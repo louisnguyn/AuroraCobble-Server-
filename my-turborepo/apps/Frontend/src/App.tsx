@@ -2,13 +2,15 @@ import { useState } from 'react'
 import { Home } from './components/Home'
 import { UsageStats } from './components/UsageStats'
 import { Leaderboard } from './components/Leaderboard'
+import { Wiki } from './components/Wiki'
 
-type Page = 'main' | 'leaderboard' | 'usage'
+type Page = 'main' | 'leaderboard' | 'usage' | 'wiki'
 
 const PAGES: { id: Page; label: string }[] = [
   { id: 'main', label: 'Main' },
   { id: 'leaderboard', label: 'Leaderboard' },
   { id: 'usage', label: 'Usage Stats' },
+  { id: 'wiki', label: 'Wiki' },
 ]
 
 function App() {
@@ -68,6 +70,7 @@ function App() {
         {page === 'main' && <Home />}
         {page === 'usage' && <UsageStats />}
         {page === 'leaderboard' && <Leaderboard />}
+        {page === 'wiki' && <Wiki />}
       </main>
     </div>
   )
