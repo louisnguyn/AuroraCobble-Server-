@@ -49,3 +49,57 @@ export async function fetchPokemonInfo(name: string): Promise<PokemonInfo | null
     return null
   }
 }
+
+const moveTypeCache = new Map<string, string | null>()
+const itemCache = new Map<string, string | null>() // item name -> image URL or null
+
+/** Slugify a generic name for PokéAPI (moves/items). */
+function toApiSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/['.]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+}
+
+/** Fetch move type from PokéAPI; returns null on 404 or error. Cached. */
+export async function fetchMoveType(moveName: string): Promise<string | null> {
+  const key = toApiSlug(moveName)
+  if (moveTypeCache.has(key)) return moveTypeCache.get(key) ?? null
+
+  try {
+    const res = await fetch(`https://pokeapi.co/api/v2/move/${encodeURIComponent(key)}`)
+    if (!res.ok) {
+      moveTypeCache.set(key, null)
+      return null
+    }
+    const data = (await res.json()) as { type?: { name?: string } }
+    const typeName = data.type?.name ?? null
+    moveTypeCache.set(key, typeName)
+    return typeName
+  } catch {
+    moveTypeCache.set(key, null)
+    return null
+  }
+}
+
+/** Fetch item sprite URL from PokéAPI; returns null on 404 or error. Cached. */
+export async function fetchItemImage(itemName: string): Promise<string | null> {
+  const key = toApiSlug(itemName)
+  if (itemCache.has(key)) return itemCache.get(key) ?? null
+
+  try {
+    const res = await fetch(`https://pokeapi.co/api/v2/item/${encodeURIComponent(key)}`)
+    if (!res.ok) {
+      itemCache.set(key, null)
+      return null
+    }
+    const data = (await res.json()) as { sprites?: { default?: string } }
+    const url = data.sprites?.default ?? null
+    itemCache.set(key, url)
+    return url
+  } catch {
+    itemCache.set(key, null)
+    return null
+  }
+}

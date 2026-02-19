@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { fetchUsageStats } from '../api'
-import { fetchPokemonInfo } from '../pokemonApi'
+import { fetchPokemonInfo, fetchMoveType, fetchItemImage } from '../pokemonApi'
 import type { UsageStatsResponse, FormatUsage, SpeciesUsage } from '../types'
 
 const FORMAT_ORDER = ['singles', 'doubles', 'triples'] as const
@@ -73,9 +73,171 @@ const TYPE_COLORS: Record<string, string> = {
   fairy: 'bg-[#ee99ac]',
 }
 
-function SpeciesCard({ s, rank }: { s: SpeciesUsage; rank: number }) {
+/** Moves with type-based colors from PokéAPI */
+function MoveTags({ items, max = 10 }: { items: Record<string, number>; max?: number }) {
+  const entries = Object.entries(items)
+    .filter(([, pct]) => pct > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, max)
+  const [types, setTypes] = useState<Record<string, string | null>>({})
+  const namesKey = entries.map(([n]) => n).join(',')
+
+  useEffect(() => {
+    let cancelled = false
+    entries.forEach(([name]) => {
+      fetchMoveType(name).then((typeName) => {
+        if (!cancelled) setTypes((prev) => ({ ...prev, [name]: typeName }))
+      })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [namesKey])
+
+  if (entries.length === 0) return <span className="text-muted">—</span>
+  return (
+    <span className="flex flex-wrap gap-1.5">
+      {entries.map(([name, pct]) => (
+        <span
+          key={name}
+          className={`inline-block py-0.5 px-1.5 rounded text-xs font-medium text-white ${TYPE_COLORS[types[name] ?? ''] ?? 'bg-surface-hover text-[#e6edf3]'}`}
+        >
+          {name} <em className="not-italic opacity-90 ml-0.5">{pct.toFixed(0)}%</em>
+        </span>
+      ))}
+    </span>
+  )
+}
+
+/** Teammates with Pokémon sprite + name + % */
+function TeammateTags({ items, max = 8 }: { items: Record<string, number>; max?: number }) {
+  const entries = Object.entries(items)
+    .filter(([, pct]) => pct > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, max)
+  if (entries.length === 0) return <span className="text-muted">—</span>
+  return (
+    <div className="flex flex-wrap gap-2">
+      {entries.map(([name, pct]) => (
+        <TeammateRow key={name} name={name} pct={pct} />
+      ))}
+    </div>
+  )
+}
+
+/** Items with icon + name + % from PokéAPI */
+function ItemTags({ items, max = 6 }: { items: Record<string, number>; max?: number }) {
+  const entries = Object.entries(items)
+    .filter(([, pct]) => pct > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, max)
+  if (entries.length === 0) return <span className="text-muted">—</span>
+  return (
+    <div className="flex flex-wrap gap-2">
+      {entries.map(([name, pct]) => (
+        <ItemRow key={name} name={name} pct={pct} />
+      ))}
+    </div>
+  )
+}
+
+function ItemRow({ name, pct }: { name: string; pct: number }) {
+  const [image, setImage] = useState<string | null | 'loading'>('loading')
+
+  useEffect(() => {
+    let cancelled = false
+    fetchItemImage(name).then((url) => {
+      if (!cancelled) setImage(url ?? null)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [name])
+
+  return (
+    <div className="flex items-center gap-2 py-1 px-2 rounded-lg bg-surface-hover">
+      <div className="w-7 h-7 shrink-0 rounded bg-surface flex items-center justify-center overflow-hidden">
+        {image === 'loading' ? (
+          <span className="text-muted text-[10px]">…</span>
+        ) : image ? (
+          <img src={image} alt={name} className="w-full h-full object-contain" />
+        ) : (
+          <span className="text-muted text-[10px]">?</span>
+        )}
+      </div>
+      <span className="text-xs font-medium truncate max-w-[120px]">{name}</span>
+      <span className="text-xs text-muted shrink-0">{pct.toFixed(0)}%</span>
+    </div>
+  )
+}
+
+function TeammateRow({ name, pct }: { name: string; pct: number }) {
   const [info, setInfo] = useState<{ image: string; types: string[] } | null | 'loading'>('loading')
-  const [expanded, setExpanded] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    fetchPokemonInfo(name).then((data) => {
+      if (!cancelled) setInfo(data ?? null)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [name])
+
+  return (
+    <div className="flex items-center gap-2 py-1 px-2 rounded-lg bg-surface-hover">
+      <div className="w-8 h-8 lg:w-10 lg:h-10 shrink-0 rounded bg-surface flex items-center justify-center overflow-hidden">
+        {info === 'loading' ? (
+          <span className="text-muted text-[10px]">…</span>
+        ) : info?.image ? (
+          <img src={info.image} alt={name} className="w-full h-full object-contain" />
+        ) : (
+          <span className="text-muted text-[10px]">?</span>
+        )}
+      </div>
+      <span className="text-xs font-medium truncate max-w-[100px]">{name}</span>
+      <span className="text-xs text-muted shrink-0">{pct.toFixed(0)}%</span>
+    </div>
+  )
+}
+
+/** Large sprite used on the detail header */
+function DetailSprite({ name }: { name: string }) {
+  const [info, setInfo] = useState<{ image: string; types: string[] } | null | 'loading'>('loading')
+
+  useEffect(() => {
+    let cancelled = false
+    fetchPokemonInfo(name).then((data) => {
+      if (!cancelled) setInfo(data ?? null)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [name])
+
+  return (
+    <div className="w-20 h-20 md:w-28 md:h-28 rounded-2xl bg-surface-hover flex items-center justify-center overflow-hidden">
+      {info === 'loading' ? (
+        <span className="text-muted text-xs">…</span>
+      ) : info?.image ? (
+        <img src={info.image} alt={name} className="w-full h-full object-contain" />
+      ) : (
+        <span className="text-muted text-xs">?</span>
+      )}
+    </div>
+  )
+}
+
+function SpeciesCard({
+  s,
+  rank,
+  onOpenDetail,
+}: {
+  s: SpeciesUsage
+  rank: number
+  onOpenDetail?: (s: SpeciesUsage, rank: number) => void
+}) {
+  const [info, setInfo] = useState<{ image: string; types: string[] } | null | 'loading'>('loading')
 
   useEffect(() => {
     let cancelled = false
@@ -93,7 +255,7 @@ function SpeciesCard({ s, rank }: { s: SpeciesUsage; rank: number }) {
       <button
         type="button"
         className="w-full flex items-center gap-4 px-4 py-3 sm:px-5 sm:py-4 text-left"
-        onClick={() => setExpanded((v) => !v)}
+        onClick={() => onOpenDetail?.(s, rank)}
       >
         <div className="w-10 text-sm font-semibold text-muted">#{rank}</div>
         <div className="flex items-center gap-4 flex-1 min-w-0">
@@ -138,38 +300,6 @@ function SpeciesCard({ s, rank }: { s: SpeciesUsage; rank: number }) {
           <div className="text-[11px] text-muted">{s.count} games</div>
         </div>
       </button>
-      {expanded && (
-        <div className="px-4 pb-4 pt-1 border-t border-border text-xs sm:text-sm">
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="space-y-1">
-              <h4 className="font-semibold text-[0.8rem] text-muted uppercase tracking-wide">Moves</h4>
-              <TopItems items={s.moves ?? {}} max={10} />
-            </div>
-            <div className="space-y-1">
-              <h4 className="font-semibold text-[0.8rem] text-muted uppercase tracking-wide">Teammates</h4>
-              <TopItems items={s.teammates ?? {}} max={8} />
-            </div>
-            <div className="space-y-1">
-              <h4 className="font-semibold text-[0.8rem] text-muted uppercase tracking-wide">Items</h4>
-              <TopItems items={s.items ?? {}} max={6} />
-            </div>
-            <div className="space-y-1">
-              <h4 className="font-semibold text-[0.8rem] text-muted uppercase tracking-wide">Abilities</h4>
-              <TopItems items={s.abilities ?? {}} formatLabel max={4} />
-            </div>
-            <div className="space-y-1">
-              <h4 className="font-semibold text-[0.8rem] text-muted uppercase tracking-wide">
-                EV spreads (HP, Atk, Def, SpA, SpD, Spe)
-              </h4>
-              <TopItems items={s.evSpreads ?? {}} max={4} />
-            </div>
-            <div className="space-y-1">
-              <h4 className="font-semibold text-[0.8rem] text-muted uppercase tracking-wide">Natures</h4>
-              <TopItems items={s.natures ?? {}} formatLabel max={5} />
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
@@ -179,6 +309,14 @@ export function UsageStats() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [formatId, setFormatId] = useState<FormatId>('singles')
+  const [selected, setSelected] = useState<{
+    species: SpeciesUsage
+    rank: number
+    tierLabel: string
+    tierMinElo: number
+    tierMaxElo: number
+    tierBattles: number
+  } | null>(null)
 
   useEffect(() => {
     setLoading(true)
@@ -202,6 +340,76 @@ export function UsageStats() {
   const displayName = getFormatDisplayName(formatId)
   const tiers = format?.tiers ?? {}
   const tierKeys = Object.keys(tiers)
+
+  if (selected) {
+    const s = selected.species
+    return (
+      <div className="w-full max-w-[1200px] mx-auto">
+        <button
+          type="button"
+          className="mb-4 text-sm text-muted hover:text-[#e6edf3]"
+          onClick={() => setSelected(null)}
+        >
+          ← Back to {displayName} usage
+        </button>
+        <div className="mb-4 rounded-lg p-4 bg-surface border border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <DetailSprite name={s.name} />
+            <div>
+              <h2 className="text-2xl sm:text-3xl font-semibold m-0">{s.name}</h2>
+              <p className="text-sm text-muted m-0 mt-1">
+                {displayName} · ELO {selected.tierMinElo} –{' '}
+                {selected.tierMaxElo === Infinity ? '∞' : selected.tierMaxElo} · {selected.tierBattles} battles
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-6 text-right text-sm sm:text-base">
+            <div>
+              <div className="text-[0.7rem] uppercase tracking-wide text-muted">Usage Rank</div>
+              <div className="font-semibold text-emerald-400">#{selected.rank}</div>
+            </div>
+            <div>
+              <div className="text-[0.7rem] uppercase tracking-wide text-muted">Usage Percent</div>
+              <div className="font-semibold text-accent">
+                {s.usagePercent.toFixed(1)}
+                <span className="text-xs align-top ml-0.5">%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="rounded-lg p-4 bg-surface border border-border text-xs sm:text-sm">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="space-y-1">
+              <h4 className="font-semibold text-[0.8rem] text-muted uppercase tracking-wide">Moves</h4>
+              <MoveTags items={s.moves ?? {}} max={10} />
+            </div>
+            <div className="space-y-1">
+              <h4 className="font-semibold text-[0.8rem] text-muted uppercase tracking-wide">Teammates</h4>
+              <TeammateTags items={s.teammates ?? {}} max={8} />
+            </div>
+            <div className="space-y-1">
+              <h4 className="font-semibold text-[0.8rem] text-muted uppercase tracking-wide">Items</h4>
+              <ItemTags items={s.items ?? {}} max={6} />
+            </div>
+            <div className="space-y-1">
+              <h4 className="font-semibold text-[0.8rem] text-muted uppercase tracking-wide">Abilities</h4>
+              <TopItems items={s.abilities ?? {}} formatLabel max={4} />
+            </div>
+            <div className="space-y-1">
+              <h4 className="font-semibold text-[0.8rem] text-muted uppercase tracking-wide">
+                EV spreads (HP, Atk, Def, SpA, SpD, Spe)
+              </h4>
+              <TopItems items={s.evSpreads ?? {}} max={4} />
+            </div>
+            <div className="space-y-1">
+              <h4 className="font-semibold text-[0.8rem] text-muted uppercase tracking-wide">Natures</h4>
+              <TopItems items={s.natures ?? {}} formatLabel max={5} />
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="w-full max-w-[1200px] mx-auto">
@@ -249,7 +457,21 @@ export function UsageStats() {
               </h3>
               <div className="flex flex-col gap-3">
                 {sorted.map((s, i) => (
-                  <SpeciesCard key={s.name} s={s} rank={i + 1} />
+                  <SpeciesCard
+                    key={s.name}
+                    s={s}
+                    rank={i + 1}
+                    onOpenDetail={(species, rank) =>
+                      setSelected({
+                        species,
+                        rank,
+                        tierLabel: tierKey,
+                        tierMinElo: tier?.minElo ?? 0,
+                        tierMaxElo: tier?.maxElo ?? Infinity,
+                        tierBattles: tier?.totalBattles ?? 0,
+                      })
+                    }
+                  />
                 ))}
               </div>
             </div>
