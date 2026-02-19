@@ -199,6 +199,84 @@ export function Wiki() {
                 </div>
               </div>
 
+              {detail.evolution.length > 0 && (
+                <div className="w-full space-y-4">
+                  <h3 className="text-sm font-semibold text-muted uppercase tracking-wide mb-2">
+                    Evolution
+                  </h3>
+                  <div className="flex justify-center">
+                    <div className="flex flex-wrap items-center justify-center gap-4 w-full">
+                      {detail.evolution.map((stage, stageIdx) => {
+                        const defaultForm = stage.forms[0]
+                        return (
+                          <div key={stageIdx} className="flex items-center gap-4">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedId(defaultForm.id)}
+                              className={`flex flex-col items-center gap-1 rounded-lg p-2 transition-colors hover:bg-surface-hover ${
+                                defaultForm.id === detail.id ? 'ring-2 ring-accent' : ''
+                              }`}
+                            >
+                              <img
+                                src={pokemonSpriteUrl(defaultForm.id)}
+                                alt={defaultForm.name}
+                                className="w-20 h-20 object-contain"
+                              />
+                              <span className="text-xs sm:text-sm font-medium max-w-[5rem] truncate text-center">
+                                {formatName(defaultForm.name)}
+                              </span>
+                            </button>
+                            {stageIdx < detail.evolution.length - 1 && (
+                              <span className="text-muted text-lg sm:text-xl flex-shrink-0">→</span>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {detail.evolution.some((s) => s.forms.length > 1) && (
+                    <>
+                      <h3 className="text-sm font-semibold text-muted uppercase tracking-wide mb-2">
+                        Forms
+                      </h3>
+                      <div className="flex flex-wrap justify-center gap-6 w-full">
+                        {detail.evolution
+                          .filter((stage) => stage.forms.length > 1)
+                          .map((stage, stageIdx) => (
+                            <div key={stageIdx} className="flex flex-col items-center gap-2">
+                              <span className="text-xs text-muted">
+                                {formatName(stage.forms[0].name.split('-')[0])}
+                              </span>
+                              <div className="flex flex-wrap items-center justify-center gap-2">
+                                {stage.forms.map((form) => (
+                                  <button
+                                    key={form.id}
+                                    type="button"
+                                    onClick={() => setSelectedId(form.id)}
+                                    className={`flex flex-col items-center gap-0.5 rounded-lg p-1.5 transition-colors hover:bg-surface-hover ${
+                                      form.id === detail.id ? 'ring-2 ring-accent' : ''
+                                    }`}
+                                  >
+                                    <img
+                                      src={pokemonSpriteUrl(form.id)}
+                                      alt={form.name}
+                                      className="w-20 h-20 object-contain"
+                                    />
+                                    <span className="text-xs sm:text-sm font-medium max-w-[5rem] truncate text-center">
+                                      {formatName(form.name)}
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
               {detail.abilities.length > 0 && (
                 <div>
                   <h3 className="text-sm font-semibold text-muted uppercase tracking-wide mb-2">

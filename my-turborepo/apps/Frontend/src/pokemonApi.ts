@@ -14,6 +14,17 @@ export interface PokemonListEntry {
   name: string
 }
 
+/** One form in a species (e.g. deoxys, deoxys-attack, kyurem-black). */
+export interface EvolutionForm {
+  id: number
+  name: string
+}
+
+/** One evolution stage = one species, possibly with multiple forms. */
+export interface EvolutionStage {
+  forms: EvolutionForm[]
+}
+
 /** Full details for wiki/detail view */
 export interface PokemonDetail {
   id: number
@@ -25,6 +36,7 @@ export interface PokemonDetail {
   baseStats: { hp: number; attack: number; defense: number; specialAttack: number; specialDefense: number; speed: number }
   abilities: string[]
   moves: string[]
+  evolution: EvolutionStage[]
 }
 
 export interface MoveSummary {
@@ -56,6 +68,89 @@ export function pokemonSpriteUrl(id: number): string {
 /** Fetch full Pokémon details for wiki. Cached by id/name. */
 const detailCache = new Map<string, PokemonDetail>()
 
+const evolutionCache = new Map<number, EvolutionStage[]>()
+const speciesVarietiesCache = new Map<number, EvolutionForm[]>()
+
+async function fetchSpeciesVarieties(speciesId: number): Promise<EvolutionForm[]> {
+  if (speciesVarietiesCache.has(speciesId)) return speciesVarietiesCache.get(speciesId) ?? []
+  try {
+    const res = await fetch(`https://pokeapi.co/api/v2/pokemon-species/${speciesId}`)
+    if (!res.ok) {
+      speciesVarietiesCache.set(speciesId, [])
+      return []
+    }
+    const data = (await res.json()) as {
+      varieties?: Array<{
+        pokemon?: { name?: string; url?: string }
+      }>
+    }
+    const forms: EvolutionForm[] = (data.varieties ?? [])
+      .map((v) => {
+        const url = v.pokemon?.url ?? ''
+        const name = v.pokemon?.name ?? ''
+        const idStr = url.split('/').filter(Boolean).pop()
+        const id = idStr ? parseInt(idStr, 10) : NaN
+        return name && !Number.isNaN(id) ? { id, name } : null
+      })
+      .filter((f): f is EvolutionForm => f != null)
+    speciesVarietiesCache.set(speciesId, forms)
+    return forms
+  } catch {
+    speciesVarietiesCache.set(speciesId, [])
+    return []
+  }
+}
+
+async function fetchEvolutionChainForSpecies(speciesId: number): Promise<EvolutionStage[]> {
+  if (evolutionCache.has(speciesId)) return evolutionCache.get(speciesId) ?? []
+  try {
+    const speciesRes = await fetch(`https://pokeapi.co/api/v2/pokemon-species/${speciesId}`)
+    if (!speciesRes.ok) {
+      evolutionCache.set(speciesId, [])
+      return []
+    }
+    const speciesData = (await speciesRes.json()) as {
+      evolution_chain?: { url?: string }
+    }
+    const chainUrl = speciesData.evolution_chain?.url
+    if (!chainUrl) {
+      evolutionCache.set(speciesId, [])
+      return []
+    }
+    const chainRes = await fetch(chainUrl)
+    if (!chainRes.ok) {
+      evolutionCache.set(speciesId, [])
+      return []
+    }
+    const chainData = (await chainRes.json()) as {
+      chain?: {
+        species?: { name?: string; url?: string }
+        evolves_to?: any[]
+      }
+    }
+    const speciesUrls: string[] = []
+    function walk(node: any) {
+      if (!node || !node.species?.url) return
+      speciesUrls.push(node.species.url)
+      ;(node.evolves_to ?? []).forEach((child: any) => walk(child))
+    }
+    walk(chainData.chain)
+    const stages: EvolutionStage[] = []
+    for (const url of speciesUrls) {
+      const idStr = url.split('/').filter(Boolean).pop()
+      const sid = idStr ? parseInt(idStr, 10) : NaN
+      if (Number.isNaN(sid)) continue
+      const forms = await fetchSpeciesVarieties(sid)
+      if (forms.length > 0) stages.push({ forms })
+    }
+    evolutionCache.set(speciesId, stages)
+    return stages
+  } catch {
+    evolutionCache.set(speciesId, [])
+    return []
+  }
+}
+
 export async function fetchPokemonDetail(idOrName: string | number): Promise<PokemonDetail | null> {
   const key = String(idOrName).toLowerCase()
   if (detailCache.has(key)) return detailCache.get(key) ?? null
@@ -67,6 +162,7 @@ export async function fetchPokemonDetail(idOrName: string | number): Promise<Pok
       name: string
       height: number
       weight: number
+      species?: { url?: string }
       sprites?: { other?: { 'official-artwork'?: { front_default?: string } }; front_default?: string }
       types?: Array<{ type?: { name?: string } }>
       stats?: Array<{ base_stat: number; stat?: { name?: string } }>
@@ -75,6 +171,10 @@ export async function fetchPokemonDetail(idOrName: string | number): Promise<Pok
         move?: { name?: string }
       }>
     }
+    const speciesUrl = data.species?.url ?? ''
+    const speciesIdStr = speciesUrl.split('/').filter(Boolean).pop()
+    const speciesId = speciesIdStr ? parseInt(speciesIdStr, 10) : data.id
+    const speciesIdNum = Number.isNaN(speciesId) ? data.id : speciesId
     const image =
       data.sprites?.other?.['official-artwork']?.front_default ?? data.sprites?.front_default ?? ''
     const types = (data.types ?? []).map((t) => t.type?.name ?? '').filter(Boolean)
@@ -88,6 +188,7 @@ export async function fetchPokemonDetail(idOrName: string | number): Promise<Pok
       .map((m) => m.move?.name ?? '')
       .filter(Boolean)
       .sort((a, b) => a.localeCompare(b))
+    const evolution = await fetchEvolutionChainForSpecies(speciesIdNum)
     const detail: PokemonDetail = {
       id: data.id,
       name: data.name,
@@ -105,6 +206,7 @@ export async function fetchPokemonDetail(idOrName: string | number): Promise<Pok
       },
       abilities,
       moves,
+      evolution,
     }
     detailCache.set(key, detail)
     detailCache.set(String(data.id), detail)
