@@ -1,16 +1,18 @@
 import { useState } from 'react'
-import { Home } from './components/Home'
-import { UsageStats } from './components/UsageStats'
-import { Leaderboard } from './components/Leaderboard'
-import { Wiki } from './components/Wiki'
+import { Home } from './components/Home.tsx'
+import { UsageStats } from './components/UsageStats.tsx'
+import { Leaderboard } from './components/Leaderboard.tsx'
+import { Wiki } from './components/Wiki.tsx'
+import { Rules } from './components/Rules.tsx'
 
-type Page = 'main' | 'leaderboard' | 'usage' | 'wiki'
+type Page = 'main' | 'leaderboard' | 'usage' | 'wiki' | 'rules'
 
 const PAGES: { id: Page; label: string }[] = [
   { id: 'main', label: 'Main' },
   { id: 'leaderboard', label: 'Leaderboard' },
   { id: 'usage', label: 'Usage Stats' },
   { id: 'wiki', label: 'Wiki' },
+  { id: 'rules', label: 'Rules' },
 ]
 
 function App() {
@@ -67,10 +69,11 @@ function App() {
       </nav>
 
       <main className="flex-1 p-4 sm:p-6 min-w-0">
-        {page === 'main' && <Home />}
+        {page === 'main' && <Home onNavigate={goTo} />}
         {page === 'usage' && <UsageStats />}
         {page === 'leaderboard' && <Leaderboard />}
         {page === 'wiki' && <Wiki />}
+        {page === 'rules' && <Rules />}
       </main>
     </div>
   )
