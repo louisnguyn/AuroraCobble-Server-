@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { fetchUsageStats } from '../api'
+import { fetchPokemonInfo } from '../pokemonApi'
 import type { UsageStatsResponse, FormatUsage, SpeciesUsage } from '../types'
 
 const FORMAT_ORDER = ['singles', 'doubles', 'triples'] as const
@@ -51,32 +52,125 @@ function TopItems({
   )
 }
 
-function SpeciesRow({ s, rank }: { s: SpeciesUsage; rank: number }) {
+const TYPE_COLORS: Record<string, string> = {
+  normal: 'bg-[#a8a878]',
+  fire: 'bg-[#f08030]',
+  water: 'bg-[#6890f0]',
+  electric: 'bg-[#f8d030]',
+  grass: 'bg-[#78c850]',
+  ice: 'bg-[#98d8d8]',
+  fighting: 'bg-[#c03028]',
+  poison: 'bg-[#a040a0]',
+  ground: 'bg-[#e0c068]',
+  flying: 'bg-[#a890f0]',
+  psychic: 'bg-[#f85888]',
+  bug: 'bg-[#a8b820]',
+  rock: 'bg-[#b8a038]',
+  ghost: 'bg-[#705898]',
+  dragon: 'bg-[#7038f8]',
+  dark: 'bg-[#705848]',
+  steel: 'bg-[#b8b8d0]',
+  fairy: 'bg-[#ee99ac]',
+}
+
+function SpeciesCard({ s, rank }: { s: SpeciesUsage; rank: number }) {
+  const [info, setInfo] = useState<{ image: string; types: string[] } | null | 'loading'>('loading')
+  const [expanded, setExpanded] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    setInfo('loading')
+    fetchPokemonInfo(s.name).then((data) => {
+      if (!cancelled) setInfo(data)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [s.name])
+
   return (
-    <tr>
-      <td className="py-2 px-3 w-10 text-muted border-b border-border text-left">{rank}</td>
-      <td className="py-2 px-3 font-medium border-b border-border text-left">{s.name}</td>
-      <td className="py-2 px-3 w-20 border-b border-border text-left">{s.usagePercent.toFixed(1)}%</td>
-      <td className="py-2 px-3 w-20 border-b border-border text-left">{s.count}</td>
-      <td className="py-2 px-3 border-b border-border text-left">
-        <TopItems items={s.abilities ?? {}} formatLabel max={3} />
-      </td>
-      <td className="py-2 px-3 border-b border-border text-left">
-        <TopItems items={s.items ?? {}} />
-      </td>
-      <td className="py-2 px-3 border-b border-border text-left">
-        <TopItems items={s.moves ?? {}} />
-      </td>
-      <td className="py-2 px-3 border-b border-border text-left">
-        <TopItems items={s.natures ?? {}} formatLabel max={3} />
-      </td>
-      <td className="py-2 px-3 border-b border-border text-left max-w-[12rem] overflow-hidden text-ellipsis whitespace-nowrap">
-        <TopItems items={s.evSpreads ?? {}} max={2} />
-      </td>
-      <td className="py-2 px-3 border-b border-border text-left">
-        <TopItems items={s.teammates ?? {}} />
-      </td>
-    </tr>
+    <div className="mb-3 rounded-lg bg-surface border border-border hover:border-accent/60 transition-colors">
+      <button
+        type="button"
+        className="w-full flex items-center gap-4 px-4 py-3 sm:px-5 sm:py-4 text-left"
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <div className="w-10 text-sm font-semibold text-muted">#{rank}</div>
+        <div className="flex items-center gap-4 flex-1 min-w-0">
+          <div className="w-16 h-16 md:w-32 md:h-32 lg:w-50 lg:h-50 shrink-0 rounded-xl bg-surface-hover flex items-center justify-center overflow-hidden">
+            {info === 'loading' ? (
+              <span className="text-muted text-xs">…</span>
+            ) : info?.image ? (
+              <img src={info.image} alt={s.name} className="w-full h-full object-contain" />
+            ) : (
+              <span className="text-muted text-xs" title="No sprite">
+                ?
+              </span>
+            )}
+          </div>
+          <div className="min-w-0">
+            <div className="font-semibold truncate text-[0.95rem] sm:text-base">
+              {s.name}
+            </div>
+            <div className="flex flex-wrap gap-1 mt-0.5">
+              {info && info !== 'loading' && info.types.length > 0 ? (
+                info.types.map((t) => (
+                  <span
+                    key={t}
+                    className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium capitalize text-white ${
+                      TYPE_COLORS[t] ?? 'bg-muted'
+                    }`}
+                  >
+                    {t}
+                  </span>
+                ))
+              ) : (
+                <span className="text-muted text-xs">—</span>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="w-28 text-right">
+          <div className="text-sm sm:text-base font-semibold text-accent">
+            {s.usagePercent.toFixed(1)}
+            <span className="text-xs align-top">%</span>
+          </div>
+          <div className="text-[11px] text-muted">{s.count} games</div>
+        </div>
+      </button>
+      {expanded && (
+        <div className="px-4 pb-4 pt-1 border-t border-border text-xs sm:text-sm">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="space-y-1">
+              <h4 className="font-semibold text-[0.8rem] text-muted uppercase tracking-wide">Moves</h4>
+              <TopItems items={s.moves ?? {}} max={10} />
+            </div>
+            <div className="space-y-1">
+              <h4 className="font-semibold text-[0.8rem] text-muted uppercase tracking-wide">Teammates</h4>
+              <TopItems items={s.teammates ?? {}} max={8} />
+            </div>
+            <div className="space-y-1">
+              <h4 className="font-semibold text-[0.8rem] text-muted uppercase tracking-wide">Items</h4>
+              <TopItems items={s.items ?? {}} max={6} />
+            </div>
+            <div className="space-y-1">
+              <h4 className="font-semibold text-[0.8rem] text-muted uppercase tracking-wide">Abilities</h4>
+              <TopItems items={s.abilities ?? {}} formatLabel max={4} />
+            </div>
+            <div className="space-y-1">
+              <h4 className="font-semibold text-[0.8rem] text-muted uppercase tracking-wide">
+                EV spreads (HP, Atk, Def, SpA, SpD, Spe)
+              </h4>
+              <TopItems items={s.evSpreads ?? {}} max={4} />
+            </div>
+            <div className="space-y-1">
+              <h4 className="font-semibold text-[0.8rem] text-muted uppercase tracking-wide">Natures</h4>
+              <TopItems items={s.natures ?? {}} formatLabel max={5} />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -153,28 +247,10 @@ export function UsageStats() {
               <h3 className="text-[0.95rem] font-medium m-0 mb-3 text-muted">
                 ELO {tier?.minElo ?? 0} – {tier?.maxElo ?? '∞'} · {tier?.totalBattles ?? 0} battles
               </h3>
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-sm">
-                  <thead>
-                    <tr>
-                      <th className="text-left py-2 px-3 font-semibold text-muted border-b border-border">#</th>
-                      <th className="text-left py-2 px-3 font-semibold text-muted border-b border-border">Pokémon</th>
-                      <th className="text-left py-2 px-3 font-semibold text-muted border-b border-border">Usage %</th>
-                      <th className="text-left py-2 px-3 font-semibold text-muted border-b border-border">Count</th>
-                      <th className="text-left py-2 px-3 font-semibold text-muted border-b border-border">Abilities</th>
-                      <th className="text-left py-2 px-3 font-semibold text-muted border-b border-border">Items</th>
-                      <th className="text-left py-2 px-3 font-semibold text-muted border-b border-border">Moves</th>
-                      <th className="text-left py-2 px-3 font-semibold text-muted border-b border-border">Natures</th>
-                      <th className="text-left py-2 px-3 font-semibold text-muted border-b border-border">EV spreads</th>
-                      <th className="text-left py-2 px-3 font-semibold text-muted border-b border-border">Teammates</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sorted.map((s, i) => (
-                      <SpeciesRow key={s.name} s={s} rank={i + 1} />
-                    ))}
-                  </tbody>
-                </table>
+              <div className="flex flex-col gap-3">
+                {sorted.map((s, i) => (
+                  <SpeciesCard key={s.name} s={s} rank={i + 1} />
+                ))}
               </div>
             </div>
           )
