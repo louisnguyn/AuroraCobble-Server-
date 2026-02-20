@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Analytics } from '@vercel/analytics/react'
 import { Home } from './components/Home.tsx'
 import { UsageStats } from './components/UsageStats.tsx'
 import { Leaderboard } from './components/Leaderboard.tsx'
@@ -26,6 +27,7 @@ function App() {
 
   return (
     <div className="min-h-screen flex flex-col relative">
+      <Analytics />
       <header className="sticky top-0 z-20 flex items-center justify-between px-4 py-3 sm:px-6 sm:py-4 bg-surface/90 backdrop-blur-md border-b border-border">
         <img
           src="/logo.png"
