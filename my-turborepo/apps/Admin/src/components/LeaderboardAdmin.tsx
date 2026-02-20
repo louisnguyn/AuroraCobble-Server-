@@ -2,6 +2,29 @@ import { useEffect, useState } from 'react'
 import { fetchLeaderboard } from '../api'
 import type { LeaderboardResponse, LeaderboardPlayer } from '../types'
 
+const RANK_TIERS_BY_ELO: { minElo: number; displayName: string; slug: string }[] = [
+  { minElo: 1350, displayName: 'Netherite', slug: 'netherite' },
+  { minElo: 1250, displayName: 'Diamond', slug: 'diamond' },
+  { minElo: 1175, displayName: 'Emerald', slug: 'emerald' },
+  { minElo: 1100, displayName: 'Gold', slug: 'gold' },
+  { minElo: 1050, displayName: 'Silver', slug: 'silver' },
+  { minElo: 0, displayName: 'Copper', slug: 'copper' },
+]
+
+const TIER_COLOR_CLASS: Record<string, string> = {
+  copper: 'text-copper',
+  silver: 'text-silver',
+  gold: 'text-gold',
+  emerald: 'text-emerald',
+  diamond: 'text-diamond',
+  netherite: 'text-netherite',
+}
+
+function getTier(elo: number): { displayName: string; slug: string } {
+  const tier = RANK_TIERS_BY_ELO.find((t) => elo >= t.minElo)
+  return tier ?? { displayName: 'Copper', slug: 'copper' }
+}
+
 export function LeaderboardAdmin() {
   const [data, setData] = useState<LeaderboardResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -45,7 +68,7 @@ export function LeaderboardAdmin() {
 
   const formats = data?.formats ? Object.keys(data.formats) : []
   const players: LeaderboardPlayer[] =
-    (format && data?.formats?.[format]?.players) ?? []
+    (format ? data?.formats?.[format]?.players : undefined) ?? []
 
   return (
     <div className="space-y-4">
@@ -87,12 +110,16 @@ export function LeaderboardAdmin() {
                   </td>
                 </tr>
               ) : (
-                players.map((p) => (
-                  <tr key={p.uuid} className="border-b border-border/60 hover:bg-surface-hover/50">
+                players.map((p) => {
+                  const tier = getTier(p.elo)
+                  return (
+                    <tr key={p.uuid} className="border-b border-border/60 hover:bg-surface-hover/50">
                     <td className="py-2 px-4">{p.rank}</td>
                     <td className="py-2 px-4 font-medium">{p.playerName}</td>
                     <td className="py-2 px-4 text-right">{p.elo}</td>
-                    <td className="py-2 px-4">{p.tier}</td>
+                    <td className={`py-2 px-4 text-xs font-semibold ${TIER_COLOR_CLASS[tier.slug] ?? 'text-muted'}`}>
+                      {tier.displayName}
+                    </td>
                     <td className="py-2 px-4 text-right">
                       {p.wins} / {p.losses}
                     </td>
@@ -100,8 +127,9 @@ export function LeaderboardAdmin() {
                       {typeof p.winRate === 'number' ? `${(p.winRate * 100).toFixed(1)}%` : '—'}
                     </td>
                     <td className="py-2 px-4 text-right">{p.currentStreak ?? '—'}</td>
-                  </tr>
-                ))
+                    </tr>
+                  )
+                })
               )}
             </tbody>
           </table>

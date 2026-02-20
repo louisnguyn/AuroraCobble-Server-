@@ -118,7 +118,7 @@ export function Leaderboard() {
               {players.map((p) => {
                 const tier = getTier(p.elo)
                 return (
-                  <tr key={p.uuid}>
+                  <tr key={p.uuid} className="hover:bg-surface-hover/50">
                     <td className="py-2.5 px-3 w-16 text-muted border-b border-border">{p.rank}</td>
                     <td className="py-2.5 px-3 font-medium border-b border-border">{p.playerName}</td>
                     <td className="py-2.5 px-3 w-16 border-b border-border">{p.elo}</td>

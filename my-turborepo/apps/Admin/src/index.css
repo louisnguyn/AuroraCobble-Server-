@@ -9,6 +9,12 @@
   --color-muted: #a5b4d4;
   --color-accent: #a78bfa;
   --color-error: #f87171;
+  --color-copper: #b87333;
+  --color-silver: #c0c0c0;
+  --color-gold: #e8b923;
+  --color-emerald: #50c878;
+  --color-diamond: #6ee7f0;
+  --color-netherite: #c4b5fd;
 }
 
 @layer base {
