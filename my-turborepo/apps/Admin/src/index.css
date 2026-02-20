@@ -1,0 +1,50 @@
+@import "tailwindcss";
+
+@theme {
+  /* Blue–purple gradient theme (match Frontend) */
+  --color-bg: #0f0a1a;
+  --color-surface: #1e1b4b;
+  --color-surface-hover: #312e81;
+  --color-border: #3730a3;
+  --color-muted: #a5b4d4;
+  --color-accent: #a78bfa;
+  --color-error: #f87171;
+}
+
+@layer base {
+  * {
+    @apply box-border;
+  }
+  body {
+    margin: 0;
+    min-width: 320px;
+    min-height: 100vh;
+    color: #e2e8f0;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    background: linear-gradient(165deg, #0f0a1a 0%, #1e1b4b 35%, #312e81 65%, #1e1b4b 100%);
+    background-attachment: fixed;
+  }
+  #root {
+    @apply min-h-screen;
+  }
+  a {
+    @apply text-accent no-underline;
+  }
+  a:hover {
+    @apply underline;
+  }
+}
+
+@layer components {
+  .burger-open span:nth-child(1) {
+    transform: translateY(7px) rotate(45deg);
+  }
+  .burger-open span:nth-child(2) {
+    opacity: 0;
+  }
+  .burger-open span:nth-child(3) {
+    transform: translateY(-7px) rotate(-45deg);
+  }
+}
