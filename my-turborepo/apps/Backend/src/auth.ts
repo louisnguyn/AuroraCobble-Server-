@@ -1,0 +1,77 @@
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import { supabase, type UserRow } from "./supabase.js";
+
+const JWT_SECRET = process.env.JWT_SECRET ?? "aurora-cobble-dev-secret-change-in-production";
+const SALT_ROUNDS = 10;
+
+export async function hashPassword(password: string): Promise<string> {
+  return bcrypt.hash(password, SALT_ROUNDS);
+}
+
+export async function verifyPassword(password: string, hash: string): Promise<boolean> {
+  return bcrypt.compare(password, hash);
+}
+
+export type JwtPayload = { userId: number; email: string; username: string };
+
+export function signToken(payload: JwtPayload): string {
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
+}
+
+export function verifyToken(token: string): JwtPayload | null {
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
+    return decoded;
+  } catch {
+    return null;
+  }
+}
+
+export async function findUserByEmail(email: string): Promise<UserRow | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from("users")
+    .select("*")
+    .eq("email", email.trim().toLowerCase())
+    .maybeSingle();
+  if (error || !data) return null;
+  return data as UserRow;
+}
+
+export async function findUserById(id: number): Promise<UserRow | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase.from("users").select("*").eq("id", id).maybeSingle();
+  if (error || !data) return null;
+  return data as UserRow;
+}
+
+export async function createUser(params: {
+  email: string;
+  password: string;
+  username: string;
+}): Promise<UserRow | { error: string }> {
+  if (!supabase) return { error: "Database not configured" };
+  const email = params.email.trim().toLowerCase();
+  const username = params.username.trim();
+  if (!email || !params.password || !username)
+    return { error: "Email, password, and username are required" };
+  if (params.password.length < 8) return { error: "Password must be at least 8 characters" };
+
+  const existing = await findUserByEmail(email);
+  if (existing) return { error: "An account with this email already exists" };
+
+  const password_hash = await hashPassword(params.password);
+  const { data, error } = await supabase
+    .from("users")
+    .insert({
+      email,
+      password_hash,
+      username,
+    })
+    .select()
+    .single();
+
+  if (error) return { error: error.message };
+  return data as UserRow;
+}

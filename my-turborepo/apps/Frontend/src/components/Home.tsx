@@ -1,10 +1,11 @@
-type Page = 'main' | 'leaderboard' | 'usage' | 'wiki' | 'rules'
+type Page = 'main' | 'leaderboard' | 'usage' | 'wiki' | 'rules' | 'gacha'
 
 const QUICK_LINKS: { id: Exclude<Page, 'main'>; label: string; description: string }[] = [
   { id: 'leaderboard', label: 'Leaderboard', description: 'Rankings, ELO & tier standings' },
   { id: 'usage', label: 'Usage Stats', description: 'Pokémon usage by tier and format' },
   { id: 'wiki', label: 'Wiki', description: 'Pokédex, moves, evolution & forms' },
   { id: 'rules', label: 'Rules', description: 'Format rules & restrictions' },
+  { id: 'gacha', label: 'Gacha', description: 'Open loot & collect rewards (login required)' },
 ]
 
 interface HomeProps {
