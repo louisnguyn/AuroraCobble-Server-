@@ -108,7 +108,7 @@ export function UsersAdmin() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         <div className="lg:col-span-1 rounded-lg bg-surface border border-border overflow-hidden">
           <div className="p-3 border-b border-border">
             <h2 className="text-sm font-semibold text-muted uppercase tracking-wider">All users</h2>
