@@ -113,7 +113,7 @@ export function UsersAdmin() {
           <div className="p-3 border-b border-border">
             <h2 className="text-sm font-semibold text-muted uppercase tracking-wider">All users</h2>
           </div>
-          <ul className="max-h-[400px] overflow-y-auto">
+          <ul>
             {users.map((u) => (
               <li key={u.id}>
                 <button
@@ -210,7 +210,7 @@ export function UsersAdmin() {
                 ) : history.length === 0 ? (
                   <p className="text-sm text-muted">No gacha pulls yet.</p>
                 ) : (
-                  <ul className="space-y-2 max-h-72 overflow-y-auto">
+                  <ul className="space-y-2">
                     {history.map((entry) => (
                       <li
                         key={entry.id}

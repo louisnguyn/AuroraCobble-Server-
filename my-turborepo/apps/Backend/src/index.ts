@@ -146,8 +146,8 @@ app.post("/auth/signup", async (req, res) => {
   if (supabase) {
     const { error: _ } = await supabase.from("user_currency").insert({
       user_id: result.id,
-      currency_type: "gems",
-      balance: 500,
+      currency_type: "tickets",
+      balance: 0,
     });
   }
   const isAdmin = !!(result as { is_admin?: boolean }).is_admin;
