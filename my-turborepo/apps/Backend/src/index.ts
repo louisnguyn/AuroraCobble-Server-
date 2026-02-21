@@ -223,6 +223,28 @@ app.get("/gacha/pools/:poolId/currency", requireAuth, async (req, res) => {
   res.json({ balance: (row as { balance: number } | null)?.balance ?? 0, currencyType });
 });
 
+app.get("/gacha/pools/:poolId/rewards", requireAuth, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const poolId = Number(req.params.poolId);
+  if (!Number.isFinite(poolId)) {
+    res.status(400).json({ error: "Invalid pool id" });
+    return;
+  }
+  const { data, error } = await supabase
+    .from("gacha_rewards")
+    .select("id, reward_type, weight")
+    .eq("pool_id", poolId)
+    .order("weight", { ascending: true });
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+  res.json({ rewards: data ?? [] });
+});
+
 app.post("/gacha/pull", requireAuth, async (req, res) => {
   const user = res.locals.user!;
   const { poolId } = req.body ?? {};
@@ -295,6 +317,16 @@ app.post("/gacha/pull", requireAuth, async (req, res) => {
     });
   }
 
+  const { error: historyErr } = await supabase.from("user_gacha_pulls").insert({
+    user_id: user.userId,
+    pool_id: id,
+    reward_type: chosen.reward_type,
+    pull_at: new Date().toISOString(),
+  });
+  if (historyErr) {
+    // table may not exist yet; pull still succeeds
+  }
+
   res.json({
     reward: {
       id: chosen.id,
@@ -302,6 +334,39 @@ app.post("/gacha/pull", requireAuth, async (req, res) => {
     },
     newBalance,
   });
+});
+
+app.get("/gacha/history", requireAuth, async (req, res) => {
+  const user = res.locals.user!;
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const limit = Math.min(Number(req.query.limit) || 30, 100);
+  const { data, error } = await supabase
+    .from("user_gacha_pulls")
+    .select("id, pool_id, reward_type, pull_at")
+    .eq("user_id", user.userId)
+    .order("pull_at", { ascending: false })
+    .limit(limit);
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+  const poolIds = [...new Set((data ?? []).map((r: { pool_id: number }) => r.pool_id))];
+  const { data: pools } =
+    poolIds.length > 0
+      ? await supabase.from("gacha_pools").select("id, name").in("id", poolIds)
+      : { data: [] };
+  const poolNames = new Map((pools ?? []).map((p: { id: number; name: string }) => [p.id, p.name]));
+  const history = (data ?? []).map((r: { id: number; pool_id: number; reward_type: string; pull_at: string }) => ({
+    id: r.id,
+    poolId: r.pool_id,
+    poolName: poolNames.get(r.pool_id) ?? "Unknown",
+    rewardType: r.reward_type,
+    pulledAt: r.pull_at,
+  }));
+  res.json({ history });
 });
 
 // User currency (for gacha / display)

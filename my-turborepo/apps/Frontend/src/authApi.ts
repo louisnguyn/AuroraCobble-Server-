@@ -93,6 +93,29 @@ export async function fetchPoolCurrency(poolId: number): Promise<{ balance: numb
   return fetchApi<{ balance: number; currencyType: string }>(`/gacha/pools/${poolId}/currency`)
 }
 
+export interface PoolReward {
+  id: number
+  reward_type: string
+  weight: number
+}
+
+export async function fetchPoolRewards(poolId: number): Promise<{ rewards: PoolReward[] }> {
+  return fetchApi<{ rewards: PoolReward[] }>(`/gacha/pools/${poolId}/rewards`)
+}
+
+export interface GachaHistoryEntry {
+  id: number
+  poolId: number
+  poolName: string
+  rewardType: string
+  pulledAt: string
+}
+
+export async function fetchGachaHistory(limit?: number): Promise<{ history: GachaHistoryEntry[] }> {
+  const q = limit != null ? `?limit=${limit}` : ''
+  return fetchApi<{ history: GachaHistoryEntry[] }>(`/gacha/history${q}`)
+}
+
 export async function gachaPull(poolId: number): Promise<GachaRewardResult> {
   return fetchApi<GachaRewardResult>('/gacha/pull', {
     method: 'POST',

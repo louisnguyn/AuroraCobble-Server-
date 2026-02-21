@@ -53,4 +53,72 @@
   .burger-open span:nth-child(3) {
     transform: translateY(-7px) rotate(-45deg);
   }
+
+  /* Gacha chest – treasure chest effect */
+  @keyframes chest-arrive {
+    0% { transform: scale(0.6); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  @keyframes chest-shake {
+    0%, 100% { transform: translateX(0); }
+    10% { transform: translateX(-6px); }
+    25% { transform: translateX(5px); }
+    40% { transform: translateX(-4px); }
+    55% { transform: translateX(3px); }
+    70% { transform: translateX(-2px); }
+    85% { transform: translateX(1px); }
+  }
+  @keyframes chest-lid-open {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-120%); }
+  }
+  @keyframes chest-lock-hide {
+    0% { opacity: 1; transform: scale(1); }
+    40% { opacity: 1; transform: scale(1.1); }
+    100% { opacity: 0; transform: scale(0.8); }
+  }
+  @keyframes chest-glow-pulse {
+    0%, 100% { filter: drop-shadow(0 0 20px rgba(201, 162, 39, 0.5)); }
+    50% { filter: drop-shadow(0 0 35px rgba(201, 162, 39, 0.9)); }
+  }
+  @keyframes chest-beam {
+    0% { opacity: 0; transform: scale(0.8); }
+    30% { opacity: 0.9; transform: scale(1.1); }
+    100% { opacity: 0.4; transform: scale(1.5); }
+  }
+  @keyframes reward-pop {
+    0% { transform: scale(0.5); opacity: 0; }
+    60% { transform: scale(1.08); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  @keyframes reward-shine {
+    0% { box-shadow: 0 0 0 0 rgba(167, 139, 250, 0.4); }
+    70% { box-shadow: 0 0 0 12px rgba(167, 139, 250, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(167, 139, 250, 0); }
+  }
+  .gacha-chest-wrap {
+    animation: chest-arrive 0.35s ease-out;
+  }
+  .gacha-chest-shake {
+    animation: chest-shake 0.7s ease-in-out 0.4s;
+  }
+  .gacha-chest-lid-open {
+    animation: chest-lid-open 0.5s ease-out 0.9s forwards;
+  }
+  .gacha-chest-lock-hide {
+    animation: chest-lock-hide 0.35s ease-out 0.75s forwards;
+  }
+  .gacha-chest-glow {
+    animation: chest-glow-pulse 0.5s ease-in-out 3;
+  }
+  .gacha-chest-beam {
+    animation: chest-beam 0.6s ease-out 1.2s forwards;
+    transform-origin: center center;
+  }
+  .gacha-reward-pop {
+    animation: reward-pop 0.45s cubic-bezier(0.34, 1.2, 0.64, 1);
+  }
+  .gacha-reward-shine {
+    animation: reward-shine 0.6s ease-out 0.3s;
+  }
 }
