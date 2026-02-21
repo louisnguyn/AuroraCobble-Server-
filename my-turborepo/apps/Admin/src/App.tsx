@@ -1,14 +1,19 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { getToken, setToken, clearToken, fetchMe } from './authApi'
+import type { AuthUser } from './authApi'
+import { Login } from './components/Login.tsx'
 import { Overview } from './components/Overview.tsx'
 import { LeaderboardAdmin } from './components/LeaderboardAdmin.tsx'
 import { UsageStatsAdmin } from './components/UsageStatsAdmin.tsx'
+import { UsersAdmin } from './components/UsersAdmin.tsx'
 
-type Section = 'overview' | 'leaderboard' | 'usage' | 'settings' | 'bans'
+type Section = 'overview' | 'leaderboard' | 'usage' | 'users' | 'settings' | 'bans'
 
 const SECTIONS: { id: Section; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'leaderboard', label: 'Leaderboard' },
   { id: 'usage', label: 'Usage stats' },
+  { id: 'users', label: 'Users' },
   { id: 'settings', label: 'Settings' },
   { id: 'bans', label: 'Bans' },
 ]
@@ -23,8 +28,53 @@ function Placeholder({ title }: { title: string }) {
 }
 
 export default function App() {
+  const [user, setUser] = useState<AuthUser | null>(null)
+  const [loading, setLoading] = useState(true)
   const [section, setSection] = useState<Section>('overview')
   const [menuOpen, setMenuOpen] = useState(false)
+
+  useEffect(() => {
+    const token = getToken()
+    if (!token) {
+      setLoading(false)
+      return
+    }
+    fetchMe()
+      .then(({ user: u }) => {
+        if (u.is_admin) setUser(u)
+        else {
+          clearToken()
+          setUser(null)
+        }
+      })
+      .catch(() => {
+        clearToken()
+        setUser(null)
+      })
+      .finally(() => setLoading(false))
+  }, [])
+
+  const handleLoginSuccess = (token: string, u: AuthUser) => {
+    setToken(token)
+    setUser(u)
+  }
+
+  const handleLogout = () => {
+    clearToken()
+    setUser(null)
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-muted">Loading…</p>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return <Login onSuccess={handleLoginSuccess} />
+  }
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
@@ -62,6 +112,34 @@ export default function App() {
             alt="Aurora Cobble"
             className="block w-full max-w-[180px] h-auto mx-auto mb-6 object-contain"
           />
+          <div className="mb-4 mx-2 p-3 rounded-xl bg-surface-hover/80 border border-border/60">
+            <div className="flex items-center gap-3">
+              <div
+                className="flex-shrink-0 w-9 h-9 rounded-full bg-accent/25 border border-accent/40 flex items-center justify-center text-accent font-semibold text-sm"
+                aria-hidden
+              >
+                {user.username.charAt(0).toUpperCase()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-[#e2e8f0] truncate" title={user.username}>
+                  {user.username}
+                </p>
+                <p className="text-xs text-muted truncate" title={user.email}>
+                  {user.email}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="mt-3 w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-medium text-accent bg-accent/10 border border-accent/30 hover:bg-accent/20 hover:border-accent/50 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              Sign out
+            </button>
+          </div>
           <nav className="space-y-0.5">
             {SECTIONS.map(({ id, label }) => (
               <button
@@ -90,6 +168,7 @@ export default function App() {
           {section === 'overview' && <Overview />}
           {section === 'leaderboard' && <LeaderboardAdmin />}
           {section === 'usage' && <UsageStatsAdmin />}
+          {section === 'users' && <UsersAdmin />}
           {section === 'settings' && <Placeholder title="Settings" />}
           {section === 'bans' && <Placeholder title="Bans" />}
         </div>

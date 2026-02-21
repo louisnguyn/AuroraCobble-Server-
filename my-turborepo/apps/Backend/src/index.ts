@@ -74,6 +74,19 @@ function requireAuth(
   res.locals.user = payload;
   next();
 }
+
+function requireAdmin(
+  _req: express.Request,
+  res: express.Response,
+  next: express.NextFunction
+) {
+  if (!res.locals.user?.isAdmin) {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+  next();
+}
+
 // Normalize double slashes (plugin may send baseUrl/ + /path => //path)
 // app.use((req, _res, next) => {
 //   if (req.url?.includes("//")) {
@@ -137,14 +150,16 @@ app.post("/auth/signup", async (req, res) => {
       balance: 500,
     });
   }
+  const isAdmin = !!(result as { is_admin?: boolean }).is_admin;
   const token = signToken({
     userId: result.id,
     email: result.email,
     username: result.username,
+    isAdmin,
   });
   res.json({
     token,
-    user: { id: result.id, email: result.email, username: result.username },
+    user: { id: result.id, email: result.email, username: result.username, is_admin: isAdmin },
   });
 });
 
@@ -165,20 +180,29 @@ app.post("/auth/login", async (req, res) => {
     res.status(401).json({ error: "Invalid email or password" });
     return;
   }
+  const isAdmin = !!user.is_admin;
   const token = signToken({
     userId: user.id,
     email: user.email,
     username: user.username,
+    isAdmin,
   });
   res.json({
     token,
-    user: { id: user.id, email: user.email, username: user.username },
+    user: { id: user.id, email: user.email, username: user.username, is_admin: isAdmin },
   });
 });
 
 app.get("/auth/me", requireAuth, (_req, res) => {
   const user = res.locals.user!;
-  res.json({ user: { id: user.userId, email: user.email, username: user.username } });
+  res.json({
+    user: {
+      id: user.userId,
+      email: user.email,
+      username: user.username,
+      is_admin: user.isAdmin ?? false,
+    },
+  });
 });
 
 // --- Gacha (requires login) ---
@@ -385,6 +409,183 @@ app.get("/user/currency", requireAuth, async (_req, res) => {
     return;
   }
   res.json({ currencies: data ?? [] });
+});
+
+// --- Admin only (requireAuth + requireAdmin) ---
+app.get("/admin/users", requireAuth, requireAdmin, async (_req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, email, username, is_admin, created_at")
+    .order("created_at", { ascending: false });
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+  res.json({ users: data ?? [] });
+});
+
+app.get("/admin/users/:userId/currency", requireAuth, requireAdmin, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const userId = Number(req.params.userId);
+  if (!Number.isFinite(userId)) {
+    res.status(400).json({ error: "Invalid user id" });
+    return;
+  }
+  const { data, error } = await supabase
+    .from("user_currency")
+    .select("id, currency_type, balance, updated_at")
+    .eq("user_id", userId)
+    .order("currency_type");
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+  res.json({ currencies: data ?? [] });
+});
+
+app.post("/admin/users/:userId/currency", requireAuth, requireAdmin, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const userId = Number(req.params.userId);
+  const { currency_type, amount } = req.body ?? {};
+  if (!Number.isFinite(userId) || !currency_type || typeof amount !== "number" || amount <= 0) {
+    res.status(400).json({ error: "Invalid user id, currency_type, or positive amount" });
+    return;
+  }
+  const { data: row } = await supabase
+    .from("user_currency")
+    .select("id, balance")
+    .eq("user_id", userId)
+    .eq("currency_type", String(currency_type))
+    .maybeSingle();
+  const now = new Date().toISOString();
+  if (row) {
+    const newBalance = (row as { balance: number }).balance + amount;
+    const { data, error } = await supabase
+      .from("user_currency")
+      .update({ balance: newBalance, updated_at: now })
+      .eq("id", (row as { id: number }).id)
+      .select()
+      .single();
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+    res.json(data);
+  } else {
+    const { data, error } = await supabase
+      .from("user_currency")
+      .insert({
+        user_id: userId,
+        currency_type: String(currency_type),
+        balance: amount,
+      })
+      .select()
+      .single();
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+    res.json(data);
+  }
+});
+
+app.get("/admin/users/:userId/history", requireAuth, requireAdmin, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const userId = Number(req.params.userId);
+  if (!Number.isFinite(userId)) {
+    res.status(400).json({ error: "Invalid user id" });
+    return;
+  }
+  const limit = Math.min(Number(req.query.limit) || 50, 200);
+  type PullRow = { id: number; pool_id: number; reward_type: string; pull_at: string; fulfilled_at?: string | null };
+  let rows: PullRow[] = [];
+  let withFulfilled = true;
+
+  const resultWithFulfilled = await supabase
+    .from("user_gacha_pulls")
+    .select("id, pool_id, reward_type, pull_at, fulfilled_at")
+    .eq("user_id", userId)
+    .order("pull_at", { ascending: false })
+    .limit(limit);
+
+  if (resultWithFulfilled.error && /fulfilled_at|column/i.test(resultWithFulfilled.error.message)) {
+    withFulfilled = false;
+    const resultWithout = await supabase
+      .from("user_gacha_pulls")
+      .select("id, pool_id, reward_type, pull_at")
+      .eq("user_id", userId)
+      .order("pull_at", { ascending: false })
+      .limit(limit);
+    if (resultWithout.error) {
+      res.status(500).json({ error: resultWithout.error.message });
+      return;
+    }
+    rows = (resultWithout.data ?? []).map((r) => ({ ...r, fulfilled_at: null }));
+  } else {
+    if (resultWithFulfilled.error) {
+      res.status(500).json({ error: resultWithFulfilled.error.message });
+      return;
+    }
+    rows = (resultWithFulfilled.data ?? []) as PullRow[];
+  }
+
+  const poolIds = [...new Set(rows.map((r) => r.pool_id))];
+  const { data: pools } =
+    poolIds.length > 0
+      ? await supabase.from("gacha_pools").select("id, name").in("id", poolIds)
+      : { data: [] };
+  const poolNames = new Map((pools ?? []).map((p: { id: number; name: string }) => [p.id, p.name]));
+  const history = rows.map((r) => ({
+    id: r.id,
+    poolId: r.pool_id,
+    poolName: poolNames.get(r.pool_id) ?? "Unknown",
+    rewardType: r.reward_type,
+    pulledAt: r.pull_at,
+    fulfilledAt: withFulfilled ? r.fulfilled_at ?? null : null,
+  }));
+  res.json({ history });
+});
+
+app.patch("/admin/pulls/:pullId/fulfilled", requireAuth, requireAdmin, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const pullId = Number(req.params.pullId);
+  const { fulfilled } = req.body ?? {};
+  if (!Number.isFinite(pullId)) {
+    res.status(400).json({ error: "Invalid pull id" });
+    return;
+  }
+  const now = new Date().toISOString();
+  const fulfilledAt = fulfilled === true ? now : null;
+  const { data, error } = await supabase
+    .from("user_gacha_pulls")
+    .update({ fulfilled_at: fulfilledAt })
+    .eq("id", pullId)
+    .select()
+    .single();
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+  res.json({
+    id: (data as { id: number }).id,
+    fulfilled_at: (data as { fulfilled_at: string | null }).fulfilled_at,
+  });
 });
 
 app.listen(port, () => {

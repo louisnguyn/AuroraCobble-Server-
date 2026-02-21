@@ -16,7 +16,9 @@ import { AuthModal } from './AuthModal'
 const CHEST_OPEN_MS = 1800
 const REWARD_REVEAL_MS = 500
 
-function getRarity(weight: number): { label: string; className: string } {
+function getRarity(weight: number, totalWeight: number): { label: string; className: string } {
+  const pct = totalWeight > 0 ? (weight / totalWeight) * 100 : 0
+  if (pct < 1) return { label: 'Super Rare', className: 'bg-red-500/25 text-red-300 border-red-400/50' }
   if (weight <= 2) return { label: 'Very Rare', className: 'bg-netherite/30 text-netherite border-netherite/50' }
   if (weight <= 5) return { label: 'Rare', className: 'bg-gold/20 text-gold border-gold/50' }
   if (weight <= 10) return { label: 'Uncommon', className: 'bg-emerald/20 text-emerald border-emerald/50' }
@@ -207,15 +209,18 @@ export function Gacha() {
                 <div className="mt-6">
                   <h3 className="text-sm font-semibold text-muted uppercase tracking-wider mb-3">Rates (this banner)</h3>
                   <ul className="space-y-2">
-                    {poolRewards.map((r) => {
-                      const { label, className } = getRarity(r.weight)
+                    {(() => {
+                      const totalWeight = poolRewards.reduce((s, r) => s + r.weight, 0)
+                      return poolRewards.map((r) => {
+                      const { label, className } = getRarity(r.weight, totalWeight)
                       return (
                         <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-2 px-3 rounded-lg bg-[#0f0a1a]/50 border border-border/50">
                           <span className="text-[#e2e8f0] text-sm">{r.reward_type}</span>
                           <span className={`text-xs font-medium px-2 py-0.5 rounded border ${className}`}>{label}</span>
                         </li>
                       )
-                    })}
+                    })
+                    })()}
                   </ul>
                 </div>
               )}

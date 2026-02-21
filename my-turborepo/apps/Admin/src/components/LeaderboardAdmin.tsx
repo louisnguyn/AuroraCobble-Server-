@@ -124,7 +124,7 @@ export function LeaderboardAdmin() {
                       {p.wins} / {p.losses}
                     </td>
                     <td className="py-2 px-4 text-right">
-                      {typeof p.winRate === 'number' ? `${(p.winRate * 100).toFixed(1)}%` : '—'}
+                      {typeof p.winRate === 'number' ? `${(p.winRate <= 1 ? p.winRate * 100 : p.winRate).toFixed(1)}%` : '—'}
                     </td>
                     <td className="py-2 px-4 text-right">{p.currentStreak ?? '—'}</td>
                     </tr>

@@ -11,6 +11,7 @@ export type UserRow = {
   email: string;
   password_hash: string;
   username: string;
+  is_admin: boolean;
   created_at: string;
   updated_at: string;
 };

@@ -13,7 +13,7 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
   return bcrypt.compare(password, hash);
 }
 
-export type JwtPayload = { userId: number; email: string; username: string };
+export type JwtPayload = { userId: number; email: string; username: string; isAdmin?: boolean };
 
 export function signToken(payload: JwtPayload): string {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
@@ -68,6 +68,7 @@ export async function createUser(params: {
       email,
       password_hash,
       username,
+      is_admin: false,
     })
     .select()
     .single();
