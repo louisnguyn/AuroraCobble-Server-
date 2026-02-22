@@ -60,7 +60,7 @@ export function UsersAdmin() {
     setGranting(true)
     setError(null)
     try {
-      await grantCurrency(selectedUser.id, grantType, amount)
+      await grantCurrency(selectedUser.id, grantType.trim(), amount)
       setGrantAmount('')
       const { currencies: c } = await fetchAdminUserCurrency(selectedUser.id)
       setCurrencies(c)
@@ -168,14 +168,19 @@ export function UsersAdmin() {
                     <label htmlFor="grant-type" className="block text-xs text-muted mb-1">
                       Type
                     </label>
-                    <input
+                    <select
                       id="grant-type"
-                      type="text"
                       value={grantType}
                       onChange={(e) => setGrantType(e.target.value)}
-                      placeholder="e.g. gems, tickets"
-                      className="w-28 px-2 py-1.5 rounded bg-[#0f0a1a] border border-border text-sm text-[#e2e8f0]"
-                    />
+                      className="min-w-[140px] px-2 py-1.5 rounded bg-[#0f0a1a] border border-border text-sm text-[#e2e8f0]"
+                    >
+                      <option value="tickets">tickets</option>
+                      <option value="mythic tickets">mythic tickets</option>
+                      <option value="shiny mythic tickets">shiny mythic tickets</option>
+                      <option value="legendary tickets">legend tickets</option>
+                      <option value="shiny legendary tickets">shiny legend tickets</option>
+                      <option value="shiny paradox tickets">shiny paradox tickets</option>
+                    </select>
                   </div>
                   <div>
                     <label htmlFor="grant-amount" className="block text-xs text-muted mb-1">

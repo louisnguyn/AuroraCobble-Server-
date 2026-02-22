@@ -411,6 +411,93 @@ app.get("/user/currency", requireAuth, async (_req, res) => {
   res.json({ currencies: data ?? [] });
 });
 
+// Ticket exchange: spend tickets for special ticket types
+const EXCHANGE_RATES: { to_currency: string; cost_tickets: number; label: string }[] = [
+  { to_currency: "mythic tickets", cost_tickets: 5, label: "Mythic Tickets" },
+  { to_currency: "shiny mythic tickets", cost_tickets: 10, label: "Shiny Mythic Tickets" },
+  { to_currency: "legendary tickets", cost_tickets: 10, label: "Legend Tickets" },
+  { to_currency: "shiny legendary tickets", cost_tickets: 20, label: "Shiny Legend Tickets" },
+  { to_currency: "shiny paradox tickets", cost_tickets: 10, label: "Shiny Paradox Tickets" },
+];
+
+app.get("/user/exchange-rates", requireAuth, (_req, res) => {
+  res.json({ rates: EXCHANGE_RATES });
+});
+
+app.post("/user/exchange", requireAuth, async (req, res) => {
+  const user = res.locals.user!;
+  const userId = user.userId;
+  const { to_currency } = req.body ?? {};
+  if (!to_currency || typeof to_currency !== "string") {
+    res.status(400).json({ error: "Missing or invalid to_currency" });
+    return;
+  }
+  const rate = EXCHANGE_RATES.find((r) => r.to_currency === to_currency);
+  if (!rate) {
+    res.status(400).json({ error: "Unknown exchange target" });
+    return;
+  }
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const cost = rate.cost_tickets;
+
+  const { data: ticketsRow } = await supabase
+    .from("user_currency")
+    .select("id, balance")
+    .eq("user_id", userId)
+    .eq("currency_type", "tickets")
+    .maybeSingle();
+  const currentTickets = (ticketsRow as { balance: number } | null)?.balance ?? 0;
+  if (currentTickets < cost) {
+    res.status(400).json({ error: "Not enough tickets", balance: currentTickets, required: cost });
+    return;
+  }
+
+  const ticketsId = (ticketsRow as { id: number } | null)?.id;
+  if (ticketsId) {
+    const { error: updErr } = await supabase
+      .from("user_currency")
+      .update({
+        balance: currentTickets - cost,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", ticketsId);
+    if (updErr) {
+      res.status(500).json({ error: updErr.message });
+      return;
+    }
+  }
+
+  const { data: targetRow } = await supabase
+    .from("user_currency")
+    .select("id, balance")
+    .eq("user_id", userId)
+    .eq("currency_type", to_currency)
+    .maybeSingle();
+  const now = new Date().toISOString();
+  if (targetRow) {
+    const newBalance = (targetRow as { balance: number }).balance + 1;
+    await supabase
+      .from("user_currency")
+      .update({ balance: newBalance, updated_at: now })
+      .eq("id", (targetRow as { id: number }).id);
+  } else {
+    await supabase.from("user_currency").insert({
+      user_id: userId,
+      currency_type: to_currency,
+      balance: 1,
+    });
+  }
+
+  res.json({
+    to_currency,
+    cost_tickets: cost,
+    new_tickets_balance: currentTickets - cost,
+  });
+});
+
 // --- Admin only (requireAuth + requireAdmin) ---
 app.get("/admin/users", requireAuth, requireAdmin, async (_req, res) => {
   if (!supabase) {
@@ -457,7 +544,8 @@ app.post("/admin/users/:userId/currency", requireAuth, requireAdmin, async (req,
   }
   const userId = Number(req.params.userId);
   const { currency_type, amount } = req.body ?? {};
-  if (!Number.isFinite(userId) || !currency_type || typeof amount !== "number" || amount <= 0) {
+  const currencyTypeStr = typeof currency_type === "string" ? currency_type.trim() : "";
+  if (!Number.isFinite(userId) || !currencyTypeStr || typeof amount !== "number" || amount <= 0) {
     res.status(400).json({ error: "Invalid user id, currency_type, or positive amount" });
     return;
   }
@@ -465,7 +553,7 @@ app.post("/admin/users/:userId/currency", requireAuth, requireAdmin, async (req,
     .from("user_currency")
     .select("id, balance")
     .eq("user_id", userId)
-    .eq("currency_type", String(currency_type))
+    .eq("currency_type", currencyTypeStr)
     .maybeSingle();
   const now = new Date().toISOString();
   if (row) {
@@ -486,7 +574,7 @@ app.post("/admin/users/:userId/currency", requireAuth, requireAdmin, async (req,
       .from("user_currency")
       .insert({
         user_id: userId,
-        currency_type: String(currency_type),
+        currency_type: currencyTypeStr,
         balance: amount,
       })
       .select()

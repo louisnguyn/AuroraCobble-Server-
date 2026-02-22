@@ -6,10 +6,14 @@ import {
   fetchPoolRewards,
   fetchGachaHistory,
   gachaPull,
+  fetchExchangeRates,
+  exchangeTickets,
+  fetchUserCurrencies,
   type GachaPool,
   type GachaRewardResult,
   type PoolReward,
   type GachaHistoryEntry,
+  type ExchangeRate,
 } from '../authApi'
 import { AuthModal } from './AuthModal'
 
@@ -38,6 +42,9 @@ export function Gacha() {
   const [chestPhase, setChestPhase] = useState<'idle' | 'opening' | 'reveal'>('idle')
   const [poolRewards, setPoolRewards] = useState<PoolReward[]>([])
   const [history, setHistory] = useState<GachaHistoryEntry[]>([])
+  const [exchangeRates, setExchangeRates] = useState<ExchangeRate[]>([])
+  const [currencies, setCurrencies] = useState<{ currency_type: string; balance: number }[]>([])
+  const [exchanging, setExchanging] = useState<string | null>(null)
   const openStartRef = useRef(0)
   const pendingRewardRef = useRef<GachaRewardResult | null>(null)
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([])
@@ -70,6 +77,33 @@ export function Gacha() {
       .then(({ history: h }) => setHistory(h))
       .catch(() => setHistory([]))
   }, [isAuthenticated])
+
+  useEffect(() => {
+    if (!isAuthenticated) return
+    fetchExchangeRates().then(({ rates }) => setExchangeRates(rates)).catch(() => setExchangeRates([]))
+    fetchUserCurrencies().then(({ currencies: c }) => setCurrencies(c)).catch(() => setCurrencies([]))
+  }, [isAuthenticated])
+
+  const refetchCurrencies = () => {
+    fetchUserCurrencies().then(({ currencies: c }) => setCurrencies(c)).catch(() => {})
+    if (selectedPool) {
+      fetchPoolCurrency(selectedPool.id).then(({ balance: b }) => setBalance(b)).catch(() => {})
+    }
+  }
+
+  const handleExchange = async (toCurrency: string) => {
+    if (exchanging) return
+    setExchanging(toCurrency)
+    setError(null)
+    try {
+      await exchangeTickets(toCurrency)
+      refetchCurrencies()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Exchange failed')
+    } finally {
+      setExchanging(null)
+    }
+  }
 
   const triggerReveal = () => {
     const result = pendingRewardRef.current
@@ -169,6 +203,52 @@ export function Gacha() {
 
       {!loading && pools.length > 0 && (
         <div className="space-y-6">
+          {exchangeRates.length > 0 && (
+            <div className="rounded-2xl bg-surface/80 border border-border p-4 sm:p-6">
+              <h3 className="text-sm font-semibold text-muted uppercase tracking-wider mb-3">Exchange tickets</h3>
+              <div className="mb-4">
+                <p className="text-xs text-muted uppercase tracking-wider mb-2">Your currencies</p>
+                <div className="flex flex-wrap gap-2">
+                  {currencies.length === 0 ? (
+                    <span className="text-sm text-muted">No currency yet</span>
+                  ) : (
+                    currencies.map((c) => (
+                      <span
+                        key={c.currency_type}
+                        className="inline-flex items-center px-3 py-1.5 rounded-lg bg-[#0f0a1a]/50 border border-border/50 text-sm"
+                      >
+                        <span className="text-muted">{c.currency_type.replace(/_/g, ' ')}:</span>
+                        <span className="ml-1.5 font-medium text-[#e2e8f0]">{c.balance}</span>
+                      </span>
+                    ))
+                  )}
+                </div>
+              </div>
+              <ul className="space-y-2">
+                {exchangeRates.map((rate) => {
+                  const ticketsBalance = currencies.find((c) => c.currency_type === 'tickets')?.balance ?? 0
+                  const canAfford = ticketsBalance >= rate.cost_tickets
+                  const busy = exchanging === rate.to_currency
+                  return (
+                    <li key={rate.to_currency} className="flex flex-wrap items-center justify-between gap-3 py-2 px-3 rounded-lg bg-[#0f0a1a]/50 border border-border/50">
+                      <span className="text-[#e2e8f0] text-sm">
+                        {rate.cost_tickets} tickets → <span className="font-medium text-accent">{rate.label}</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleExchange(rate.to_currency)}
+                        disabled={!canAfford || !!exchanging}
+                        className="px-3 py-1.5 rounded-lg bg-accent/20 text-accent text-sm font-medium border border-accent/40 hover:bg-accent/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {busy ? '…' : 'Exchange'}
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {pools.map((pool) => (
               <button

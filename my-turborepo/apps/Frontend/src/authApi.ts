@@ -126,3 +126,24 @@ export async function gachaPull(poolId: number): Promise<GachaRewardResult> {
 export async function fetchUserCurrencies(): Promise<{ currencies: { currency_type: string; balance: number }[] }> {
   return fetchApi<{ currencies: { currency_type: string; balance: number }[] }>('/user/currency')
 }
+
+export interface ExchangeRate {
+  to_currency: string
+  cost_tickets: number
+  label: string
+}
+
+export async function fetchExchangeRates(): Promise<{ rates: ExchangeRate[] }> {
+  return fetchApi<{ rates: ExchangeRate[] }>('/user/exchange-rates')
+}
+
+export async function exchangeTickets(toCurrency: string): Promise<{
+  to_currency: string
+  cost_tickets: number
+  new_tickets_balance: number
+}> {
+  return fetchApi<{ to_currency: string; cost_tickets: number; new_tickets_balance: number }>('/user/exchange', {
+    method: 'POST',
+    body: JSON.stringify({ to_currency: toCurrency }),
+  })
+}
