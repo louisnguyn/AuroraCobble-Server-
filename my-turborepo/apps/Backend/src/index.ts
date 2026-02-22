@@ -19,6 +19,29 @@ const cobbleStore = {
 };
 const COBBLE_API_KEY = process.env.COBBLE_API_KEY;
 const CORS_ORIGIN = process.env.CORS_ORIGIN ?? "*";
+const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL?.trim() || null;
+
+function notifyDiscordPull(username: string, poolName: string, rewardType: string) {
+  if (!DISCORD_WEBHOOK_URL) {
+    console.log("[Discord] DISCORD_WEBHOOK_URL not set, skip announce");
+    return;
+  }
+  const content = `**${username}** pulled **${rewardType}** from **${poolName}**!`;
+  fetch(DISCORD_WEBHOOK_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content }),
+  })
+    .then(async (res) => {
+      if (!res.ok) {
+        const text = await res.text();
+        console.warn("[Discord] webhook failed:", res.status, text);
+      } else {
+        console.log("[Discord] pull announced");
+      }
+    })
+    .catch((err) => console.warn("[Discord] webhook error:", err));
+}
 
 // CORS: required when frontend is on a different origin (e.g. deploy frontend + backend separately)
 app.use((_req, res, next) => {
@@ -283,13 +306,14 @@ app.post("/gacha/pull", requireAuth, async (req, res) => {
   }
   const { data: pool, error: poolErr } = await supabase
     .from("gacha_pools")
-    .select("id, config")
+    .select("id, name, config")
     .eq("id", id)
     .single();
   if (poolErr || !pool) {
     res.status(404).json({ error: "Pool not found" });
     return;
   }
+  const poolName = (pool as { name?: string }).name ?? "Banner";
   const config = (pool.config as { cost?: number; currency_type?: string }) ?? {};
   const cost = Number(config.cost) || 100;
   const currencyType = (config.currency_type as string) ?? "gems";
@@ -350,6 +374,8 @@ app.post("/gacha/pull", requireAuth, async (req, res) => {
   if (historyErr) {
     // table may not exist yet; pull still succeeds
   }
+
+  notifyDiscordPull(user.username, poolName, chosen.reward_type);
 
   res.json({
     reward: {
