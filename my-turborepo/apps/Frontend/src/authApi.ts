@@ -68,6 +68,13 @@ export async function fetchMe(): Promise<{ user: AuthUser }> {
   return fetchApi<{ user: AuthUser }>('/auth/me')
 }
 
+export async function changePassword(currentPassword: string, newPassword: string): Promise<{ ok: boolean }> {
+  return fetchApi<{ ok: boolean }>('/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify({ currentPassword, newPassword }),
+  })
+}
+
 // Gacha
 export interface GachaPool {
   id: number

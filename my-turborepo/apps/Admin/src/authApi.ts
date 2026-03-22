@@ -112,3 +112,9 @@ export async function setPullFulfilled(pullId: number, fulfilled: boolean): Prom
     body: JSON.stringify({ fulfilled }),
   })
 }
+
+export async function deleteAdminPull(pullId: number): Promise<{ ok: boolean; id: number }> {
+  return fetchJson<{ ok: boolean; id: number }>(`/admin/pulls/${pullId}`, {
+    method: 'DELETE',
+  })
+}

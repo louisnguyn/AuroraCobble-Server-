@@ -6,6 +6,7 @@ import {
   verifyPassword,
   signToken,
   verifyToken,
+  updatePasswordForUser,
   type JwtPayload,
 } from "./auth.js";
 import { supabase } from "./supabase.js";
@@ -226,6 +227,21 @@ app.get("/auth/me", requireAuth, (_req, res) => {
       is_admin: user.isAdmin ?? false,
     },
   });
+});
+
+app.post("/auth/change-password", requireAuth, async (req, res) => {
+  const user = res.locals.user!;
+  const { currentPassword, newPassword } = req.body ?? {};
+  if (typeof currentPassword !== "string" || typeof newPassword !== "string") {
+    res.status(400).json({ error: "currentPassword and newPassword are required" });
+    return;
+  }
+  const result = await updatePasswordForUser(user.userId, currentPassword, newPassword);
+  if ("error" in result) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+  res.json({ ok: true });
 });
 
 // --- Gacha (requires login) ---
@@ -700,6 +716,24 @@ app.patch("/admin/pulls/:pullId/fulfilled", requireAuth, requireAdmin, async (re
     id: (data as { id: number }).id,
     fulfilled_at: (data as { fulfilled_at: string | null }).fulfilled_at,
   });
+});
+
+app.delete("/admin/pulls/:pullId", requireAuth, requireAdmin, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const pullId = Number(req.params.pullId);
+  if (!Number.isFinite(pullId)) {
+    res.status(400).json({ error: "Invalid pull id" });
+    return;
+  }
+  const { error } = await supabase.from("user_gacha_pulls").delete().eq("id", pullId);
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+  res.json({ ok: true, id: pullId });
 });
 
 app.listen(port, () => {

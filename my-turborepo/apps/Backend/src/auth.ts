@@ -76,3 +76,25 @@ export async function createUser(params: {
   if (error) return { error: error.message };
   return data as UserRow;
 }
+
+export async function updatePasswordForUser(
+  userId: number,
+  currentPassword: string,
+  newPassword: string
+): Promise<{ ok: true } | { error: string }> {
+  if (!supabase) return { error: "Database not configured" };
+  if (newPassword.length < 8) return { error: "Password must be at least 8 characters" };
+  const user = await findUserById(userId);
+  if (!user) return { error: "User not found" };
+  const ok = await verifyPassword(currentPassword, user.password_hash);
+  if (!ok) return { error: "Current password is incorrect" };
+  if (currentPassword === newPassword) return { error: "New password must be different from your current password" };
+  const password_hash = await hashPassword(newPassword);
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from("users")
+    .update({ password_hash, updated_at: now })
+    .eq("id", userId);
+  if (error) return { error: error.message };
+  return { ok: true };
+}

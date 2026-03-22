@@ -8,8 +8,9 @@ import { Wiki } from './components/Wiki.tsx'
 import { Rules } from './components/Rules.tsx'
 import { Gacha } from './components/Gacha.tsx'
 import { AuthModal } from './components/AuthModal.tsx'
+import { Account } from './components/Account.tsx'
 
-type Page = 'main' | 'leaderboard' | 'usage' | 'wiki' | 'rules' | 'gacha'
+type Page = 'main' | 'leaderboard' | 'usage' | 'wiki' | 'rules' | 'gacha' | 'account'
 
 const PAGES: { id: Page; label: string }[] = [
   { id: 'main', label: 'Main' },
@@ -18,6 +19,7 @@ const PAGES: { id: Page; label: string }[] = [
   { id: 'wiki', label: 'Wiki' },
   { id: 'rules', label: 'Rules' },
   { id: 'gacha', label: 'Gacha' },
+  { id: 'account', label: 'Account' },
 ]
 
 function AppContent() {
@@ -108,6 +110,7 @@ function AppContent() {
         {page === 'wiki' && <Wiki />}
         {page === 'rules' && <Rules />}
         {page === 'gacha' && <Gacha />}
+        {page === 'account' && <Account />}
       </main>
     </div>
   )
