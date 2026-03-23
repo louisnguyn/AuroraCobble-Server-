@@ -158,6 +158,43 @@ app.post("/v4/leaderboard", requireCobbleAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// --- Spawn data (public) ---
+app.get("/spawn/pokemon", async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const q = String(req.query.q ?? "").trim();
+  const generation = String(req.query.generation ?? "").trim();
+  const source = String(req.query.source ?? "").trim();
+  const limit = Math.min(Math.max(Number(req.query.limit) || 500, 1), 2000);
+
+  let query = supabase
+    .from("pokemon_spawn")
+    .select("id, generation, generation_number, dex_number, pokemon, source, spawn, rarity, condition, forms")
+    .order("generation_number", { ascending: true })
+    .order("dex_number", { ascending: true })
+    .order("pokemon", { ascending: true })
+    .limit(limit);
+
+  if (q) query = query.ilike("pokemon", `%${q}%`);
+  if (generation) query = query.eq("generation", generation);
+  if (source) query = query.eq("source", source);
+
+  const { data, error } = await query;
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+  const rows = (data ?? []) as { generation: string | null; source: string | null }[];
+  const generations = Array.from(new Set(rows.map((r) => r.generation).filter(Boolean))) as string[];
+  const sources = Array.from(new Set(rows.map((r) => r.source).filter(Boolean))) as string[];
+  res.json({
+    rows: data ?? [],
+    filters: { generations, sources },
+  });
+});
+
 // --- Auth (users table, no Supabase built-in auth) ---
 app.post("/auth/signup", async (req, res) => {
   const { email, password, username } = req.body ?? {};

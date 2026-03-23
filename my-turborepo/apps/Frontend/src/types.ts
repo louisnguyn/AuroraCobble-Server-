@@ -71,3 +71,24 @@ export interface LeaderboardEntry {
   losses?: number
   [key: string]: unknown
 }
+
+export interface SpawnPokemonRow {
+  id: number
+  generation: string | null
+  generation_number: number | null
+  dex_number: number | null
+  pokemon: string
+  source: string | null
+  spawn: string | null
+  rarity: string | null
+  condition: string | null
+  forms: string | null
+}
+
+export interface SpawnPokemonResponse {
+  rows: SpawnPokemonRow[]
+  filters: {
+    generations: string[]
+    sources: string[]
+  }
+}

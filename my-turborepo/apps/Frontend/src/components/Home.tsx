@@ -1,4 +1,4 @@
-type Page = 'main' | 'leaderboard' | 'usage' | 'wiki' | 'rules' | 'gacha'
+type Page = 'main' | 'leaderboard' | 'usage' | 'wiki' | 'rules' | 'gacha' | 'spawn'
 
 const QUICK_LINKS: { id: Exclude<Page, 'main'>; label: string; description: string }[] = [
   { id: 'leaderboard', label: 'Leaderboard', description: 'Rankings, ELO & tier standings' },
@@ -6,6 +6,7 @@ const QUICK_LINKS: { id: Exclude<Page, 'main'>; label: string; description: stri
   { id: 'wiki', label: 'Wiki', description: 'Pokédex, moves, evolution & forms' },
   { id: 'rules', label: 'Rules', description: 'Format rules & restrictions' },
   { id: 'gacha', label: 'Gacha', description: 'Open loot & collect rewards (login required)' },
+  { id: 'spawn', label: 'Spawn', description: 'Pokemon spawn locations and conditions' },
 ]
 
 interface HomeProps {

@@ -9,8 +9,9 @@ import { Rules } from './components/Rules.tsx'
 import { Gacha } from './components/Gacha.tsx'
 import { AuthModal } from './components/AuthModal.tsx'
 import { Account } from './components/Account.tsx'
+import { Spawn } from './components/Spawn.tsx'
 
-type Page = 'main' | 'leaderboard' | 'usage' | 'wiki' | 'rules' | 'gacha' | 'account'
+type Page = 'main' | 'leaderboard' | 'usage' | 'wiki' | 'rules' | 'gacha' | 'spawn' | 'account'
 
 const PAGES: { id: Page; label: string }[] = [
   { id: 'main', label: 'Main' },
@@ -19,6 +20,7 @@ const PAGES: { id: Page; label: string }[] = [
   { id: 'wiki', label: 'Wiki' },
   { id: 'rules', label: 'Rules' },
   { id: 'gacha', label: 'Gacha' },
+  { id: 'spawn', label: 'Spawn' },
   { id: 'account', label: 'Account' },
 ]
 
@@ -110,6 +112,7 @@ function AppContent() {
         {page === 'wiki' && <Wiki />}
         {page === 'rules' && <Rules />}
         {page === 'gacha' && <Gacha />}
+        {page === 'spawn' && <Spawn />}
         {page === 'account' && <Account />}
       </main>
     </div>
