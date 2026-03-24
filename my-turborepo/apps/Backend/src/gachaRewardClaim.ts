@@ -1,5 +1,6 @@
 /**
  * Map gacha reward_type text to Cobblemon /givepokemonother args.
+ * Multi-word species: spaces are removed (e.g. "Chi Yu" → chiyu), not underscores.
  * Examples: "shiny mesprit" → mesprit + shiny; "pikachu" → pikachu.
  * Returns null for banners, tickets, or non-Pokémon labels.
  */
@@ -19,7 +20,7 @@ export function parseRewardForGivePokemon(
   rest = rest.split(/\s*[–-]\s*/)[0] ?? rest;
   rest = rest.replace(/\s*\([^)]*\)\s*/g, "").trim();
   if (!rest || block.test(rest)) return null;
-  const species = rest.replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+  const species = rest.replace(/\s+/g, "").replace(/[^a-z0-9_]/g, "");
   if (species.length < 2 || species.length > 40) return null;
   return { species, shiny };
 }
