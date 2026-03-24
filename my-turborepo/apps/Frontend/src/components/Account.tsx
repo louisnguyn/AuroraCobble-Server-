@@ -37,6 +37,7 @@ export function Account() {
   const [dailyBusy, setDailyBusy] = useState(false)
   const [dailyError, setDailyError] = useState<string | null>(null)
   const [dailySuccess, setDailySuccess] = useState<string | null>(null)
+  const [dailyResetCountdown, setDailyResetCountdown] = useState('—')
   const [inventory, setInventory] = useState<{ item_key: string; quantity: number }[]>([])
   const [shopItems, setShopItems] = useState<ShopItem[]>([])
   const [shopBusyItem, setShopBusyItem] = useState<string | null>(null)
@@ -56,6 +57,16 @@ export function Account() {
   const [pokemonSuccess, setPokemonSuccess] = useState<string | null>(null)
   const [pokemonClaimedToServerAt, setPokemonClaimedToServerAt] = useState<Record<number, string>>({})
   const [userPvpRank, setUserPvpRank] = useState<UserPvpRank | null>(null)
+  const PVP_DAILY_REWARD_BY_RANK: Record<number, number> = {
+    1: 60_000,
+    2: 50_000,
+    3: 45_000,
+    4: 40_000,
+    5: 35_000,
+    6: 30_000,
+    7: 25_000,
+    8: 20_000,
+  }
 
   const displayItemName = (key: string): string => {
     const map: Record<string, string> = {
@@ -123,6 +134,32 @@ export function Account() {
     const id = setInterval(update, 1000)
     return () => clearInterval(id)
   }, [pokemonWindowEnd])
+
+  useEffect(() => {
+    const update = () => {
+      const tz = daily?.timeZone ?? 'Asia/Ho_Chi_Minh'
+      const parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: tz,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      }).formatToParts(new Date())
+      const hNow = Number(parts.find((p) => p.type === 'hour')?.value ?? '0')
+      const mNow = Number(parts.find((p) => p.type === 'minute')?.value ?? '0')
+      const sNow = Number(parts.find((p) => p.type === 'second')?.value ?? '0')
+      const elapsed = hNow * 3600 + mNow * 60 + sNow
+      const total = 24 * 3600 - elapsed
+      const h = Math.floor(total / 3600)
+      const min = Math.floor((total % 3600) / 60)
+      const s = total % 60
+      setDailyResetCountdown(`${h}h ${min}m ${s}s`)
+    }
+
+    update()
+    const id = setInterval(update, 1000)
+    return () => clearInterval(id)
+  }, [daily?.timeZone])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -279,6 +316,17 @@ export function Account() {
               : 'Unranked'}
           </span>
         </span>
+        <span className="block mt-1">
+          Next reset reward:{' '}
+          <span className="text-[#fbbf24]">
+            {(
+              userPvpRank?.rank != null
+                ? (PVP_DAILY_REWARD_BY_RANK[userPvpRank.rank] ?? 0)
+                : 0
+            ).toLocaleString()}{' '}
+            Cobble$
+          </span>
+        </span>
         {user?.email && (
           <span className="block mt-1 truncate" title={user.email}>
             {user.email}
@@ -318,6 +366,7 @@ export function Account() {
               <p className="text-sm text-muted m-0">
                 Reset: 00:00 ({daily?.timeZone ?? 'Asia/Ho_Chi_Minh'}) · Date: {daily?.date ?? '—'}
               </p>
+              <p className="text-sm text-muted mt-2 mb-0">Next reset in: {dailyResetCountdown}</p>
               <p className="text-sm text-violet-200 mt-2 mb-2">
                 Next: Day {daily?.streak.nextDay ?? 1} · {daily?.streak.nextReward?.label ?? 'Reward'}
               </p>

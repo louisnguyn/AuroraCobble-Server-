@@ -2,7 +2,21 @@ import { useCallback, useEffect, useState } from 'react'
 import { fetchCobbleDollarsLeaderboard } from '../api'
 import type { CobbleDollarsLeaderboardResponse } from '../types'
 import { useAuth } from '../contexts/AuthContext'
-import { depositCobbledollars, fetchUserCurrencies } from '../authApi'
+import {
+  depositCobbledollars,
+  fetchCobbledollarsLedger,
+  fetchUserCurrencies,
+  type CobbledollarLedgerRow,
+} from '../authApi'
+
+const LEDGER_KIND_LABEL: Record<string, string> = {
+  deposit_to_server: 'Deposit to Minecraft',
+  shop: 'Item shop',
+  pokemon_shop: 'Shiny Pokémon shop',
+  daily_login: 'Daily streak',
+  pvp_rank_daily: 'PvP rank reward',
+  admin_grant: 'Staff grant',
+}
 
 export function CobbleDollars() {
   const { isAuthenticated } = useAuth()
@@ -15,6 +29,9 @@ export function CobbleDollars() {
   const [depositAmount, setDepositAmount] = useState('')
   const [depositBusy, setDepositBusy] = useState(false)
   const [depositError, setDepositError] = useState<string | null>(null)
+  const [ledger, setLedger] = useState<CobbledollarLedgerRow[]>([])
+  const [ledgerLoading, setLedgerLoading] = useState(false)
+  const [ledgerError, setLedgerError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -36,6 +53,8 @@ export function CobbleDollars() {
   const loadWallet = useCallback(() => {
     if (!isAuthenticated) {
       setWalletBalance(null)
+      setLedger([])
+      setLedgerError(null)
       return
     }
     setWalletLoading(true)
@@ -48,9 +67,29 @@ export function CobbleDollars() {
       .finally(() => setWalletLoading(false))
   }, [isAuthenticated])
 
+  const loadLedger = useCallback(() => {
+    if (!isAuthenticated) {
+      setLedger([])
+      return
+    }
+    setLedgerLoading(true)
+    setLedgerError(null)
+    fetchCobbledollarsLedger(10)
+      .then(({ transactions }) => setLedger(transactions ?? []))
+      .catch((e) => {
+        setLedger([])
+        setLedgerError(e instanceof Error ? e.message : 'Could not load history')
+      })
+      .finally(() => setLedgerLoading(false))
+  }, [isAuthenticated])
+
   useEffect(() => {
     loadWallet()
   }, [loadWallet])
+
+  useEffect(() => {
+    loadLedger()
+  }, [loadLedger])
 
   const handleDeposit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -65,6 +104,7 @@ export function CobbleDollars() {
       const { newBalance } = await depositCobbledollars(n)
       setWalletBalance(newBalance)
       setDepositAmount('')
+      void loadLedger()
     } catch (err) {
       setDepositError(err instanceof Error ? err.message : 'Deposit failed')
     } finally {
@@ -117,6 +157,57 @@ export function CobbleDollars() {
                 </button>
               </form>
               {depositError && <p className="text-sm text-error m-0 mt-3">{depositError}</p>}
+
+              <div className="mt-6 pt-5 border-t border-border/80">
+                <h3 className="text-sm font-semibold text-[#e2e8f0] m-0 mb-2">Recent activity</h3>
+                <p className="text-xs text-muted m-0 mb-3">Last 10 website Cobble$ changes (newest first).</p>
+                {ledgerLoading ? (
+                  <p className="text-xs text-muted m-0">Loading history…</p>
+                ) : ledgerError ? (
+                  <p className="text-xs text-error m-0">{ledgerError}</p>
+                ) : ledger.length === 0 ? (
+                  <p className="text-xs text-muted m-0">
+                    No entries yet. Deposits, shop purchases, and rewards will appear here after the ledger is
+                    enabled in the database.
+                  </p>
+                ) : (
+                  <ul className="list-none m-0 p-0 space-y-2 max-h-72 overflow-y-auto pr-1">
+                    {ledger.map((tx) => {
+                      const sign = tx.delta >= 0 ? '+' : ''
+                      const label = LEDGER_KIND_LABEL[tx.kind] ?? tx.kind.replace(/_/g, ' ')
+                      return (
+                        <li
+                          key={tx.id}
+                          className="rounded-lg border border-border/60 bg-[#0f0a1a]/50 px-3 py-2 text-left text-xs"
+                        >
+                          <div className="flex flex-wrap items-baseline justify-between gap-2">
+                            <span className="text-[#e2e8f0] font-medium">{label}</span>
+                            <span
+                              className={`tabular-nums font-semibold shrink-0 ${
+                                tx.delta >= 0 ? 'text-emerald-400' : 'text-rose-300'
+                              }`}
+                            >
+                              {sign}
+                              {Number(tx.delta).toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 mt-1 text-muted">
+                            <span className="truncate" title={tx.detail ?? undefined}>
+                              {tx.detail || '—'}
+                            </span>
+                            <span className="tabular-nums shrink-0 text-[#fbbf24]/90">
+                              Bal. {Number(tx.balance_after).toLocaleString()}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-muted/80 m-0 mt-1">
+                            {new Date(tx.created_at).toLocaleString()}
+                          </p>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+              </div>
             </>
           )}
         </section>

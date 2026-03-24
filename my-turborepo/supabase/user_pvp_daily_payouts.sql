@@ -1,8 +1,8 @@
--- Weekly PVP rank rewards (Top 1 and Top 2).
+-- Daily PVP rank rewards (top 1 -> top 8) paid once per day.
 
-CREATE TABLE IF NOT EXISTS user_pvp_weekly_payouts (
+CREATE TABLE IF NOT EXISTS user_pvp_daily_payouts (
   id bigserial PRIMARY KEY,
-  week_start date NOT NULL,
+  payout_date date NOT NULL,
   format_key text NOT NULL DEFAULT 'singles',
   rank_position integer NOT NULL,
   minecraft_username text NOT NULL,
@@ -15,8 +15,8 @@ CREATE TABLE IF NOT EXISTS user_pvp_weekly_payouts (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS uq_user_pvp_weekly_payouts_once
-  ON user_pvp_weekly_payouts (week_start, format_key, rank_position);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_user_pvp_daily_payouts_once
+  ON user_pvp_daily_payouts (payout_date, format_key, rank_position);
 
-CREATE INDEX IF NOT EXISTS idx_user_pvp_weekly_payouts_user
-  ON user_pvp_weekly_payouts (user_id, paid_at DESC);
+CREATE INDEX IF NOT EXISTS idx_user_pvp_daily_payouts_user
+  ON user_pvp_daily_payouts (user_id, paid_at DESC);

@@ -40,7 +40,16 @@ const cobbleStore = {
 };
 
 const COBBLEDOLLARS_PUBLIC_CACHE_TTL_MS = 90_000;
-const PVP_WEEKLY_REWARDS: Record<number, number> = { 1: 75_000, 2: 50_000 };
+const PVP_DAILY_REWARDS: Record<number, number> = {
+  1: 60_000,
+  2: 50_000,
+  3: 45_000,
+  4: 40_000,
+  5: 35_000,
+  6: 30_000,
+  7: 25_000,
+  8: 20_000,
+};
 let cobbledollarsPublicCache: {
   at: number;
   body: {
@@ -76,27 +85,6 @@ function normalizeName(s: string): string {
   return s.trim().toLowerCase();
 }
 
-function startOfWeekIsoDateInTimezone(
-  date: Date,
-  timeZone: string = "Asia/Ho_Chi_Minh"
-): string {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    weekday: "short",
-  }).formatToParts(date);
-  const y = parts.find((p) => p.type === "year")?.value ?? "1970";
-  const m = parts.find((p) => p.type === "month")?.value ?? "01";
-  const d = parts.find((p) => p.type === "day")?.value ?? "01";
-  const w = parts.find((p) => p.type === "weekday")?.value ?? "Mon";
-  const dayMap: Record<string, number> = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
-  const offset = dayMap[w] ?? 0;
-  const utc = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d)));
-  utc.setUTCDate(utc.getUTCDate() - offset);
-  return utc.toISOString().slice(0, 10);
-}
 
 function extractPvpRowsFromLeaderboardPayload(payload: unknown): PvpLeaderboardRow[] {
   const obj = payload as { formats?: Record<string, { players?: unknown[] }>; entries?: unknown[] } | null;
@@ -883,16 +871,16 @@ const DAILY_STREAK_REWARDS = [
   { day: 7, kind: "item", itemKey: "masterball", amount: 1, label: "Master Ball x1" },
 ] as const;
 const SHOP_ITEMS = [
-  { itemKey: "exp_candy_xl", label: "EXP Candy XL", cost: 60_000 },
-  { itemKey: "ancient_origin_ball", label: "Ancient Origin Ball", cost: 500_000 },
+  { itemKey: "exp_candy_xl", label: "EXP Candy XL", cost: 40_000 },
+  { itemKey: "ancient_origin_ball", label: "Ancient Origin Ball", cost: 300_000 },
   { itemKey: "master_ball", label: "Master Ball", cost: 100_000 },
-  { itemKey: "gold_bottle_cap", label: "Gold Bottle Cap", cost: 1_000_000 },
+  { itemKey: "gold_bottle_cap", label: "Gold Bottle Cap", cost: 2_000_000 },
 ] as const;
 const POKEMON_SHOP_REFRESH_HOURS = 4;
 const POKEMON_SHOP_OFFER_COUNT = 3;
 const POKEMON_SHOP_CATEGORIES = {
   starter: {
-    price: 500_000,
+    price: 750_000,
     species: [
       "bulbasaur", "charmander", "squirtle", "chikorita", "cyndaquil", "totodile", "treecko",
       "torchic", "mudkip", "turtwig", "chimchar", "piplup", "snivy", "tepig", "oshawott",
@@ -901,7 +889,7 @@ const POKEMON_SHOP_CATEGORIES = {
     ],
   },
   mythic: {
-    price: 1_500_000,
+    price: 3_500_000,
     species: [
       "mew", "celebi", "jirachi", "deoxys", "manaphy", "phione", "darkrai", "shaymin",
       "arceus", "victini", "keldeo", "meloetta", "genesect", "diancie", "hoopa", "volcanion",
@@ -909,14 +897,14 @@ const POKEMON_SHOP_CATEGORIES = {
     ],
   },
   pseudo_legend: {
-    price: 1_000_000,
+    price: 1_500_000,
     species: [
       "dragonite", "tyranitar", "salamence", "metagross", "garchomp", "hydreigon",
       "goodra", "kommo-o", "dragapult", "baxcalibur",
     ],
   },
   legend: {
-    price: 2_000_000,
+    price: 7_500_000,
     species: [
       "articuno", "zapdos", "moltres", "mewtwo", "raikou", "entei", "suicune", "lugia", "ho-oh",
       "regirock", "regice", "registeel", "latias", "latios", "kyogre", "groudon", "rayquaza",
@@ -1019,10 +1007,31 @@ function yesterdayDateOnly(yyyyMmDd: string): string {
   return dt.toISOString().slice(0, 10);
 }
 
+type CobbledollarsLedgerMeta = { kind: string; detail?: string | null };
+
+async function recordCobbledollarLedger(
+  userId: number,
+  delta: number,
+  balanceAfter: number,
+  kind: string,
+  detail: string | null
+): Promise<void> {
+  if (!supabase || delta === 0) return;
+  const { error } = await supabase.from("user_cobbledollar_ledger").insert({
+    user_id: userId,
+    delta,
+    balance_after: balanceAfter,
+    kind,
+    detail,
+  });
+  if (error) console.warn("[cobbledollars ledger]", error.message);
+}
+
 async function incrementUserCurrency(
   userId: number,
   currencyType: string,
-  amount: number
+  amount: number,
+  cobbledollarsLedger?: CobbledollarsLedgerMeta
 ): Promise<number> {
   if (!supabase) throw new Error("Database not configured");
   const { data: row } = await supabase
@@ -1039,6 +1048,19 @@ async function incrementUserCurrency(
       .update({ balance: newBalance, updated_at: now })
       .eq("id", (row as { id: number }).id);
     if (error) throw new Error(error.message);
+    if (
+      currencyType === COBBLEDOLLARS_CURRENCY &&
+      amount !== 0 &&
+      cobbledollarsLedger
+    ) {
+      void recordCobbledollarLedger(
+        userId,
+        amount,
+        newBalance,
+        cobbledollarsLedger.kind,
+        cobbledollarsLedger.detail ?? null
+      );
+    }
     return newBalance;
   }
   const { error } = await supabase.from("user_currency").insert({
@@ -1047,6 +1069,19 @@ async function incrementUserCurrency(
     balance: amount,
   });
   if (error) throw new Error(error.message);
+  if (
+    currencyType === COBBLEDOLLARS_CURRENCY &&
+    amount !== 0 &&
+    cobbledollarsLedger
+  ) {
+    void recordCobbledollarLedger(
+      userId,
+      amount,
+      amount,
+      cobbledollarsLedger.kind,
+      cobbledollarsLedger.detail ?? null
+    );
+  }
   return amount;
 }
 
@@ -1208,7 +1243,37 @@ app.post("/user/cobbledollars/deposit", requireAuth, async (req, res) => {
     return;
   }
 
+  await recordCobbledollarLedger(
+    user.userId,
+    -amount,
+    newBalance,
+    "deposit_to_server",
+    null
+  );
+
   res.json({ newBalance });
+});
+
+app.get("/user/cobbledollars/ledger", requireAuth, async (req, res) => {
+  const user = res.locals.user!;
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const raw = req.query.limit;
+  const n = typeof raw === "string" ? parseInt(raw, 10) : NaN;
+  const limit = Number.isFinite(n) ? Math.min(Math.max(n, 1), 50) : 10;
+  const { data, error } = await supabase
+    .from("user_cobbledollar_ledger")
+    .select("id, delta, balance_after, kind, detail, created_at")
+    .eq("user_id", user.userId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+  res.json({ transactions: data ?? [] });
 });
 
 app.get("/user/inventory", requireAuth, async (_req, res) => {
@@ -1397,6 +1462,13 @@ app.post("/shop/buy", requireAuth, async (req, res) => {
 
   try {
     const newQty = await incrementUserInventory(user.userId, item.itemKey, quantity);
+    await recordCobbledollarLedger(
+      user.userId,
+      -totalCost,
+      newBalance,
+      "shop",
+      `${item.label} ×${quantity}`
+    );
     res.json({
       ok: true,
       itemKey: item.itemKey,
@@ -1525,6 +1597,14 @@ app.post("/pokemon-shop/buy", requireAuth, async (req, res) => {
     res.status(500).json({ error: insErr.message });
     return;
   }
+
+  await recordCobbledollarLedger(
+    user.userId,
+    -offer.price,
+    newBalance,
+    "pokemon_shop",
+    `${offer.species} (shiny)`
+  );
 
   res.json({
     ok: true,
@@ -1742,7 +1822,12 @@ app.post("/user/daily-login/claim", requireAuth, async (_req, res) => {
   try {
     let message = "";
     if (reward.kind === "cobbledollars") {
-      const newBalance = await incrementUserCurrency(user.userId, COBBLEDOLLARS_CURRENCY, reward.amount);
+      const newBalance = await incrementUserCurrency(
+        user.userId,
+        COBBLEDOLLARS_CURRENCY,
+        reward.amount,
+        { kind: "daily_login", detail: `Day ${streakDay} — ${reward.label}` }
+      );
       message = `Day ${streakDay}: +${reward.amount.toLocaleString()} Cobble$ (new balance ${newBalance.toLocaleString()})`;
     } else {
       const totalQty = await incrementUserInventory(user.userId, reward.itemKey, reward.amount);
@@ -1946,8 +2031,8 @@ app.get("/admin/users", requireAuth, requireAdmin, async (_req, res) => {
   res.json({ users: data ?? [] });
 });
 
-async function runWeeklyPvpRankPayout(): Promise<{
-  weekStart: string;
+async function runDailyPvpRankPayout(): Promise<{
+  payoutDate: string;
   format: string;
   paid: Array<{ rank: number; username: string; amount: number }>;
   skipped: Array<{ rank: number; username: string; reason: string }>;
@@ -1959,15 +2044,15 @@ async function runWeeklyPvpRankPayout(): Promise<{
   if (!rows.length) {
     throw new Error("Leaderboard is empty. Sync /leaderboard first.");
   }
-  const weekStart = startOfWeekIsoDateInTimezone(new Date(), DAILY_RESET_TIMEZONE);
+  const payoutDate = localDateOnly(new Date(), DAILY_RESET_TIMEZONE);
   const formatKey = rows[0]?.formatKey ?? "singles";
   const { data: existing } = await supabase
-    .from("user_pvp_weekly_payouts")
+    .from("user_pvp_daily_payouts")
     .select("id")
-    .eq("week_start", weekStart)
+    .eq("payout_date", payoutDate)
     .eq("format_key", formatKey);
   if ((existing?.length ?? 0) > 0) {
-    throw new Error(`Weekly payout already processed for ${weekStart} (${formatKey}).`);
+    throw new Error(`Daily payout already processed for ${payoutDate} (${formatKey}).`);
   }
   const { data: users, error: usersErr } = await supabase.from("users").select("id, username");
   if (usersErr) {
@@ -1980,15 +2065,15 @@ async function runWeeklyPvpRankPayout(): Promise<{
 
   const paid: Array<{ rank: number; username: string; amount: number }> = [];
   const skipped: Array<{ rank: number; username: string; reason: string }> = [];
-  for (const [rankStr, amount] of Object.entries(PVP_WEEKLY_REWARDS)) {
+  for (const [rankStr, amount] of Object.entries(PVP_DAILY_REWARDS)) {
     const rank = Number(rankStr);
     const row = rows.find((r) => r.rank === rank);
     if (!row) continue;
     const user = byUsername.get(normalizeName(row.playerName));
     const now = new Date().toISOString();
     if (!user) {
-      await supabase.from("user_pvp_weekly_payouts").insert({
-        week_start: weekStart,
+      await supabase.from("user_pvp_daily_payouts").insert({
+        payout_date: payoutDate,
         format_key: row.formatKey,
         rank_position: rank,
         minecraft_username: row.playerName,
@@ -2002,9 +2087,12 @@ async function runWeeklyPvpRankPayout(): Promise<{
       skipped.push({ rank, username: row.playerName, reason: "No matching website username" });
       continue;
     }
-    await incrementUserCurrency(user.id, COBBLEDOLLARS_CURRENCY, amount);
-    await supabase.from("user_pvp_weekly_payouts").insert({
-      week_start: weekStart,
+    await incrementUserCurrency(user.id, COBBLEDOLLARS_CURRENCY, amount, {
+      kind: "pvp_rank_daily",
+      detail: `Rank ${rank} — ${row.formatKey}`,
+    });
+    await supabase.from("user_pvp_daily_payouts").insert({
+      payout_date: payoutDate,
       format_key: row.formatKey,
       rank_position: rank,
       minecraft_username: row.playerName,
@@ -2018,13 +2106,13 @@ async function runWeeklyPvpRankPayout(): Promise<{
     paid.push({ rank, username: row.playerName, amount });
   }
 
-  return { weekStart, format: formatKey, paid, skipped };
+  return { payoutDate, format: formatKey, paid, skipped };
 }
 
-app.post("/admin/pvp-rank/weekly-payout", requireAuth, requireAdmin, async (_req, res) => {
+app.post("/admin/pvp-rank/daily-payout", requireAuth, requireAdmin, async (_req, res) => {
   try {
-    const result = await runWeeklyPvpRankPayout();
-    res.json({ ok: true, rewards: PVP_WEEKLY_REWARDS, ...result });
+    const result = await runDailyPvpRankPayout();
+    res.json({ ok: true, rewards: PVP_DAILY_REWARDS, ...result });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (/already processed/i.test(msg) || /Leaderboard is empty/i.test(msg)) {
@@ -2066,6 +2154,7 @@ app.post("/admin/users/:userId/currency", requireAuth, requireAdmin, async (req,
     res.status(503).json({ error: "Database not configured" });
     return;
   }
+  const staff = res.locals.user!;
   const userId = Number(req.params.userId);
   const { currency_type, amount } = req.body ?? {};
   const currencyTypeStr = typeof currency_type === "string" ? currency_type.trim() : "";
@@ -2092,6 +2181,15 @@ app.post("/admin/users/:userId/currency", requireAuth, requireAdmin, async (req,
       res.status(500).json({ error: error.message });
       return;
     }
+    if (currencyTypeStr === COBBLEDOLLARS_CURRENCY) {
+      await recordCobbledollarLedger(
+        userId,
+        amount,
+        newBalance,
+        "admin_grant",
+        `Staff: ${staff.username}`
+      );
+    }
     res.json(data);
   } else {
     const { data, error } = await supabase
@@ -2106,6 +2204,15 @@ app.post("/admin/users/:userId/currency", requireAuth, requireAdmin, async (req,
     if (error) {
       res.status(500).json({ error: error.message });
       return;
+    }
+    if (currencyTypeStr === COBBLEDOLLARS_CURRENCY) {
+      await recordCobbledollarLedger(
+        userId,
+        amount,
+        amount,
+        "admin_grant",
+        `Staff: ${staff.username}`
+      );
     }
     res.json(data);
   }
@@ -2218,13 +2325,12 @@ app.delete("/admin/pulls/:pullId", requireAuth, requireAdmin, async (req, res) =
   res.json({ ok: true, id: pullId });
 });
 
-let weeklyPvpAutoLastAttemptMinute = "";
-function startWeeklyPvpAutoPayoutScheduler(): void {
-  if (process.env.PVP_WEEKLY_AUTO_PAYOUT_DISABLE === "true") return;
+let dailyPvpAutoLastAttemptMinute = "";
+function startDailyPvpAutoPayoutScheduler(): void {
+  if (process.env.PVP_DAILY_AUTO_PAYOUT_DISABLE === "true") return;
   const tick = async () => {
     const parts = new Intl.DateTimeFormat("en-US", {
       timeZone: DAILY_RESET_TIMEZONE,
-      weekday: "short",
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -2232,7 +2338,6 @@ function startWeeklyPvpAutoPayoutScheduler(): void {
       minute: "2-digit",
       hour12: false,
     }).formatToParts(new Date());
-    const weekday = parts.find((p) => p.type === "weekday")?.value ?? "";
     const y = parts.find((p) => p.type === "year")?.value ?? "0000";
     const m = parts.find((p) => p.type === "month")?.value ?? "00";
     const d = parts.find((p) => p.type === "day")?.value ?? "00";
@@ -2240,18 +2345,18 @@ function startWeeklyPvpAutoPayoutScheduler(): void {
     const mm = parts.find((p) => p.type === "minute")?.value ?? "00";
     const key = `${y}-${m}-${d} ${hh}:${mm}`;
 
-    // Sunday 00:00 in configured timezone
-    if (weekday !== "Sun" || hh !== "00" || mm !== "00") return;
-    if (weeklyPvpAutoLastAttemptMinute === key) return;
-    weeklyPvpAutoLastAttemptMinute = key;
+    // Daily 00:00 in configured timezone
+    if (hh !== "00" || mm !== "00") return;
+    if (dailyPvpAutoLastAttemptMinute === key) return;
+    dailyPvpAutoLastAttemptMinute = key;
     try {
-      const result = await runWeeklyPvpRankPayout();
+      const result = await runDailyPvpRankPayout();
       console.log(
-        `[pvp-weekly-auto] paid week=${result.weekStart} format=${result.format} paid=${result.paid.length} skipped=${result.skipped.length}`
+        `[pvp-daily-auto] paid date=${result.payoutDate} format=${result.format} paid=${result.paid.length} skipped=${result.skipped.length}`
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.warn(`[pvp-weekly-auto] skipped/error: ${msg}`);
+      console.warn(`[pvp-daily-auto] skipped/error: ${msg}`);
     }
   };
   void tick();
@@ -2262,5 +2367,5 @@ function startWeeklyPvpAutoPayoutScheduler(): void {
 
 app.listen(port, () => {
   console.log(`Backend http://localhost:${port}`);
-  startWeeklyPvpAutoPayoutScheduler();
+  startDailyPvpAutoPayoutScheduler();
 });

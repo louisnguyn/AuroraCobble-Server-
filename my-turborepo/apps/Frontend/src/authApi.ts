@@ -167,6 +167,26 @@ export async function depositCobbledollars(amount: number): Promise<{ newBalance
   })
 }
 
+export interface CobbledollarLedgerRow {
+  id: number
+  delta: number
+  balance_after: number
+  kind: string
+  detail: string | null
+  created_at: string
+}
+
+/** Last website Cobble$ movements (deposit, shop, rewards, etc.). */
+export async function fetchCobbledollarsLedger(
+  limit = 10
+): Promise<{ transactions: CobbledollarLedgerRow[] }> {
+  const n = typeof limit === 'number' && Number.isFinite(limit) ? Math.floor(limit) : 10
+  const clamped = Math.min(Math.max(n, 1), 50)
+  return fetchApi<{ transactions: CobbledollarLedgerRow[] }>(
+    `/user/cobbledollars/ledger?limit=${clamped}`
+  )
+}
+
 export interface DailyLoginStatus {
   date: string
   timeZone: string
