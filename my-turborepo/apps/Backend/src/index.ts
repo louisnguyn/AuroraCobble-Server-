@@ -50,21 +50,26 @@ const COBBLE_API_KEY = process.env.COBBLE_API_KEY;
 const CORS_ORIGIN = process.env.CORS_ORIGIN ?? "*";
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL?.trim() || null;
 
-function notifyDiscordPull(username: string, poolName: string, rewardType: string) {
+async function notifyDiscordPull(
+  username: string,
+  poolName: string,
+  rewardType: string
+): Promise<void> {
   if (!DISCORD_WEBHOOK_URL) return;
   const content = `**${username}** pulled **${rewardType}** from **${poolName}**!`;
-  fetch(DISCORD_WEBHOOK_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content }),
-  })
-    .then(async (res) => {
-      if (!res.ok) {
-        const text = await res.text();
-        console.warn("[Discord] webhook failed:", res.status, text);
-      }
-    })
-    .catch((err) => console.warn("[Discord] webhook error:", err));
+  try {
+    const res = await fetch(DISCORD_WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      console.warn("[Discord] webhook failed:", res.status, text);
+    }
+  } catch (err) {
+    console.warn("[Discord] webhook error:", err);
+  }
 }
 
 // CORS: required when frontend is on a different origin (e.g. deploy frontend + backend separately)
@@ -478,7 +483,7 @@ app.post("/gacha/pull", requireAuth, async (req, res) => {
     // table may not exist yet; pull still succeeds
   }
 
-  notifyDiscordPull(user.username, poolName, chosen.reward_type);
+  await notifyDiscordPull(user.username, poolName, chosen.reward_type);
 
   res.json({
     reward: {
