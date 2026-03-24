@@ -325,6 +325,9 @@ export function Account() {
                 : 0
             ).toLocaleString()}{' '}
             Cobble$
+            {(userPvpRank?.rank === 1 || userPvpRank?.rank === 2) && (
+              <span className="text-[#e2e8f0] font-normal"> + 1 normal ticket (website)</span>
+            )}
           </span>
         </span>
         {user?.email && (

@@ -50,6 +50,10 @@ const PVP_DAILY_REWARDS: Record<number, number> = {
   7: 25_000,
   8: 20_000,
 };
+/** Ranks that receive bonus website “normal tickets” (user_currency `tickets`) each daily payout. */
+const PVP_DAILY_TICKET_BONUS_RANKS = new Set([1, 2]);
+const PVP_DAILY_TICKETS_PER_BONUS_RANK = 1;
+const PVP_TICKETS_CURRENCY = "tickets";
 let cobbledollarsPublicCache: {
   at: number;
   body: {
@@ -2034,7 +2038,7 @@ app.get("/admin/users", requireAuth, requireAdmin, async (_req, res) => {
 async function runDailyPvpRankPayout(): Promise<{
   payoutDate: string;
   format: string;
-  paid: Array<{ rank: number; username: string; amount: number }>;
+  paid: Array<{ rank: number; username: string; amount: number; tickets?: number }>;
   skipped: Array<{ rank: number; username: string; reason: string }>;
 }> {
   if (!supabase) {
@@ -2091,6 +2095,10 @@ async function runDailyPvpRankPayout(): Promise<{
       kind: "pvp_rank_daily",
       detail: `Rank ${rank} — ${row.formatKey}`,
     });
+    const ticketBonus = PVP_DAILY_TICKET_BONUS_RANKS.has(rank) ? PVP_DAILY_TICKETS_PER_BONUS_RANK : 0;
+    if (ticketBonus > 0) {
+      await incrementUserCurrency(user.id, PVP_TICKETS_CURRENCY, ticketBonus);
+    }
     await supabase.from("user_pvp_daily_payouts").insert({
       payout_date: payoutDate,
       format_key: row.formatKey,
@@ -2099,11 +2107,19 @@ async function runDailyPvpRankPayout(): Promise<{
       user_id: user.id,
       amount,
       status: "success",
-      note: null,
+      note:
+        ticketBonus > 0
+          ? `+${ticketBonus} website normal ticket(s) (${PVP_TICKETS_CURRENCY})`
+          : null,
       paid_at: now,
       updated_at: now,
     });
-    paid.push({ rank, username: row.playerName, amount });
+    paid.push({
+      rank,
+      username: row.playerName,
+      amount,
+      ...(ticketBonus > 0 ? { tickets: ticketBonus } : {}),
+    });
   }
 
   return { payoutDate, format: formatKey, paid, skipped };
