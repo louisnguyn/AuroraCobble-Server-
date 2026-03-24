@@ -64,7 +64,13 @@ export function Account() {
   const [predictPick1, setPredictPick1] = useState('')
   const [predictPick2, setPredictPick2] = useState('')
   const [predictPick3, setPredictPick3] = useState('')
-  const [predictStake, setPredictStake] = useState('')
+  const [predictStakeFull, setPredictStakeFull] = useState('')
+  const [predictPickOnly1, setPredictPickOnly1] = useState('')
+  const [predictPickOnly2, setPredictPickOnly2] = useState('')
+  const [predictPickOnly3, setPredictPickOnly3] = useState('')
+  const [predictStakeOnly1, setPredictStakeOnly1] = useState('')
+  const [predictStakeOnly2, setPredictStakeOnly2] = useState('')
+  const [predictStakeOnly3, setPredictStakeOnly3] = useState('')
   const [predictBusy, setPredictBusy] = useState(false)
   const [predictError, setPredictError] = useState<string | null>(null)
   const [predictSuccess, setPredictSuccess] = useState<string | null>(null)
@@ -416,17 +422,19 @@ export function Account() {
 
       {activeTab === 'predict' && (
         <>
-          <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-2">PVP top 3 prediction</h2>
+          <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-2">PVP predictions</h2>
           <p className="text-sm text-muted m-0 mb-4">
-            Pick who finishes #1, #2, and #3 on the ranked leaderboard (exact order). Stake website
-            Cobble$; if you are right you receive {pvpPredict?.winMultiplier ?? 2}× your stake. Settles at
-            00:00 ({pvpPredict?.resetTimeZone ?? 'Asia/Ho_Chi_Minh'}) — same moment as daily streak and
-            PVP rank payouts (round date: {pvpPredict?.forPayoutDate ?? '—'}).
+            Exact order #1–#3: win {pvpPredict?.winMultiplierFull ?? 4}× that stake if all three are correct.
+            Or bet separately on who finishes #1, #2, or #3 — each pays {pvpPredict?.winMultiplierSlot ?? 2}× that
+            line if correct. Per-line stake {pvpPredict?.minStake ?? 100}–{pvpPredict?.maxStake ?? 20_000}{' '}
+            Cobble$. Settles 00:00 ({pvpPredict?.resetTimeZone ?? 'Asia/Ho_Chi_Minh'}), same as daily & PVP
+            payouts — round: {pvpPredict?.forPayoutDate ?? '—'}.
           </p>
           {!pvpPredict ? (
             <p className="text-sm text-amber-200/90 m-0">
-              Could not load predictions. If this is new, run <code className="text-xs">pvp_top_predictions.sql</code>{' '}
-              in Supabase and redeploy the backend.
+              Could not load predictions. Run <code className="text-xs">pvp_top_predictions.sql</code> (or{' '}
+              <code className="text-xs">pvp_top_predictions_alter.sql</code> if the table already exists) in
+              Supabase, then redeploy.
             </p>
           ) : pvpPredict.rankedPlayers.length < 3 ? (
             <p className="text-sm text-muted m-0">
@@ -435,30 +443,60 @@ export function Account() {
           ) : (
             <div className="mb-6 rounded-xl border border-border bg-[#0f0a1a]/50 p-4 space-y-4">
               <p className="text-xs text-muted m-0">
-                Stake: {pvpPredict.minStake.toLocaleString()}–{pvpPredict.maxStake.toLocaleString()} Cobble$
-                · Wallet:{' '}
-                <span className="tabular-nums text-[#fbbf24]">{cobbleBalance.toLocaleString()}</span>
+                Per line: {pvpPredict.minStake.toLocaleString()}–{pvpPredict.maxStake.toLocaleString()} Cobble$ ·
+                Wallet: <span className="tabular-nums text-[#fbbf24]">{cobbleBalance.toLocaleString()}</span>
                 {!pvpPredict.windowOpen && (
                   <span className="block mt-2 text-amber-300">
-                    This round is locked (cutoff passed for {pvpPredict.forPayoutDate}). Next round loads
-                    after reset.
+                    Locked for {pvpPredict.forPayoutDate}. Next round after reset.
                   </span>
                 )}
               </p>
               {pvpPredict.entry ? (
-                <div className="text-sm text-[#e2e8f0] space-y-2">
-                  <p className="m-0 font-medium">Your pick (locked)</p>
-                  <p className="m-0 text-muted">
-                    #1 {pvpPredict.entry.pick_rank1_name} · #2 {pvpPredict.entry.pick_rank2_name} · #3{' '}
-                    {pvpPredict.entry.pick_rank3_name}
-                  </p>
-                  <p className="m-0">
-                    Stake:{' '}
-                    <span className="tabular-nums text-[#fbbf24]">
-                      {Number(pvpPredict.entry.stake).toLocaleString()}
-                    </span>{' '}
-                    Cobble$
-                  </p>
+                <div className="text-sm text-[#e2e8f0] space-y-3">
+                  <p className="m-0 font-medium">Your entry (locked)</p>
+                  {pvpPredict.entry.stake > 0 && (
+                    <div className="rounded-lg border border-border/60 p-3 space-y-1">
+                      <p className="text-xs text-muted m-0">
+                        Full top 3 order (×{pvpPredict.winMultiplierFull})
+                      </p>
+                      <p className="m-0">
+                        #1 {pvpPredict.entry.pick_rank1_name} · #2 {pvpPredict.entry.pick_rank2_name} · #3{' '}
+                        {pvpPredict.entry.pick_rank3_name}
+                      </p>
+                      <p className="m-0 tabular-nums text-[#fbbf24]">
+                        Stake {Number(pvpPredict.entry.stake).toLocaleString()} Cobble$
+                      </p>
+                    </div>
+                  )}
+                  {[1, 2, 3].map((rank) => {
+                    const sk =
+                      rank === 1
+                        ? (pvpPredict.entry.stake_rank1_only ?? 0)
+                        : rank === 2
+                          ? (pvpPredict.entry.stake_rank2_only ?? 0)
+                          : (pvpPredict.entry.stake_rank3_only ?? 0)
+                    const pk =
+                      rank === 1
+                        ? pvpPredict.entry.pick_rank1_only
+                        : rank === 2
+                          ? pvpPredict.entry.pick_rank2_only
+                          : pvpPredict.entry.pick_rank3_only
+                    if (!sk) return null
+                    return (
+                      <div
+                        key={`locked-only-${rank}`}
+                        className="rounded-lg border border-border/60 p-3 space-y-1"
+                      >
+                        <p className="text-xs text-muted m-0">
+                          #{rank} only (×{pvpPredict.winMultiplierSlot})
+                        </p>
+                        <p className="m-0">{pk ?? '—'}</p>
+                        <p className="m-0 tabular-nums text-[#fbbf24]">
+                          Stake {Number(sk).toLocaleString()} Cobble$
+                        </p>
+                      </div>
+                    )
+                  })}
                   <p className="m-0">
                     Result:{' '}
                     <span
@@ -480,31 +518,90 @@ export function Account() {
                 </div>
               ) : pvpPredict.windowOpen ? (
                 <form
-                  className="space-y-3"
+                  className="space-y-5"
                   onSubmit={async (e) => {
                     e.preventDefault()
                     setPredictError(null)
                     setPredictSuccess(null)
-                    const stake = parseInt(predictStake.replace(/,/g, ''), 10)
-                    if (!Number.isFinite(stake)) {
-                      setPredictError('Enter a whole-number stake.')
+                    const parseN = (s: string) => parseInt(s.replace(/,/g, ''), 10)
+                    const sf = parseN(predictStakeFull)
+                    const s1 = parseN(predictStakeOnly1)
+                    const s2 = parseN(predictStakeOnly2)
+                    const s3 = parseN(predictStakeOnly3)
+                    const na = (v: number) => !Number.isFinite(v) || !Number.isInteger(v) || v < 0
+                    if (na(sf) || na(s1) || na(s2) || na(s3)) {
+                      setPredictError('Use whole-number stakes (0 to skip a line).')
                       return
                     }
-                    if (!predictPick1 || !predictPick2 || !predictPick3) {
-                      setPredictError('Choose all three players.')
+                    const { minStake, maxStake } = pvpPredict
+                    const checkBand = (x: number, label: string) => {
+                      if (x === 0) return null
+                      if (x < minStake || x > maxStake) return `${label}: ${minStake}–${maxStake}`
+                      return null
+                    }
+                    const bandErr =
+                      checkBand(sf, 'Full combo') ||
+                      checkBand(s1, '#1 only') ||
+                      checkBand(s2, '#2 only') ||
+                      checkBand(s3, '#3 only')
+                    if (bandErr) {
+                      setPredictError(bandErr)
+                      return
+                    }
+                    const total = sf + s1 + s2 + s3
+                    if (total <= 0) {
+                      setPredictError('Stake at least one line.')
+                      return
+                    }
+                    if (sf > 0 && (!predictPick1 || !predictPick2 || !predictPick3)) {
+                      setPredictError('Full combo: pick #1, #2, #3 when stake > 0.')
+                      return
+                    }
+                    if (sf > 0) {
+                      const a = predictPick1.toLowerCase()
+                      const b = predictPick2.toLowerCase()
+                      const c = predictPick3.toLowerCase()
+                      if (a === b || b === c || a === c) {
+                        setPredictError('Full combo: three different players.')
+                        return
+                      }
+                    }
+                    if (s1 > 0 && !predictPickOnly1) {
+                      setPredictError('Pick someone for #1-only.')
+                      return
+                    }
+                    if (s2 > 0 && !predictPickOnly2) {
+                      setPredictError('Pick someone for #2-only.')
+                      return
+                    }
+                    if (s3 > 0 && !predictPickOnly3) {
+                      setPredictError('Pick someone for #3-only.')
+                      return
+                    }
+                    if (cobbleBalance < total) {
+                      setPredictError(`Need ${total.toLocaleString()} Cobble$ (wallet too low).`)
                       return
                     }
                     setPredictBusy(true)
                     try {
                       const res = await submitPvpTopPrediction({
-                        pickRank1: predictPick1,
-                        pickRank2: predictPick2,
-                        pickRank3: predictPick3,
-                        stake,
+                        pickRank1: sf > 0 ? predictPick1 : '',
+                        pickRank2: sf > 0 ? predictPick2 : '',
+                        pickRank3: sf > 0 ? predictPick3 : '',
+                        stake: sf,
+                        stakeRank1Only: s1,
+                        pickRank1Only: s1 > 0 ? predictPickOnly1 : '',
+                        stakeRank2Only: s2,
+                        pickRank2Only: s2 > 0 ? predictPickOnly2 : '',
+                        stakeRank3Only: s3,
+                        pickRank3Only: s3 > 0 ? predictPickOnly3 : '',
                       })
                       setPredictSuccess(`Submitted for ${res.forPayoutDate}.`)
                       setCobbleBalance(res.newBalance)
-                      setPredictStake('')
+                      setPredictStakeFull('')
+                      setPredictStakeOnly1('')
+                      setPredictStakeOnly2('')
+                      setPredictStakeOnly3('')
                       const next = await fetchPvpTopPrediction()
                       setPvpPredict(next)
                     } catch (err) {
@@ -514,54 +611,119 @@ export function Account() {
                     }
                   }}
                 >
-                  {(['1st', '2nd', '3rd'] as const).map((label, i) => {
-                    const value = i === 0 ? predictPick1 : i === 1 ? predictPick2 : predictPick3
-                    const set =
-                      i === 0 ? setPredictPick1 : i === 1 ? setPredictPick2 : setPredictPick3
+                  <div className="space-y-3 rounded-lg border border-violet-500/25 bg-violet-950/20 p-3">
+                    <p className="text-xs font-medium text-violet-200 m-0">
+                      Exact #1 → #2 → #3 order — ×{pvpPredict.winMultiplierFull}{' '}
+                      <span className="font-normal text-muted">(optional)</span>
+                    </p>
+                    {(['1st', '2nd', '3rd'] as const).map((label, i) => {
+                      const value = i === 0 ? predictPick1 : i === 1 ? predictPick2 : predictPick3
+                      const set =
+                        i === 0 ? setPredictPick1 : i === 1 ? setPredictPick2 : setPredictPick3
+                      return (
+                        <label key={label} className="block">
+                          <span className="block text-xs text-muted mb-1">{label} place</span>
+                          <select
+                            value={value}
+                            onChange={(ev) => set(ev.target.value)}
+                            className="w-full rounded-lg border border-border bg-[#0f0a1a]/80 px-3 py-2 text-sm text-[#e2e8f0]"
+                            disabled={predictBusy}
+                          >
+                            <option value="">— Select —</option>
+                            {pvpPredict.rankedPlayers.map((p) => (
+                              <option key={`full-${label}-${p.rank}-${p.playerName}`} value={p.playerName}>
+                                #{p.rank} {p.playerName}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      )
+                    })}
+                    <label className="block">
+                      <span className="block text-xs text-muted mb-1">Stake (0 = skip)</span>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={predictStakeFull}
+                        onChange={(e) => setPredictStakeFull(e.target.value)}
+                        placeholder="0"
+                        className="w-full rounded-lg border border-border bg-[#0f0a1a]/80 px-3 py-2 text-sm text-[#e2e8f0] tabular-nums"
+                        disabled={predictBusy}
+                      />
+                    </label>
+                  </div>
+                  {[1, 2, 3].map((rank) => {
+                    const pick =
+                      rank === 1
+                        ? predictPickOnly1
+                        : rank === 2
+                          ? predictPickOnly2
+                          : predictPickOnly3
+                    const setPick =
+                      rank === 1
+                        ? setPredictPickOnly1
+                        : rank === 2
+                          ? setPredictPickOnly2
+                          : setPredictPickOnly3
+                    const stakeVal =
+                      rank === 1
+                        ? predictStakeOnly1
+                        : rank === 2
+                          ? predictStakeOnly2
+                          : predictStakeOnly3
+                    const setStake =
+                      rank === 1
+                        ? setPredictStakeOnly1
+                        : rank === 2
+                          ? setPredictStakeOnly2
+                          : setPredictStakeOnly3
                     return (
-                      <label key={label} className="block">
-                        <span className="block text-xs text-muted mb-1">Predict {label}</span>
-                        <select
-                          required
-                          value={value}
-                          onChange={(ev) => set(ev.target.value)}
-                          className="w-full rounded-lg border border-border bg-[#0f0a1a]/80 px-3 py-2 text-sm text-[#e2e8f0]"
-                          disabled={predictBusy}
-                        >
-                          <option value="">— Select —</option>
-                          {pvpPredict.rankedPlayers.map((p) => (
-                            <option key={`${label}-${p.rank}-${p.playerName}`} value={p.playerName}>
-                              #{p.rank} {p.playerName}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                      <div
+                        key={`only-${rank}`}
+                        className="space-y-2 rounded-lg border border-border/70 bg-[#0f0a1a]/40 p-3"
+                      >
+                        <p className="text-xs font-medium text-[#e2e8f0] m-0">
+                          Who finishes #{rank}? only — ×{pvpPredict.winMultiplierSlot}
+                        </p>
+                        <label className="block">
+                          <span className="block text-xs text-muted mb-1">Player</span>
+                          <select
+                            value={pick}
+                            onChange={(ev) => setPick(ev.target.value)}
+                            className="w-full rounded-lg border border-border bg-[#0f0a1a]/80 px-3 py-2 text-sm text-[#e2e8f0]"
+                            disabled={predictBusy}
+                          >
+                            <option value="">— Select —</option>
+                            {pvpPredict.rankedPlayers.map((p) => (
+                              <option key={`only-${rank}-${p.rank}-${p.playerName}`} value={p.playerName}>
+                                #{p.rank} {p.playerName}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="block">
+                          <span className="block text-xs text-muted mb-1">Stake (0 = skip)</span>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={stakeVal}
+                            onChange={(e) => setStake(e.target.value)}
+                            placeholder="0"
+                            className="w-full rounded-lg border border-border bg-[#0f0a1a]/80 px-3 py-2 text-sm tabular-nums text-[#e2e8f0]"
+                            disabled={predictBusy}
+                          />
+                        </label>
+                      </div>
                     )
                   })}
-                  <label className="block">
-                    <span className="block text-xs text-muted mb-1">Stake (Cobble$)</span>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={predictStake}
-                      onChange={(e) => setPredictStake(e.target.value)}
-                      placeholder={`${pvpPredict.minStake}–${pvpPredict.maxStake}`}
-                      className="w-full rounded-lg border border-border bg-[#0f0a1a]/80 px-3 py-2 text-sm text-[#e2e8f0] tabular-nums"
-                      disabled={predictBusy}
-                    />
-                  </label>
                   <button
                     type="submit"
-                    disabled={
-                      predictBusy || cobbleBalance < pvpPredict.minStake || !pvpPredict.windowOpen
-                    }
+                    disabled={predictBusy || !pvpPredict.windowOpen}
                     className="py-2 px-4 rounded-lg bg-accent text-[#0f0a1a] font-semibold hover:bg-accent/90 disabled:opacity-50"
                   >
-                    {predictBusy ? 'Submitting…' : 'Lock prediction'}
+                    {predictBusy ? 'Submitting…' : 'Lock predictions'}
                   </button>
-                  {predictSuccess && (
-                    <p className="text-sm text-emerald-300 m-0">{predictSuccess}</p>
-                  )}
+                  {predictSuccess && <p className="text-sm text-emerald-300 m-0">{predictSuccess}</p>}
                   {predictError && <p className="text-sm text-error m-0">{predictError}</p>}
                 </form>
               ) : (

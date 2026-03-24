@@ -170,6 +170,12 @@ export interface PvpTopPredictionEntry {
   pick_rank1_name: string
   pick_rank2_name: string
   pick_rank3_name: string
+  stake_rank1_only: number
+  pick_rank1_only: string | null
+  stake_rank2_only: number
+  pick_rank2_only: string | null
+  stake_rank3_only: number
+  pick_rank3_only: string | null
   result: string
   payout_amount: number | null
   resolved_at: string | null
@@ -184,7 +190,8 @@ export interface PvpTopPredictionStatus {
   settlesAtLocalMidnight?: boolean
   maxStake: number
   minStake: number
-  winMultiplier: number
+  winMultiplierFull: number
+  winMultiplierSlot: number
   rankedPlayers: PvpTopPredictionPlayer[]
   entry: PvpTopPredictionEntry | null
 }
@@ -198,6 +205,12 @@ export async function submitPvpTopPrediction(body: {
   pickRank2: string
   pickRank3: string
   stake: number
+  stakeRank1Only?: number
+  pickRank1Only?: string
+  stakeRank2Only?: number
+  pickRank2Only?: string
+  stakeRank3Only?: number
+  pickRank3Only?: string
 }): Promise<{ ok: boolean; newBalance: number; forPayoutDate: string }> {
   return fetchApi<{ ok: boolean; newBalance: number; forPayoutDate: string }>(
     '/user/pvp-top-prediction',

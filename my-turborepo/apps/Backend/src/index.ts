@@ -55,10 +55,11 @@ const PVP_DAILY_TICKET_BONUS_RANKS = new Set([1, 2]);
 const PVP_DAILY_TICKETS_PER_BONUS_RANK = 1;
 const PVP_TICKETS_CURRENCY = "tickets";
 
-/** Daily top-3 order prediction (website Cobble$). */
+/** PVP predictions: exact top-3 order pays `stake ×` this; each single-rank bet pays `stake ×` PVP_PREDICTION_SLOT_WIN_MULT. */
 const PVP_PREDICTION_MAX_STAKE = 20_000;
 const PVP_PREDICTION_MIN_STAKE = 100;
-const PVP_PREDICTION_WIN_MULT = 2;
+const PVP_PREDICTION_FULL_WIN_MULT = 4;
+const PVP_PREDICTION_SLOT_WIN_MULT = 2;
 let cobbledollarsPublicCache: {
   at: number;
   body: {
@@ -882,7 +883,9 @@ async function resolvePvpTopPredictionsForPayout(
 
   const { data: pending, error } = await supabase
     .from("pvp_top_predictions")
-    .select("id, user_id, stake, pick_rank1_name, pick_rank2_name, pick_rank3_name")
+    .select(
+      "id, user_id, stake, pick_rank1_name, pick_rank2_name, pick_rank3_name, stake_rank1_only, pick_rank1_only, stake_rank2_only, pick_rank2_only, stake_rank3_only, pick_rank3_only"
+    )
     .eq("for_payout_date", payoutDate)
     .eq("format_key", formatKey)
     .eq("result", "pending");
@@ -898,17 +901,48 @@ async function resolvePvpTopPredictionsForPayout(
     pick_rank1_name: string;
     pick_rank2_name: string;
     pick_rank3_name: string;
+    stake_rank1_only: number;
+    pick_rank1_only: string | null;
+    stake_rank2_only: number;
+    pick_rank2_only: string | null;
+    stake_rank3_only: number;
+    pick_rank3_only: string | null;
   }>) {
-    const exact =
-      normalizeName(p.pick_rank1_name) === normalizeName(a1.playerName) &&
-      normalizeName(p.pick_rank2_name) === normalizeName(a2.playerName) &&
-      normalizeName(p.pick_rank3_name) === normalizeName(a3.playerName);
-    const payoutAmt = exact ? p.stake * PVP_PREDICTION_WIN_MULT : 0;
+    let payoutAmt = 0;
+    if (p.stake > 0) {
+      const exact =
+        normalizeName(p.pick_rank1_name) === normalizeName(a1.playerName) &&
+        normalizeName(p.pick_rank2_name) === normalizeName(a2.playerName) &&
+        normalizeName(p.pick_rank3_name) === normalizeName(a3.playerName);
+      if (exact) payoutAmt += p.stake * PVP_PREDICTION_FULL_WIN_MULT;
+    }
+    if (
+      p.stake_rank1_only > 0 &&
+      p.pick_rank1_only &&
+      normalizeName(p.pick_rank1_only) === normalizeName(a1.playerName)
+    ) {
+      payoutAmt += p.stake_rank1_only * PVP_PREDICTION_SLOT_WIN_MULT;
+    }
+    if (
+      p.stake_rank2_only > 0 &&
+      p.pick_rank2_only &&
+      normalizeName(p.pick_rank2_only) === normalizeName(a2.playerName)
+    ) {
+      payoutAmt += p.stake_rank2_only * PVP_PREDICTION_SLOT_WIN_MULT;
+    }
+    if (
+      p.stake_rank3_only > 0 &&
+      p.pick_rank3_only &&
+      normalizeName(p.pick_rank3_only) === normalizeName(a3.playerName)
+    ) {
+      payoutAmt += p.stake_rank3_only * PVP_PREDICTION_SLOT_WIN_MULT;
+    }
 
+    const wonAnything = payoutAmt > 0;
     const { data: locked } = await supabase
       .from("pvp_top_predictions")
       .update({
-        result: exact ? "won" : "lost",
+        result: wonAnything ? "won" : "lost",
         payout_amount: payoutAmt,
         resolved_at: nowIso,
       })
@@ -917,11 +951,11 @@ async function resolvePvpTopPredictionsForPayout(
       .select("id");
     if (!locked?.length) continue;
     settled++;
-    if (exact) {
+    if (wonAnything) {
       wins++;
       await incrementUserCurrency(p.user_id, COBBLEDOLLARS_CURRENCY, payoutAmt, {
         kind: "pvp_prediction_win",
-        detail: `Exact top 3 · ${payoutDate}`,
+        detail: `PVP predict · ${payoutDate} · +${payoutAmt}`,
       });
     }
   }
@@ -942,7 +976,7 @@ app.get("/user/pvp-top-prediction", requireAuth, async (_req, res) => {
   const { data: entryRow, error: entryErr } = await supabase
     .from("pvp_top_predictions")
     .select(
-      "id, stake, pick_rank1_name, pick_rank2_name, pick_rank3_name, result, payout_amount, resolved_at"
+      "id, stake, pick_rank1_name, pick_rank2_name, pick_rank3_name, stake_rank1_only, pick_rank1_only, stake_rank2_only, pick_rank2_only, stake_rank3_only, pick_rank3_only, result, payout_amount, resolved_at"
     )
     .eq("user_id", user.userId)
     .eq("for_payout_date", forPayoutDate)
@@ -963,7 +997,8 @@ app.get("/user/pvp-top-prediction", requireAuth, async (_req, res) => {
     rankedPlayers,
     maxStake: PVP_PREDICTION_MAX_STAKE,
     minStake: PVP_PREDICTION_MIN_STAKE,
-    winMultiplier: PVP_PREDICTION_WIN_MULT,
+    winMultiplierFull: PVP_PREDICTION_FULL_WIN_MULT,
+    winMultiplierSlot: PVP_PREDICTION_SLOT_WIN_MULT,
     entry: entryRow ?? null,
   });
 });
@@ -987,39 +1022,95 @@ app.post("/user/pvp-top-prediction", requireAuth, async (req, res) => {
   const formatKey = rows[0]?.formatKey ?? "singles";
   const allowed = new Set(rows.map((r) => normalizeName(r.playerName)));
   const body = req.body ?? {};
+  const parseStake = (v: unknown): number => {
+    if (typeof v === "number" && Number.isInteger(v)) return v;
+    if (typeof v === "string" && v.trim() !== "") {
+      const n = parseInt(v.replace(/,/g, ""), 10);
+      return Number.isInteger(n) ? n : NaN;
+    }
+    return 0;
+  };
+  const stakeFull = parseStake(body.stake);
+  const stakeR1 = parseStake(body.stakeRank1Only);
+  const stakeR2 = parseStake(body.stakeRank2Only);
+  const stakeR3 = parseStake(body.stakeRank3Only);
   const pick1 = typeof body.pickRank1 === "string" ? body.pickRank1.trim() : "";
   const pick2 = typeof body.pickRank2 === "string" ? body.pickRank2.trim() : "";
   const pick3 = typeof body.pickRank3 === "string" ? body.pickRank3.trim() : "";
-  const stakeRaw = body.stake;
-  const stake =
-    typeof stakeRaw === "number" ? stakeRaw : typeof stakeRaw === "string" ? parseInt(stakeRaw, 10) : NaN;
-  if (!pick1 || !pick2 || !pick3) {
-    res.status(400).json({ error: "pickRank1, pickRank2, and pickRank3 are required" });
+  const pickOnly1 = typeof body.pickRank1Only === "string" ? body.pickRank1Only.trim() : "";
+  const pickOnly2 = typeof body.pickRank2Only === "string" ? body.pickRank2Only.trim() : "";
+  const pickOnly3 = typeof body.pickRank3Only === "string" ? body.pickRank3Only.trim() : "";
+
+  function validateStakeLabel(s: number, label: string): string | null {
+    if (s === 0) return null;
+    if (!Number.isInteger(s) || s < PVP_PREDICTION_MIN_STAKE || s > PVP_PREDICTION_MAX_STAKE) {
+      return `${label} must be 0 or a whole number from ${PVP_PREDICTION_MIN_STAKE} to ${PVP_PREDICTION_MAX_STAKE}`;
+    }
+    return null;
+  }
+  const errStake =
+    validateStakeLabel(stakeFull, "Full top-3 stake") ||
+    validateStakeLabel(stakeR1, "Top #1-only stake") ||
+    validateStakeLabel(stakeR2, "Top #2-only stake") ||
+    validateStakeLabel(stakeR3, "Top #3-only stake");
+  if (errStake) {
+    res.status(400).json({ error: errStake });
     return;
   }
-  const n1 = normalizeName(pick1);
-  const n2 = normalizeName(pick2);
-  const n3 = normalizeName(pick3);
-  if (n1 === n2 || n2 === n3 || n1 === n3) {
-    res.status(400).json({ error: "Choose three different players" });
+  const totalStake = stakeFull + stakeR1 + stakeR2 + stakeR3;
+  if (totalStake <= 0) {
+    res.status(400).json({ error: "Stake at least one line (full combo and/or single-rank bets)." });
     return;
   }
-  if (!allowed.has(n1) || !allowed.has(n2) || !allowed.has(n3)) {
-    res.status(400).json({ error: "Each pick must be someone on the current ranked leaderboard" });
-    return;
+
+  if (stakeFull > 0) {
+    if (!pick1 || !pick2 || !pick3) {
+      res.status(400).json({ error: "Full combo: pick #1, #2, and #3 are required when stake > 0." });
+      return;
+    }
+    const n1 = normalizeName(pick1);
+    const n2 = normalizeName(pick2);
+    const n3 = normalizeName(pick3);
+    if (n1 === n2 || n2 === n3 || n1 === n3) {
+      res.status(400).json({ error: "Full combo: choose three different players." });
+      return;
+    }
+    if (!allowed.has(n1) || !allowed.has(n2) || !allowed.has(n3)) {
+      res.status(400).json({ error: "Full combo: each pick must be on the ranked leaderboard." });
+      return;
+    }
   }
-  if (!Number.isInteger(stake) || stake < PVP_PREDICTION_MIN_STAKE || stake > PVP_PREDICTION_MAX_STAKE) {
-    res.status(400).json({
-      error: `stake must be a whole number from ${PVP_PREDICTION_MIN_STAKE} to ${PVP_PREDICTION_MAX_STAKE}`,
-    });
-    return;
+  if (stakeR1 > 0) {
+    if (!pickOnly1 || !allowed.has(normalizeName(pickOnly1))) {
+      res
+        .status(400)
+        .json({ error: "Top #1 only: pick a player on the ranked leaderboard when stake > 0." });
+      return;
+    }
   }
+  if (stakeR2 > 0) {
+    if (!pickOnly2 || !allowed.has(normalizeName(pickOnly2))) {
+      res
+        .status(400)
+        .json({ error: "Top #2 only: pick a player on the ranked leaderboard when stake > 0." });
+      return;
+    }
+  }
+  if (stakeR3 > 0) {
+    if (!pickOnly3 || !allowed.has(normalizeName(pickOnly3))) {
+      res
+        .status(400)
+        .json({ error: "Top #3 only: pick a player on the ranked leaderboard when stake > 0." });
+      return;
+    }
+  }
+
   const wallet = await ensureUserCobbledollarsRow(user.userId);
-  if (!wallet || wallet.balance < stake) {
+  if (!wallet || wallet.balance < totalStake) {
     res.status(400).json({
       error: "Not enough website Cobble$",
       balance: wallet?.balance ?? 0,
-      required: stake,
+      required: totalStake,
     });
     return;
   }
@@ -1034,7 +1125,7 @@ app.post("/user/pvp-top-prediction", requireAuth, async (req, res) => {
     res.status(409).json({ error: "You already submitted a prediction for this round" });
     return;
   }
-  const newBalance = wallet.balance - stake;
+  const newBalance = wallet.balance - totalStake;
   const now = new Date().toISOString();
   const { data: updated, error: updErr } = await supabase
     .from("user_currency")
@@ -1058,10 +1149,16 @@ app.post("/user/pvp-top-prediction", requireAuth, async (req, res) => {
     user_id: user.userId,
     for_payout_date: forPayoutDate,
     format_key: formatKey,
-    stake,
-    pick_rank1_name: canonical(pick1),
-    pick_rank2_name: canonical(pick2),
-    pick_rank3_name: canonical(pick3),
+    stake: stakeFull,
+    pick_rank1_name: stakeFull > 0 ? canonical(pick1) : "",
+    pick_rank2_name: stakeFull > 0 ? canonical(pick2) : "",
+    pick_rank3_name: stakeFull > 0 ? canonical(pick3) : "",
+    stake_rank1_only: stakeR1,
+    pick_rank1_only: stakeR1 > 0 ? canonical(pickOnly1) : null,
+    stake_rank2_only: stakeR2,
+    pick_rank2_only: stakeR2 > 0 ? canonical(pickOnly2) : null,
+    stake_rank3_only: stakeR3,
+    pick_rank3_only: stakeR3 > 0 ? canonical(pickOnly3) : null,
     result: "pending",
   });
   if (insErr) {
@@ -1078,10 +1175,10 @@ app.post("/user/pvp-top-prediction", requireAuth, async (req, res) => {
   }
   await recordCobbledollarLedger(
     user.userId,
-    -stake,
+    -totalStake,
     newBalance,
     "pvp_prediction_stake",
-    `Top 3 order · ${forPayoutDate}`
+    `PVP predict · ${forPayoutDate} · staked ${totalStake}`
   );
   res.json({ ok: true, newBalance, forPayoutDate });
 });
