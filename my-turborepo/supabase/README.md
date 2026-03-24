@@ -20,3 +20,8 @@ The Gacha page shows **"No gacha pools available yet"** until you add at least o
 - **gacha_rewards**: `pool_id` (id from `gacha_pools`), `reward_type` (e.g. `pokemon`), `reward_id` (e.g. PokeAPI id), `weight` (higher = more likely).
 
 Run the seed only once; running it again will create a second "Starter Banner" pool.
+
+## Minecraft admin streak / offline time
+
+1. In **SQL Editor**, run **`minecraft_player_presence.sql`** once.
+2. This enables **day streak** and **offline duration** on the Admin → Minecraft dashboard (stored when you open/refresh that page).

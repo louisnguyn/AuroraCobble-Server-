@@ -10,6 +10,22 @@ import {
   type JwtPayload,
 } from "./auth.js";
 import { supabase } from "./supabase.js";
+import { fetchMinecraftServerPayload } from "./minecraftStatus.js";
+import { fetchRosterFromWhitelistRcon } from "./minecraftRconRoster.js";
+import {
+  fetchRosterFromUsers,
+  mergeOnlineWithRoster,
+  mergeRosterMaps,
+} from "./minecraftRoster.js";
+import { syncAndEnrichPresence } from "./minecraftPresence.js";
+import { fetchCobbledollarsViaRcon, topBalancesFromMap } from "./minecraftRconCobbledollars.js";
+import { executeMinecraftRconCommand } from "./minecraftRconExecute.js";
+import {
+  buildGivePokemonOtherCommand,
+  isGachaClaimEnabled,
+  isLikelyMinecraftUsername,
+  parseRewardForGivePokemon,
+} from "./gachaRewardClaim.js";
 
 const app = express();
 const port = process.env.PORT ?? 3001;
@@ -18,15 +34,24 @@ const cobbleStore = {
   usageStats: null as unknown,
   leaderboard: null as unknown,
 };
+
+const COBBLEDOLLARS_PUBLIC_CACHE_TTL_MS = 90_000;
+let cobbledollarsPublicCache: {
+  at: number;
+  body: {
+    ok: boolean;
+    disabled: boolean;
+    top10: { name: string; balance: number }[];
+    error: string | null;
+    updatedAt: string | null;
+  };
+} | null = null;
 const COBBLE_API_KEY = process.env.COBBLE_API_KEY;
 const CORS_ORIGIN = process.env.CORS_ORIGIN ?? "*";
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL?.trim() || null;
 
 function notifyDiscordPull(username: string, poolName: string, rewardType: string) {
-  if (!DISCORD_WEBHOOK_URL) {
-    console.log("[Discord] DISCORD_WEBHOOK_URL not set, skip announce");
-    return;
-  }
+  if (!DISCORD_WEBHOOK_URL) return;
   const content = `**${username}** pulled **${rewardType}** from **${poolName}**!`;
   fetch(DISCORD_WEBHOOK_URL, {
     method: "POST",
@@ -37,8 +62,6 @@ function notifyDiscordPull(username: string, poolName: string, rewardType: strin
       if (!res.ok) {
         const text = await res.text();
         console.warn("[Discord] webhook failed:", res.status, text);
-      } else {
-        console.log("[Discord] pull announced");
       }
     })
     .catch((err) => console.warn("[Discord] webhook error:", err));
@@ -49,9 +72,6 @@ app.use((_req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", CORS_ORIGIN);
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  if (process.env.NODE_ENV === "production" && CORS_ORIGIN === "*") {
-    // In production, prefer setting CORS_ORIGIN to your frontend URL for security
-  }
   next();
 });
 app.options("*", (_, res) => res.sendStatus(204));
@@ -71,6 +91,7 @@ function requireCobbleAuth(
   next();
 }
 
+/* eslint-disable @typescript-eslint/no-namespace -- Express Locals augmentation for JWT */
 declare global {
   namespace Express {
     interface Locals {
@@ -78,6 +99,7 @@ declare global {
     }
   }
 }
+/* eslint-enable @typescript-eslint/no-namespace */
 
 function requireAuth(
   req: express.Request,
@@ -111,19 +133,7 @@ function requireAdmin(
   next();
 }
 
-// Normalize double slashes (plugin may send baseUrl/ + /path => //path)
-// app.use((req, _res, next) => {
-//   if (req.url?.includes("//")) {
-//     const [path, qs] = req.url.split("?");
-//     req.url = (path?.replace(/\/+/g, "/") || "/") + (qs ? `?${qs}` : "");
-//   }
-//   next();
-// });
 app.use(express.json());
-app.use((req, _res, next) => {
-  console.log(req.method, req.path);
-  next();
-});
 
 app.get("/", (_req, res) => {
   res.json({ message: "Backend running" });
@@ -135,27 +145,67 @@ app.get("/health", (_req, res) => {
 app.get("/usage-stats", (_req, res) => res.json(cobbleStore.usageStats ?? {}));
 app.post("/usage-stats", requireCobbleAuth, (req, res) => {
   cobbleStore.usageStats = req.body;
-  console.log("[CobbleRanked] usage-stats pushed");
   res.json({ ok: true });
 });
 app.get("/leaderboard", (_req, res) => res.json(cobbleStore.leaderboard ?? {}));
 app.post("/leaderboard", requireCobbleAuth, (req, res) => {
   cobbleStore.leaderboard = req.body;
-  console.log("[CobbleRanked] leaderboard pushed");
   res.json({ ok: true });
 });
 
 app.get("/v4/usage-stats", (_req, res) => res.json(cobbleStore.usageStats ?? {}));
 app.post("/v4/usage-stats", requireCobbleAuth, (req, res) => {
   cobbleStore.usageStats = req.body;
-  console.log("[CobbleRanked] usage-stats pushed");
   res.json({ ok: true });
 });
 app.get("/v4/leaderboard", (_req, res) => res.json(cobbleStore.leaderboard ?? {}));
 app.post("/v4/leaderboard", requireCobbleAuth, (req, res) => {
   cobbleStore.leaderboard = req.body;
-  console.log("[CobbleRanked] leaderboard pushed");
   res.json({ ok: true });
+});
+
+/** Public Cobble$ top 10 from Minecraft RCON (cached ~90s). No auth. */
+app.get("/minecraft/cobbledollars-leaderboard", async (_req, res) => {
+  if (process.env.MC_COBBLEDOLLARS_DISABLE === "true") {
+    res.json({
+      ok: false,
+      disabled: true,
+      top10: [],
+      error: null,
+      updatedAt: null,
+    });
+    return;
+  }
+  const now = Date.now();
+  if (
+    cobbledollarsPublicCache &&
+    now - cobbledollarsPublicCache.at < COBBLEDOLLARS_PUBLIC_CACHE_TTL_MS
+  ) {
+    res.json(cobbledollarsPublicCache.body);
+    return;
+  }
+  try {
+    const r = await fetchCobbledollarsViaRcon();
+    const top10 = topBalancesFromMap(r.balances, 10);
+    const body = {
+      ok: !r.error,
+      disabled: false,
+      top10,
+      error: r.error ?? null,
+      updatedAt: new Date().toISOString(),
+    };
+    cobbledollarsPublicCache = { at: now, body };
+    res.json(body);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.json({
+      ok: false,
+      disabled: false,
+      top10: [],
+      error: msg,
+      updatedAt: null,
+    });
+  }
 });
 
 // --- Spawn data (public) ---
@@ -205,7 +255,7 @@ app.post("/auth/signup", async (req, res) => {
   }
   // Grant starter currency for gacha (ignore errors so signup still succeeds)
   if (supabase) {
-    const { error: _ } = await supabase.from("user_currency").insert({
+    void supabase.from("user_currency").insert({
       user_id: result.id,
       currency_type: "tickets",
       balance: 0,
@@ -439,6 +489,97 @@ app.post("/gacha/pull", requireAuth, async (req, res) => {
   });
 });
 
+/** Claim a gacha pull in-game via RCON (Cobblemon givepokemonother). User must be online. */
+app.post("/gacha/pulls/:pullId/claim", requireAuth, async (req, res) => {
+  const user = res.locals.user!;
+  if (!isGachaClaimEnabled()) {
+    res.status(503).json({ error: "In-game claim is not configured (RCON or MC_GACHA_CLAIM_DISABLE)" });
+    return;
+  }
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const pullId = Number(req.params.pullId);
+  if (!Number.isFinite(pullId)) {
+    res.status(400).json({ error: "Invalid pull id" });
+    return;
+  }
+
+  const { data: row, error: fetchErr } = await supabase
+    .from("user_gacha_pulls")
+    .select("id, user_id, reward_type, fulfilled_at")
+    .eq("id", pullId)
+    .maybeSingle();
+
+  if (fetchErr) {
+    res.status(500).json({ error: fetchErr.message });
+    return;
+  }
+  const r = row as {
+    id: number;
+    user_id: number;
+    reward_type: string;
+    fulfilled_at: string | null;
+  } | null;
+  if (!r || r.user_id !== user.userId) {
+    res.status(404).json({ error: "Pull not found" });
+    return;
+  }
+  if (r.fulfilled_at) {
+    res.status(400).json({ error: "This reward was already claimed or fulfilled" });
+    return;
+  }
+
+  if (!isLikelyMinecraftUsername(user.username)) {
+    res.status(400).json({
+      error:
+        "Your website username must match your Minecraft name (2–16 letters, numbers, underscore) to receive Pokémon.",
+    });
+    return;
+  }
+
+  const parsed = parseRewardForGivePokemon(r.reward_type);
+  if (!parsed) {
+    res.status(400).json({
+      error:
+        "This reward type cannot be sent automatically. Ask staff to fulfill it, or use a reward name like “shiny mesprit”.",
+    });
+    return;
+  }
+
+  const cmd = buildGivePokemonOtherCommand(user.username, parsed.species, parsed.shiny);
+  const exec = await executeMinecraftRconCommand(cmd);
+  if (!exec.ok) {
+    res.status(502).json({
+      error: exec.error,
+      hint: "Make sure you are online on the server with the same username as your site account.",
+    });
+    return;
+  }
+
+  const { error: upErr } = await supabase
+    .from("user_gacha_pulls")
+    .update({ fulfilled_at: new Date().toISOString() })
+    .eq("id", pullId)
+    .eq("user_id", user.userId)
+    .is("fulfilled_at", null);
+
+  if (upErr) {
+    if (/fulfilled_at|column/i.test(upErr.message)) {
+      res.status(503).json({
+        error:
+          "Server ran the command but could not record fulfillment — run supabase/user_gacha_pulls_fulfilled.sql",
+      });
+      return;
+    }
+    res.status(500).json({ error: upErr.message });
+    return;
+  }
+
+  res.json({ ok: true, message: "Pokémon sent to your party (if you were online)." });
+});
+
 app.get("/gacha/history", requireAuth, async (req, res) => {
   const user = res.locals.user!;
   if (!supabase) {
@@ -446,29 +587,65 @@ app.get("/gacha/history", requireAuth, async (req, res) => {
     return;
   }
   const limit = Math.min(Number(req.query.limit) || 30, 100);
-  const { data, error } = await supabase
+  const claimEnabled = isGachaClaimEnabled();
+
+  let data: {
+    id: number;
+    pool_id: number;
+    reward_type: string;
+    pull_at: string;
+    fulfilled_at?: string | null;
+  }[] = [];
+  const withFul = await supabase
     .from("user_gacha_pulls")
-    .select("id, pool_id, reward_type, pull_at")
+    .select("id, pool_id, reward_type, pull_at, fulfilled_at")
     .eq("user_id", user.userId)
     .order("pull_at", { ascending: false })
     .limit(limit);
-  if (error) {
-    res.status(500).json({ error: error.message });
+
+  if (withFul.error && /fulfilled_at|column/i.test(withFul.error.message)) {
+    const noFul = await supabase
+      .from("user_gacha_pulls")
+      .select("id, pool_id, reward_type, pull_at")
+      .eq("user_id", user.userId)
+      .order("pull_at", { ascending: false })
+      .limit(limit);
+    if (noFul.error) {
+      res.status(500).json({ error: noFul.error.message });
+      return;
+    }
+    data = (noFul.data ?? []).map((row) => ({ ...row, fulfilled_at: null }));
+  } else if (withFul.error) {
+    res.status(500).json({ error: withFul.error.message });
     return;
+  } else {
+    data = (withFul.data ?? []) as typeof data;
   }
-  const poolIds = [...new Set((data ?? []).map((r: { pool_id: number }) => r.pool_id))];
+
+  const poolIds = [...new Set(data.map((r) => r.pool_id))];
   const { data: pools } =
     poolIds.length > 0
       ? await supabase.from("gacha_pools").select("id, name").in("id", poolIds)
       : { data: [] };
   const poolNames = new Map((pools ?? []).map((p: { id: number; name: string }) => [p.id, p.name]));
-  const history = (data ?? []).map((r: { id: number; pool_id: number; reward_type: string; pull_at: string }) => ({
-    id: r.id,
-    poolId: r.pool_id,
-    poolName: poolNames.get(r.pool_id) ?? "Unknown",
-    rewardType: r.reward_type,
-    pulledAt: r.pull_at,
-  }));
+
+  const history = data.map((r) => {
+    const fulfilledAt = r.fulfilled_at ?? null;
+    const claimable =
+      claimEnabled &&
+      !fulfilledAt &&
+      isLikelyMinecraftUsername(user.username) &&
+      parseRewardForGivePokemon(r.reward_type) != null;
+    return {
+      id: r.id,
+      poolId: r.pool_id,
+      poolName: poolNames.get(r.pool_id) ?? "Unknown",
+      rewardType: r.reward_type,
+      pulledAt: r.pull_at,
+      fulfilledAt,
+      claimable,
+    };
+  });
   res.json({ history });
 });
 
@@ -578,6 +755,64 @@ app.post("/user/exchange", requireAuth, async (req, res) => {
 });
 
 // --- Admin only (requireAuth + requireAdmin) ---
+/**
+ * Full Minecraft dashboard: Query/status data + roster (RCON whitelist ∪ users ∪ env) with online/offline.
+ */
+app.get("/admin/minecraft/dashboard", requireAuth, requireAdmin, async (_req, res) => {
+  if (!process.env.MC_SERVER_HOST?.trim()) {
+    res.status(503).json({
+      error: "Minecraft not configured",
+      hint: "Set MC_SERVER_HOST, MC_SERVER_PORT, and optionally MC_QUERY_PORT on the backend.",
+    });
+    return;
+  }
+  try {
+    const data = await fetchMinecraftServerPayload();
+    const rosterRcon = await fetchRosterFromWhitelistRcon();
+    const includeWebsiteUsers = process.env.MC_ROSTER_INCLUDE_WEBSITE_USERS !== "false";
+    const rosterWeb = includeWebsiteUsers ? await fetchRosterFromUsers(supabase) : new Map();
+    const rosterBase = mergeRosterMaps(rosterRcon, rosterWeb);
+    const { players, accountCount, extraEnvCount } = mergeOnlineWithRoster(
+      data.onlinePlayerNames,
+      rosterBase
+    );
+
+    const { players: playersEnriched, presenceTracking } = await syncAndEnrichPresence(
+      supabase,
+      players
+    );
+
+    const cobbledollarsRcon = await fetchCobbledollarsViaRcon();
+
+    let rosterNote: string | undefined;
+    if (accountCount === 0 && data.online === 0) {
+      rosterNote =
+        "No roster: configure RCON + /whitelist add, or website users (username = IGN), or MC_EXTRA_ROSTER_NAMES.";
+    } else if (accountCount === 0 && data.online > 0) {
+      rosterNote =
+        "No roster for offline tracking — add whitelist (RCON), website users, or MC_EXTRA_ROSTER_NAMES.";
+    }
+
+    const serverInfo = { ...data };
+    delete (serverInfo as { onlinePlayerNames?: unknown }).onlinePlayerNames;
+    res.json({
+      ...serverInfo,
+      players: playersEnriched,
+      presenceTracking,
+      cobbledollarsRconError: cobbledollarsRcon.error,
+      cobbledollarsTop10: topBalancesFromMap(cobbledollarsRcon.balances, 10),
+      rosterAccountCount: accountCount,
+      rosterExtraFromEnv: extraEnvCount > 0 ? extraEnvCount : undefined,
+      rosterFromServerWhitelist: rosterRcon.size > 0 ? rosterRcon.size : undefined,
+      rosterWebsiteUsers: includeWebsiteUsers && rosterWeb.size > 0 ? rosterWeb.size : undefined,
+      rosterNote,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.status(502).json({ error: "Could not reach Minecraft server", details: msg });
+  }
+});
+
 app.get("/admin/users", requireAuth, requireAdmin, async (_req, res) => {
   if (!supabase) {
     res.status(503).json({ error: "Database not configured" });

@@ -118,3 +118,61 @@ export async function deleteAdminPull(pullId: number): Promise<{ ok: boolean; id
     method: 'DELETE',
   })
 }
+
+export type MinecraftDashboardResponse = {
+  ok: true
+  source: 'query' | 'status'
+  online: number
+  maxPlayers: number
+  motd?: string
+  version?: string
+  protocol?: number
+  latencyMs?: number
+  note?: string
+  software?: string
+  plugins?: string[]
+  mapName?: string
+  reportedHost?: string
+  reportedPort?: number
+  srvTarget?: string
+  faviconDataUri?: string
+  players: {
+    name: string
+    status: 'online' | 'offline'
+    streakDays: number
+    lastSeenOnline: string | null
+    offlineSeconds: number | null
+  }[]
+  /** When RCON failed to fetch CobbleDollars */
+  cobbledollarsRconError?: string
+  /** Top balances from parsed in-game leaderboard (RCON), highest first */
+  cobbledollarsTop10?: { name: string; balance: number }[]
+  /** True when Supabase table minecraft_player_presence exists and sync worked */
+  presenceTracking?: boolean
+  rosterAccountCount?: number
+  rosterExtraFromEnv?: number
+  rosterFromServerWhitelist?: number
+  rosterWebsiteUsers?: number
+  rosterNote?: string
+}
+
+export async function fetchMinecraftDashboard(): Promise<MinecraftDashboardResponse> {
+  const url = buildUrl('/admin/minecraft/dashboard')
+  const headers: HeadersInit = { 'Content-Type': 'application/json' }
+  const token = getToken()
+  if (token) {
+    (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`
+  }
+  const res = await fetch(url, { headers })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    const err = new Error(
+      (data as { error?: string })?.error ?? `Request failed: ${res.status}`
+    ) as Error & { hint?: string }
+    if (typeof (data as { hint?: string }).hint === 'string') {
+      err.hint = (data as { hint: string }).hint
+    }
+    throw err
+  }
+  return data as MinecraftDashboardResponse
+}

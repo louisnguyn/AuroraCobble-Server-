@@ -92,3 +92,12 @@ export interface SpawnPokemonResponse {
     sources: string[]
   }
 }
+
+/** GET /minecraft/cobbledollars-leaderboard */
+export interface CobbleDollarsLeaderboardResponse {
+  ok: boolean
+  disabled?: boolean
+  top10: { name: string; balance: number }[]
+  error: string | null
+  updatedAt: string | null
+}

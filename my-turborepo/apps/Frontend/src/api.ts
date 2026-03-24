@@ -14,6 +14,10 @@ export async function fetchLeaderboard() {
   return get<import('./types').LeaderboardResponse>('/leaderboard')
 }
 
+export async function fetchCobbleDollarsLeaderboard() {
+  return get<import('./types').CobbleDollarsLeaderboardResponse>('/minecraft/cobbledollars-leaderboard')
+}
+
 export async function fetchSpawnPokemon(params?: { q?: string; generation?: string; source?: string; limit?: number }) {
   const sp = new URLSearchParams()
   if (params?.q) sp.set('q', params.q)

@@ -116,6 +116,10 @@ export interface GachaHistoryEntry {
   poolName: string
   rewardType: string
   pulledAt: string
+  /** Set when claimed in-game or marked fulfilled by admin */
+  fulfilledAt?: string | null
+  /** Server says this row can use Claim (RCON + parsable species + not fulfilled) */
+  claimable?: boolean
 }
 
 export async function fetchGachaHistory(limit?: number): Promise<{ history: GachaHistoryEntry[] }> {
@@ -127,6 +131,13 @@ export async function gachaPull(poolId: number): Promise<GachaRewardResult> {
   return fetchApi<GachaRewardResult>('/gacha/pull', {
     method: 'POST',
     body: JSON.stringify({ poolId }),
+  })
+}
+
+export async function claimGachaPull(pullId: number): Promise<{ ok: boolean; message?: string }> {
+  return fetchApi<{ ok: boolean; message?: string }>(`/gacha/pulls/${pullId}/claim`, {
+    method: 'POST',
+    body: JSON.stringify({}),
   })
 }
 

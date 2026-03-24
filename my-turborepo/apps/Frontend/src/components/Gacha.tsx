@@ -6,6 +6,7 @@ import {
   fetchPoolRewards,
   fetchGachaHistory,
   gachaPull,
+  claimGachaPull,
   fetchExchangeRates,
   exchangeTickets,
   fetchUserCurrencies,
@@ -30,7 +31,7 @@ function getRarity(weight: number, totalWeight: number): { label: string; classN
 }
 
 export function Gacha() {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, user } = useAuth()
   const [showAuth, setShowAuth] = useState(false)
   const [pools, setPools] = useState<GachaPool[]>([])
   const [loading, setLoading] = useState(true)
@@ -45,6 +46,8 @@ export function Gacha() {
   const [exchangeRates, setExchangeRates] = useState<ExchangeRate[]>([])
   const [currencies, setCurrencies] = useState<{ currency_type: string; balance: number }[]>([])
   const [exchanging, setExchanging] = useState<string | null>(null)
+  const [claimingId, setClaimingId] = useState<number | null>(null)
+  const [claimPending, setClaimPending] = useState<{ pullId: number; rewardLabel: string } | null>(null)
   const openStartRef = useRef(0)
   const pendingRewardRef = useRef<GachaRewardResult | null>(null)
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([])
@@ -88,6 +91,23 @@ export function Gacha() {
     fetchUserCurrencies().then(({ currencies: c }) => setCurrencies(c)).catch(() => {})
     if (selectedPool) {
       fetchPoolCurrency(selectedPool.id).then(({ balance: b }) => setBalance(b)).catch(() => {})
+    }
+  }
+
+  const executeClaim = async () => {
+    if (!claimPending) return
+    const { pullId } = claimPending
+    setClaimPending(null)
+    setClaimingId(pullId)
+    setError(null)
+    try {
+      await claimGachaPull(pullId)
+      const { history: h } = await fetchGachaHistory(30)
+      setHistory(h)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Claim failed')
+    } finally {
+      setClaimingId(null)
     }
   }
 
@@ -410,23 +430,103 @@ export function Gacha() {
 
           {isAuthenticated && (
             <div className="mt-8 rounded-2xl bg-surface/80 border border-border p-4 sm:p-6">
-              <h3 className="text-lg font-semibold text-[#e2e8f0] mb-3">Your pull history</h3>
+              <h3 className="text-lg font-semibold text-[#e2e8f0] mb-1">Your pull history</h3>
+              <p className="text-xs text-muted mb-3 m-0">
+                Claim sends the Pokémon to your in-game party via the server. You must be{' '}
+                <strong className="text-[#e2e8f0]">online</strong> on the server, and your{' '}
+                <strong className="text-[#e2e8f0]">Minecraft name must match</strong> your website username.
+              </p>
               {history.length === 0 ? (
                 <p className="text-muted text-sm">No pulls yet. Open a chest to see your rewards here.</p>
               ) : (
                 <ul className="space-y-2 max-h-64 overflow-y-auto">
                   {history.map((entry) => (
-                    <li key={entry.id} className="flex flex-wrap items-center justify-between gap-2 py-2 px-3 rounded-lg bg-[#0f0a1a]/50 border border-border/50 text-sm">
-                      <span className="text-[#e2e8f0]">{entry.rewardType}</span>
-                      <span className="text-muted text-xs">
-                        {entry.poolName} · {new Date(entry.pulledAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                      </span>
+                    <li
+                      key={entry.id}
+                      className="flex flex-wrap items-center justify-between gap-2 py-2 px-3 rounded-lg bg-[#0f0a1a]/50 border border-border/50 text-sm"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <span className="text-[#e2e8f0] block">{entry.rewardType}</span>
+                        <span className="text-muted text-xs">
+                          {entry.poolName} ·{' '}
+                          {new Date(entry.pulledAt).toLocaleDateString(undefined, {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                        {entry.fulfilledAt && (
+                          <span className="block text-xs text-emerald-400/90 mt-1">Claimed in-game</span>
+                        )}
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        {entry.claimable && !entry.fulfilledAt && (
+                          <button
+                            type="button"
+                            onClick={() => setClaimPending({ pullId: entry.id, rewardLabel: entry.rewardType })}
+                            disabled={claimingId !== null}
+                            className="px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-200 text-xs font-semibold border border-amber-500/40 hover:bg-amber-500/30 disabled:opacity-50 touch-manipulation"
+                          >
+                            {claimingId === entry.id ? '…' : 'Claim'}
+                          </button>
+                        )}
+                      </div>
                     </li>
                   ))}
                 </ul>
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {claimPending && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="claim-modal-title"
+          onClick={() => setClaimPending(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-surface border border-border shadow-xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6 sm:p-8">
+              <h2 id="claim-modal-title" className="text-lg font-bold text-[#e2e8f0] m-0 mb-3">
+                Claim in-game?
+              </h2>
+              <p className="text-sm text-[#e2e8f0] m-0 mb-4">
+                Send <span className="font-semibold text-amber-200/95">“{claimPending.rewardLabel}”</span> to your
+                party on the Minecraft server.
+              </p>
+              <div className="rounded-xl bg-amber-500/10 border border-amber-500/25 px-4 py-3 mb-6">
+                <p className="text-sm text-amber-100/90 m-0 leading-relaxed">
+                  You must be <strong className="text-amber-50">online</strong> on the server. Your in-game name must
+                  match your site account:{' '}
+                  <strong className="font-mono text-amber-50">{user?.username ?? '—'}</strong>. If you are offline or
+                  your IGN differs, delivery will fail.
+                </p>
+              </div>
+              <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setClaimPending(null)}
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-border text-muted hover:text-[#e2e8f0] hover:bg-surface-hover text-sm font-medium touch-manipulation"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void executeClaim()}
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-amber-500/90 text-[#0f0a1a] text-sm font-semibold hover:bg-amber-400 border border-amber-400/50 touch-manipulation"
+                >
+                  Claim now
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
