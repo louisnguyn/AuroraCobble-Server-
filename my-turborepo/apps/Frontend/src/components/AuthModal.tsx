@@ -67,14 +67,14 @@ export function AuthModal({ onClose, defaultMode = 'login' }: AuthModalProps) {
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4 text-left">
             {error && (
               <div className="p-3 rounded-lg bg-error/15 border border-error/30 text-error text-sm">
                 {error}
               </div>
             )}
             <div>
-              <label htmlFor="auth-email" className="block text-sm font-medium text-muted mb-1">
+              <label htmlFor="auth-email" className="block text-left text-sm font-medium text-muted mb-1">
                 Email
               </label>
               <input
@@ -90,7 +90,7 @@ export function AuthModal({ onClose, defaultMode = 'login' }: AuthModalProps) {
             </div>
             {!isLogin && (
               <div>
-                <label htmlFor="auth-username" className="block text-sm font-medium text-muted mb-1">
+                <label htmlFor="auth-username" className="block text-left text-sm font-medium text-muted mb-1">
                   Username
                 </label>
                 <input
@@ -106,7 +106,7 @@ export function AuthModal({ onClose, defaultMode = 'login' }: AuthModalProps) {
               </div>
             )}
             <div>
-              <label htmlFor="auth-password" className="block text-sm font-medium text-muted mb-1">
+              <label htmlFor="auth-password" className="block text-left text-sm font-medium text-muted mb-1">
                 Password
               </label>
               <input

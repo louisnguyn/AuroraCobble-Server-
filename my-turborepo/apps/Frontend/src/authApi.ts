@@ -145,11 +145,190 @@ export async function fetchUserCurrencies(): Promise<{ currencies: { currency_ty
   return fetchApi<{ currencies: { currency_type: string; balance: number }[] }>('/user/currency')
 }
 
+export interface UserPvpRank {
+  rank: number | null
+  status: 'ranked' | 'unranked'
+  format?: string
+  minecraftUsername?: string
+  elo?: number | null
+  updatedAt?: string
+}
+
+export async function fetchUserPvpRank(): Promise<UserPvpRank> {
+  return fetchApi<UserPvpRank>('/user/pvp-rank')
+}
+
 /** Move website Cobble$ (user_currency cobbledollars) into the Minecraft server via RCON. */
 export async function depositCobbledollars(amount: number): Promise<{ newBalance: number }> {
   return fetchApi<{ newBalance: number }>('/user/cobbledollars/deposit', {
     method: 'POST',
     body: JSON.stringify({ amount }),
+  })
+}
+
+export interface DailyLoginStatus {
+  date: string
+  timeZone: string
+  eligible: boolean
+  streak: {
+    nextDay: number
+    nextReward: {
+      day: number
+      kind: string
+      amount: number
+      label: string
+      itemKey?: string
+    }
+  }
+  claim: {
+    status: string | null
+    claimedAt: string | null
+    selectedReward: string | null
+    error: string | null
+    streakDay: number | null
+  } | null
+}
+
+export async function fetchDailyLoginStatus(): Promise<DailyLoginStatus> {
+  return fetchApi<DailyLoginStatus>('/user/daily-login/status')
+}
+
+export async function claimDailyLoginReward(): Promise<{
+  ok: boolean
+  date: string
+  streakDay: number
+  reward: string
+  message: string
+}> {
+  return fetchApi<{
+    ok: boolean
+    date: string
+    streakDay: number
+    reward: string
+    message: string
+  }>('/user/daily-login/claim', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+}
+
+export async function fetchUserInventory(): Promise<{ inventory: { item_key: string; quantity: number }[] }> {
+  return fetchApi<{ inventory: { item_key: string; quantity: number }[] }>('/user/inventory')
+}
+
+export async function claimInventoryItem(itemKey: string, quantity = 1): Promise<{
+  ok: boolean
+  itemKey: string
+  label: string
+  quantityClaimed: number
+  remaining: number
+}> {
+  return fetchApi<{
+    ok: boolean
+    itemKey: string
+    label: string
+    quantityClaimed: number
+    remaining: number
+  }>('/user/inventory/claim', {
+    method: 'POST',
+    body: JSON.stringify({ itemKey, quantity }),
+  })
+}
+
+export interface ShopItem {
+  itemKey: string
+  label: string
+  cost: number
+}
+
+export async function fetchShopItems(): Promise<{ currency: string; items: ShopItem[] }> {
+  return fetchApi<{ currency: string; items: ShopItem[] }>('/shop/items')
+}
+
+export async function buyShopItem(itemKey: string, quantity = 1): Promise<{
+  ok: boolean
+  itemKey: string
+  quantityPurchased: number
+  totalCost: number
+  newBalance: number
+  newInventoryQuantity: number
+}> {
+  return fetchApi<{
+    ok: boolean
+    itemKey: string
+    quantityPurchased: number
+    totalCost: number
+    newBalance: number
+    newInventoryQuantity: number
+  }>('/shop/buy', {
+    method: 'POST',
+    body: JSON.stringify({ itemKey, quantity }),
+  })
+}
+
+export interface PokemonShopOffer {
+  slot: number
+  category: string
+  species: string
+  shiny: boolean
+  price: number
+  label: string
+  purchased: boolean
+  claimed: boolean
+}
+
+export interface PokemonShopOffersResponse {
+  refreshHours: number
+  windowStart: string
+  windowEnd: string
+  offers: PokemonShopOffer[]
+}
+
+export interface PokemonShopPurchase {
+  id: number
+  species: string
+  category: string
+  shiny: boolean
+  price: number
+  purchasedAt: string
+  claimedAt: string | null
+  claimable: boolean
+}
+
+export async function fetchPokemonShopOffers(): Promise<PokemonShopOffersResponse> {
+  return fetchApi<PokemonShopOffersResponse>('/pokemon-shop/offers')
+}
+
+export async function buyPokemonShopOffer(slot: number): Promise<{
+  ok: boolean
+  slot: number
+  species: string
+  shiny: boolean
+  price: number
+  newBalance: number
+}> {
+  return fetchApi<{
+    ok: boolean
+    slot: number
+    species: string
+    shiny: boolean
+    price: number
+    newBalance: number
+  }>('/pokemon-shop/buy', {
+    method: 'POST',
+    body: JSON.stringify({ slot }),
+  })
+}
+
+export async function fetchPokemonShopPurchases(limit?: number): Promise<{ purchases: PokemonShopPurchase[] }> {
+  const q = limit != null ? `?limit=${limit}` : ''
+  return fetchApi<{ purchases: PokemonShopPurchase[] }>(`/pokemon-shop/purchases${q}`)
+}
+
+export async function claimPokemonShopPurchase(id: number): Promise<{ ok: boolean; message: string }> {
+  return fetchApi<{ ok: boolean; message: string }>(`/pokemon-shop/purchases/${id}/claim`, {
+    method: 'POST',
+    body: JSON.stringify({}),
   })
 }
 
