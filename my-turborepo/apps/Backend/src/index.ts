@@ -62,6 +62,16 @@ type PvpLeaderboardRow = {
   formatKey: string;
 };
 
+function pvpTierFromElo(elo: number | null): string {
+  const n = Number(elo ?? 0);
+  if (n >= 1350) return "netherite";
+  if (n >= 1250) return "diamond";
+  if (n >= 1175) return "emerald";
+  if (n >= 1100) return "gold";
+  if (n >= 1050) return "silver";
+  return "copper";
+}
+
 function normalizeName(s: string): string {
   return s.trim().toLowerCase();
 }
@@ -800,7 +810,10 @@ app.get("/user/pvp-rank", requireAuth, async (_req, res) => {
     .select("rank_position, minecraft_username, format_key, elo, source_updated_at")
     .eq("user_id", user.userId)
     .maybeSingle();
-  if (error) {
+  const missingRankTable = Boolean(
+    error && /user_pvp_ranks|relation|does not exist|schema cache/i.test(error.message)
+  );
+  if (error && !missingRankTable) {
     res.status(500).json({ error: error.message });
     return;
   }
@@ -813,17 +826,48 @@ app.get("/user/pvp-rank", requireAuth, async (_req, res) => {
         source_updated_at: string;
       }
     | null;
-  if (!row) {
+  if (row) {
+    res.json({
+      rank: row.rank_position,
+      status: "ranked",
+      format: row.format_key,
+      minecraftUsername: row.minecraft_username,
+      elo: row.elo,
+      tier: pvpTierFromElo(row.elo),
+      updatedAt: row.source_updated_at,
+    });
+    return;
+  }
+
+  // Fallback: derive live rank directly from in-memory /leaderboard payload.
+  const liveRows = extractPvpRowsFromLeaderboardPayload(cobbleStore.leaderboard);
+  const mine = liveRows.find((r) => normalizeName(r.playerName) === normalizeName(user.username));
+  if (!mine) {
     res.json({ rank: null, status: "unranked" });
     return;
   }
+  const now = new Date().toISOString();
+  await supabase.from("user_pvp_ranks").upsert(
+    {
+      user_id: user.userId,
+      minecraft_username: mine.playerName,
+      format_key: mine.formatKey,
+      rank_position: mine.rank,
+      elo: mine.elo,
+      source_updated_at: now,
+      updated_at: now,
+    },
+    { onConflict: "user_id" }
+  );
   res.json({
-    rank: row.rank_position,
+    rank: mine.rank,
     status: "ranked",
-    format: row.format_key,
-    minecraftUsername: row.minecraft_username,
-    elo: row.elo,
-    updatedAt: row.source_updated_at,
+    format: mine.formatKey,
+    minecraftUsername: mine.playerName,
+    elo: mine.elo,
+    tier: pvpTierFromElo(mine.elo),
+    updatedAt: now,
+    fromLiveLeaderboard: true,
   });
 });
 

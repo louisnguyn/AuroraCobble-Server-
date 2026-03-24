@@ -274,7 +274,9 @@ export function Account() {
         <span className="block mt-1">
           PVP rank:{' '}
           <span className="text-[#e2e8f0]">
-            {userPvpRank?.rank != null ? `#${userPvpRank.rank}` : 'Unranked'}
+            {userPvpRank?.rank != null
+              ? `#${userPvpRank.rank}${userPvpRank.tier ? ` (${displayItemName(userPvpRank.tier)})` : ''}`
+              : 'Unranked'}
           </span>
         </span>
         {user?.email && (

@@ -151,6 +151,7 @@ export interface UserPvpRank {
   format?: string
   minecraftUsername?: string
   elo?: number | null
+  tier?: string
   updatedAt?: string
 }
 
