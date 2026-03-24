@@ -14,8 +14,8 @@ const SECTIONS: { id: Section; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'leaderboard', label: 'Leaderboard' },
   { id: 'usage', label: 'Usage stats' },
-  { id: 'users', label: 'Users' },
-  { id: 'minecraft', label: 'Minecraft' },
+  { id: 'users', label: 'Ticket Management' },
+  { id: 'minecraft', label: 'Server Dashboard' },
   { id: 'settings', label: 'Settings' },
   { id: 'bans', label: 'Bans' },
 ]

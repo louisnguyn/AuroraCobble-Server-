@@ -145,6 +145,14 @@ export async function fetchUserCurrencies(): Promise<{ currencies: { currency_ty
   return fetchApi<{ currencies: { currency_type: string; balance: number }[] }>('/user/currency')
 }
 
+/** Move website Cobble$ (user_currency cobbledollars) into the Minecraft server via RCON. */
+export async function depositCobbledollars(amount: number): Promise<{ newBalance: number }> {
+  return fetchApi<{ newBalance: number }>('/user/cobbledollars/deposit', {
+    method: 'POST',
+    body: JSON.stringify({ amount }),
+  })
+}
+
 export interface ExchangeRate {
   to_currency: string
   cost_tickets: number

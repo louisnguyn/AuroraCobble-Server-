@@ -134,7 +134,7 @@ export function MinecraftDashboard() {
       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-white m-0 bg-gradient-to-r from-white via-violet-100 to-indigo-200 bg-clip-text text-transparent">
-            Minecraft live
+            Server Dashboard
           </h1>
         </div>
         <button

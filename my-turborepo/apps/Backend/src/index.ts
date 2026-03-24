@@ -26,6 +26,10 @@ import {
   isLikelyMinecraftUsername,
   parseRewardForGivePokemon,
 } from "./gachaRewardClaim.js";
+import {
+  buildCobbledollarsDepositCommand,
+  isCobbledollarsDepositEnabled,
+} from "./minecraftCobbledollarsDeposit.js";
 
 const app = express();
 const port = process.env.PORT ?? 3001;
@@ -258,13 +262,12 @@ app.post("/auth/signup", async (req, res) => {
     res.status(400).json({ error: result.error });
     return;
   }
-  // Grant starter currency for gacha (ignore errors so signup still succeeds)
+  // Grant starter currency for gacha + website Cobble$ wallet (ignore errors so signup still succeeds)
   if (supabase) {
-    void supabase.from("user_currency").insert({
-      user_id: result.id,
-      currency_type: "tickets",
-      balance: 0,
-    });
+    void supabase.from("user_currency").insert([
+      { user_id: result.id, currency_type: "tickets", balance: 0 },
+      { user_id: result.id, currency_type: "cobbledollars", balance: 0 },
+    ]);
   }
   const isAdmin = !!(result as { is_admin?: boolean }).is_admin;
   const token = signToken({
@@ -670,6 +673,118 @@ app.get("/user/currency", requireAuth, async (_req, res) => {
     return;
   }
   res.json({ currencies: data ?? [] });
+});
+
+const COBBLEDOLLARS_CURRENCY = "cobbledollars";
+
+/** Website Cobble$ row — created on signup; lazily created for older accounts on first deposit. */
+async function ensureUserCobbledollarsRow(
+  userId: number
+): Promise<{ id: number; balance: number } | null> {
+  if (!supabase) return null;
+  const { data: row } = await supabase
+    .from("user_currency")
+    .select("id, balance")
+    .eq("user_id", userId)
+    .eq("currency_type", COBBLEDOLLARS_CURRENCY)
+    .maybeSingle();
+  if (row) return row as { id: number; balance: number };
+  const { data: inserted, error } = await supabase
+    .from("user_currency")
+    .insert({
+      user_id: userId,
+      currency_type: COBBLEDOLLARS_CURRENCY,
+      balance: 0,
+    })
+    .select("id, balance")
+    .single();
+  if (error) return null;
+  return inserted as { id: number; balance: number };
+}
+
+/**
+ * Spend website Cobble$ and credit the linked Minecraft account via RCON.
+ * Username must match Java edition IGN (same rule as gacha Pokémon claim).
+ */
+app.post("/user/cobbledollars/deposit", requireAuth, async (req, res) => {
+  const user = res.locals.user!;
+  if (!isCobbledollarsDepositEnabled()) {
+    res.status(503).json({
+      error:
+        "Cobble$ deposit is not configured (set MC_RCON_* or disable MC_COBBLEDOLLARS_DEPOSIT_DISABLE)",
+    });
+    return;
+  }
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const raw = (req.body ?? {}).amount;
+  const amount =
+    typeof raw === "number" ? raw : typeof raw === "string" ? parseInt(raw, 10) : NaN;
+  if (!Number.isInteger(amount) || amount < 1) {
+    res.status(400).json({ error: "amount must be a positive whole number" });
+    return;
+  }
+  if (amount > 1_000_000_000_000) {
+    res.status(400).json({ error: "amount too large" });
+    return;
+  }
+  if (!isLikelyMinecraftUsername(user.username)) {
+    res.status(400).json({
+      error:
+        "Your website username must match your Minecraft name (2–16 letters, numbers, underscore) to deposit Cobble$.",
+    });
+    return;
+  }
+
+  const row = await ensureUserCobbledollarsRow(user.userId);
+  if (!row) {
+    res.status(500).json({ error: "Could not open Cobble$ wallet" });
+    return;
+  }
+  if (row.balance < amount) {
+    res.status(400).json({
+      error: "Not enough website Cobble$",
+      balance: row.balance,
+      required: amount,
+    });
+    return;
+  }
+
+  const newBalance = row.balance - amount;
+  const now = new Date().toISOString();
+  const { data: updated, error: updErr } = await supabase
+    .from("user_currency")
+    .update({ balance: newBalance, updated_at: now })
+    .eq("id", row.id)
+    .eq("balance", row.balance)
+    .select("balance");
+
+  if (updErr) {
+    res.status(500).json({ error: updErr.message });
+    return;
+  }
+  if (!updated?.length) {
+    res.status(409).json({ error: "Balance changed — try again" });
+    return;
+  }
+
+  const cmd = buildCobbledollarsDepositCommand(user.username, amount);
+  const exec = await executeMinecraftRconCommand(cmd);
+  if (!exec.ok) {
+    await supabase
+      .from("user_currency")
+      .update({ balance: row.balance, updated_at: new Date().toISOString() })
+      .eq("id", row.id);
+    res.status(502).json({
+      error: exec.error,
+      hint: "Website balance was not charged. Check RCON and that your server’s Cobble$ command matches MC_COBBLEDOLLARS_DEPOSIT_COMMAND_TEMPLATE.",
+    });
+    return;
+  }
+
+  res.json({ newBalance });
 });
 
 // Ticket exchange: spend tickets for special ticket types

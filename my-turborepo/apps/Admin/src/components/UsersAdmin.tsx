@@ -127,7 +127,7 @@ export function UsersAdmin() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-bold text-[#e2e8f0]">Users</h1>
+      <h1 className="text-xl font-bold text-[#e2e8f0]">Ticket Management</h1>
       {error && (
         <div className="p-3 rounded-lg bg-error/15 border border-error/30 text-error text-sm">
           {error}
