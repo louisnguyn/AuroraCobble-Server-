@@ -1946,15 +1946,18 @@ app.get("/admin/users", requireAuth, requireAdmin, async (_req, res) => {
   res.json({ users: data ?? [] });
 });
 
-app.post("/admin/pvp-rank/weekly-payout", requireAuth, requireAdmin, async (_req, res) => {
+async function runWeeklyPvpRankPayout(): Promise<{
+  weekStart: string;
+  format: string;
+  paid: Array<{ rank: number; username: string; amount: number }>;
+  skipped: Array<{ rank: number; username: string; reason: string }>;
+}> {
   if (!supabase) {
-    res.status(503).json({ error: "Database not configured" });
-    return;
+    throw new Error("Database not configured");
   }
   const rows = extractPvpRowsFromLeaderboardPayload(cobbleStore.leaderboard);
   if (!rows.length) {
-    res.status(400).json({ error: "Leaderboard is empty. Sync /leaderboard first." });
-    return;
+    throw new Error("Leaderboard is empty. Sync /leaderboard first.");
   }
   const weekStart = startOfWeekIsoDateInTimezone(new Date(), DAILY_RESET_TIMEZONE);
   const formatKey = rows[0]?.formatKey ?? "singles";
@@ -1964,13 +1967,11 @@ app.post("/admin/pvp-rank/weekly-payout", requireAuth, requireAdmin, async (_req
     .eq("week_start", weekStart)
     .eq("format_key", formatKey);
   if ((existing?.length ?? 0) > 0) {
-    res.status(400).json({ error: `Weekly payout already processed for ${weekStart} (${formatKey}).` });
-    return;
+    throw new Error(`Weekly payout already processed for ${weekStart} (${formatKey}).`);
   }
   const { data: users, error: usersErr } = await supabase.from("users").select("id, username");
   if (usersErr) {
-    res.status(500).json({ error: usersErr.message });
-    return;
+    throw new Error(usersErr.message);
   }
   const byUsername = new Map<string, { id: number }>();
   for (const u of (users ?? []) as { id: number; username: string }[]) {
@@ -2017,7 +2018,25 @@ app.post("/admin/pvp-rank/weekly-payout", requireAuth, requireAdmin, async (_req
     paid.push({ rank, username: row.playerName, amount });
   }
 
-  res.json({ ok: true, weekStart, format: formatKey, rewards: PVP_WEEKLY_REWARDS, paid, skipped });
+  return { weekStart, format: formatKey, paid, skipped };
+}
+
+app.post("/admin/pvp-rank/weekly-payout", requireAuth, requireAdmin, async (_req, res) => {
+  try {
+    const result = await runWeeklyPvpRankPayout();
+    res.json({ ok: true, rewards: PVP_WEEKLY_REWARDS, ...result });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/already processed/i.test(msg) || /Leaderboard is empty/i.test(msg)) {
+      res.status(400).json({ error: msg });
+      return;
+    }
+    if (/Database not configured/i.test(msg)) {
+      res.status(503).json({ error: msg });
+      return;
+    }
+    res.status(500).json({ error: msg });
+  }
 });
 
 app.get("/admin/users/:userId/currency", requireAuth, requireAdmin, async (req, res) => {
@@ -2199,6 +2218,49 @@ app.delete("/admin/pulls/:pullId", requireAuth, requireAdmin, async (req, res) =
   res.json({ ok: true, id: pullId });
 });
 
+let weeklyPvpAutoLastAttemptMinute = "";
+function startWeeklyPvpAutoPayoutScheduler(): void {
+  if (process.env.PVP_WEEKLY_AUTO_PAYOUT_DISABLE === "true") return;
+  const tick = async () => {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: DAILY_RESET_TIMEZONE,
+      weekday: "short",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(new Date());
+    const weekday = parts.find((p) => p.type === "weekday")?.value ?? "";
+    const y = parts.find((p) => p.type === "year")?.value ?? "0000";
+    const m = parts.find((p) => p.type === "month")?.value ?? "00";
+    const d = parts.find((p) => p.type === "day")?.value ?? "00";
+    const hh = parts.find((p) => p.type === "hour")?.value ?? "00";
+    const mm = parts.find((p) => p.type === "minute")?.value ?? "00";
+    const key = `${y}-${m}-${d} ${hh}:${mm}`;
+
+    // Sunday 00:00 in configured timezone
+    if (weekday !== "Sun" || hh !== "00" || mm !== "00") return;
+    if (weeklyPvpAutoLastAttemptMinute === key) return;
+    weeklyPvpAutoLastAttemptMinute = key;
+    try {
+      const result = await runWeeklyPvpRankPayout();
+      console.log(
+        `[pvp-weekly-auto] paid week=${result.weekStart} format=${result.format} paid=${result.paid.length} skipped=${result.skipped.length}`
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[pvp-weekly-auto] skipped/error: ${msg}`);
+    }
+  };
+  void tick();
+  setInterval(() => {
+    void tick();
+  }, 60_000);
+}
+
 app.listen(port, () => {
   console.log(`Backend http://localhost:${port}`);
+  startWeeklyPvpAutoPayoutScheduler();
 });
