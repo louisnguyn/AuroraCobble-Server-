@@ -12,18 +12,21 @@ import {
   fetchPokemonShopPurchases,
   fetchShopItems,
   fetchUserPvpRank,
+  fetchPvpTopPrediction,
+  submitPvpTopPrediction,
   fetchUserCurrencies,
   fetchUserInventory,
   type DailyLoginStatus,
   type PokemonShopOffer,
   type PokemonShopPurchase,
   type UserPvpRank,
+  type PvpTopPredictionStatus,
   type ShopItem,
 } from '../authApi'
 import { AuthModal } from './AuthModal'
 
 export function Account() {
-  type AccountTab = 'account' | 'daily' | 'shop' | 'inventory'
+  type AccountTab = 'account' | 'daily' | 'predict' | 'shop' | 'inventory'
   const { isAuthenticated, user } = useAuth()
   const [showAuth, setShowAuth] = useState(false)
   const [currentPassword, setCurrentPassword] = useState('')
@@ -57,6 +60,14 @@ export function Account() {
   const [pokemonSuccess, setPokemonSuccess] = useState<string | null>(null)
   const [pokemonClaimedToServerAt, setPokemonClaimedToServerAt] = useState<Record<number, string>>({})
   const [userPvpRank, setUserPvpRank] = useState<UserPvpRank | null>(null)
+  const [pvpPredict, setPvpPredict] = useState<PvpTopPredictionStatus | null>(null)
+  const [predictPick1, setPredictPick1] = useState('')
+  const [predictPick2, setPredictPick2] = useState('')
+  const [predictPick3, setPredictPick3] = useState('')
+  const [predictStake, setPredictStake] = useState('')
+  const [predictBusy, setPredictBusy] = useState(false)
+  const [predictError, setPredictError] = useState<string | null>(null)
+  const [predictSuccess, setPredictSuccess] = useState<string | null>(null)
   const PVP_DAILY_REWARD_BY_RANK: Record<number, number> = {
     1: 60_000,
     2: 50_000,
@@ -96,8 +107,9 @@ export function Account() {
       fetchUserPvpRank(),
       fetchPokemonShopOffers(),
       fetchPokemonShopPurchases(20),
+      fetchPvpTopPrediction().catch(() => null),
     ])
-      .then(([d, inv, shop, currencies, pvpRank, pOffers, pPurchases]) => {
+      .then(([d, inv, shop, currencies, pvpRank, pOffers, pPurchases, predict]) => {
         setDaily(d)
         setInventory(inv.inventory ?? [])
         setShopItems(shop.items ?? [])
@@ -108,6 +120,7 @@ export function Account() {
         setPokemonOffers(pOffers.offers ?? [])
         setPokemonWindowEnd(pOffers.windowEnd ?? null)
         setPokemonPurchases(pPurchases.purchases ?? [])
+        if (predict) setPvpPredict(predict)
       })
       .catch((e) => setDailyError(e instanceof Error ? e.message : 'Failed to load daily rewards'))
       .finally(() => setDailyLoading(false))
@@ -337,9 +350,10 @@ export function Account() {
         )}
       </p>
 
-      <div className="mb-6 grid grid-cols-2 sm:grid-cols-4 gap-2">
+      <div className="mb-6 grid grid-cols-2 sm:grid-cols-3 gap-2">
         {([
           ['daily', 'Daily'],
+          ['predict', 'PVP predict'],
           ['shop', 'Shop'],
           ['inventory', 'Inventory'],
           ['account', 'Account'],
@@ -395,6 +409,164 @@ export function Account() {
               )}
               {dailySuccess && <p className="text-sm text-emerald-300 mt-3 mb-0">{dailySuccess}</p>}
               {dailyError && <p className="text-sm text-error mt-3 mb-0">{dailyError}</p>}
+            </div>
+          )}
+        </>
+      )}
+
+      {activeTab === 'predict' && (
+        <>
+          <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-2">PVP top 3 prediction</h2>
+          <p className="text-sm text-muted m-0 mb-4">
+            Pick who finishes #1, #2, and #3 on the ranked leaderboard (exact order). Stake website
+            Cobble$; if you are right you receive {pvpPredict?.winMultiplier ?? 2}× your stake. Settles at
+            00:00 ({pvpPredict?.resetTimeZone ?? 'Asia/Ho_Chi_Minh'}) — same moment as daily streak and
+            PVP rank payouts (round date: {pvpPredict?.forPayoutDate ?? '—'}).
+          </p>
+          {!pvpPredict ? (
+            <p className="text-sm text-amber-200/90 m-0">
+              Could not load predictions. If this is new, run <code className="text-xs">pvp_top_predictions.sql</code>{' '}
+              in Supabase and redeploy the backend.
+            </p>
+          ) : pvpPredict.rankedPlayers.length < 3 ? (
+            <p className="text-sm text-muted m-0">
+              Need at least 3 ranked players on the synced leaderboard before predictions open.
+            </p>
+          ) : (
+            <div className="mb-6 rounded-xl border border-border bg-[#0f0a1a]/50 p-4 space-y-4">
+              <p className="text-xs text-muted m-0">
+                Stake: {pvpPredict.minStake.toLocaleString()}–{pvpPredict.maxStake.toLocaleString()} Cobble$
+                · Wallet:{' '}
+                <span className="tabular-nums text-[#fbbf24]">{cobbleBalance.toLocaleString()}</span>
+                {!pvpPredict.windowOpen && (
+                  <span className="block mt-2 text-amber-300">
+                    This round is locked (cutoff passed for {pvpPredict.forPayoutDate}). Next round loads
+                    after reset.
+                  </span>
+                )}
+              </p>
+              {pvpPredict.entry ? (
+                <div className="text-sm text-[#e2e8f0] space-y-2">
+                  <p className="m-0 font-medium">Your pick (locked)</p>
+                  <p className="m-0 text-muted">
+                    #1 {pvpPredict.entry.pick_rank1_name} · #2 {pvpPredict.entry.pick_rank2_name} · #3{' '}
+                    {pvpPredict.entry.pick_rank3_name}
+                  </p>
+                  <p className="m-0">
+                    Stake:{' '}
+                    <span className="tabular-nums text-[#fbbf24]">
+                      {Number(pvpPredict.entry.stake).toLocaleString()}
+                    </span>{' '}
+                    Cobble$
+                  </p>
+                  <p className="m-0">
+                    Result:{' '}
+                    <span
+                      className={
+                        pvpPredict.entry.result === 'won'
+                          ? 'text-emerald-300'
+                          : pvpPredict.entry.result === 'lost'
+                            ? 'text-rose-300'
+                            : 'text-muted'
+                      }
+                    >
+                      {pvpPredict.entry.result === 'pending'
+                        ? `Pending until 00:00 ${pvpPredict.resetTimeZone ?? 'Asia/Ho_Chi_Minh'}`
+                        : pvpPredict.entry.result === 'won'
+                          ? `Won — +${Number(pvpPredict.entry.payout_amount ?? 0).toLocaleString()} Cobble$`
+                          : 'Lost'}
+                    </span>
+                  </p>
+                </div>
+              ) : pvpPredict.windowOpen ? (
+                <form
+                  className="space-y-3"
+                  onSubmit={async (e) => {
+                    e.preventDefault()
+                    setPredictError(null)
+                    setPredictSuccess(null)
+                    const stake = parseInt(predictStake.replace(/,/g, ''), 10)
+                    if (!Number.isFinite(stake)) {
+                      setPredictError('Enter a whole-number stake.')
+                      return
+                    }
+                    if (!predictPick1 || !predictPick2 || !predictPick3) {
+                      setPredictError('Choose all three players.')
+                      return
+                    }
+                    setPredictBusy(true)
+                    try {
+                      const res = await submitPvpTopPrediction({
+                        pickRank1: predictPick1,
+                        pickRank2: predictPick2,
+                        pickRank3: predictPick3,
+                        stake,
+                      })
+                      setPredictSuccess(`Submitted for ${res.forPayoutDate}.`)
+                      setCobbleBalance(res.newBalance)
+                      setPredictStake('')
+                      const next = await fetchPvpTopPrediction()
+                      setPvpPredict(next)
+                    } catch (err) {
+                      setPredictError(err instanceof Error ? err.message : 'Submit failed')
+                    } finally {
+                      setPredictBusy(false)
+                    }
+                  }}
+                >
+                  {(['1st', '2nd', '3rd'] as const).map((label, i) => {
+                    const value = i === 0 ? predictPick1 : i === 1 ? predictPick2 : predictPick3
+                    const set =
+                      i === 0 ? setPredictPick1 : i === 1 ? setPredictPick2 : setPredictPick3
+                    return (
+                      <label key={label} className="block">
+                        <span className="block text-xs text-muted mb-1">Predict {label}</span>
+                        <select
+                          required
+                          value={value}
+                          onChange={(ev) => set(ev.target.value)}
+                          className="w-full rounded-lg border border-border bg-[#0f0a1a]/80 px-3 py-2 text-sm text-[#e2e8f0]"
+                          disabled={predictBusy}
+                        >
+                          <option value="">— Select —</option>
+                          {pvpPredict.rankedPlayers.map((p) => (
+                            <option key={`${label}-${p.rank}-${p.playerName}`} value={p.playerName}>
+                              #{p.rank} {p.playerName}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )
+                  })}
+                  <label className="block">
+                    <span className="block text-xs text-muted mb-1">Stake (Cobble$)</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={predictStake}
+                      onChange={(e) => setPredictStake(e.target.value)}
+                      placeholder={`${pvpPredict.minStake}–${pvpPredict.maxStake}`}
+                      className="w-full rounded-lg border border-border bg-[#0f0a1a]/80 px-3 py-2 text-sm text-[#e2e8f0] tabular-nums"
+                      disabled={predictBusy}
+                    />
+                  </label>
+                  <button
+                    type="submit"
+                    disabled={
+                      predictBusy || cobbleBalance < pvpPredict.minStake || !pvpPredict.windowOpen
+                    }
+                    className="py-2 px-4 rounded-lg bg-accent text-[#0f0a1a] font-semibold hover:bg-accent/90 disabled:opacity-50"
+                  >
+                    {predictBusy ? 'Submitting…' : 'Lock prediction'}
+                  </button>
+                  {predictSuccess && (
+                    <p className="text-sm text-emerald-300 m-0">{predictSuccess}</p>
+                  )}
+                  {predictError && <p className="text-sm text-error m-0">{predictError}</p>}
+                </form>
+              ) : (
+                <p className="text-sm text-muted m-0">No entry — window closed for this round.</p>
+              )}
             </div>
           )}
         </>

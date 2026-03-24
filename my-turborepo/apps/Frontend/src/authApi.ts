@@ -159,6 +159,55 @@ export async function fetchUserPvpRank(): Promise<UserPvpRank> {
   return fetchApi<UserPvpRank>('/user/pvp-rank')
 }
 
+export interface PvpTopPredictionPlayer {
+  rank: number
+  playerName: string
+}
+
+export interface PvpTopPredictionEntry {
+  id: number
+  stake: number
+  pick_rank1_name: string
+  pick_rank2_name: string
+  pick_rank3_name: string
+  result: string
+  payout_amount: number | null
+  resolved_at: string | null
+}
+
+export interface PvpTopPredictionStatus {
+  label?: string
+  forPayoutDate: string
+  formatKey: string
+  windowOpen: boolean
+  resetTimeZone?: string
+  settlesAtLocalMidnight?: boolean
+  maxStake: number
+  minStake: number
+  winMultiplier: number
+  rankedPlayers: PvpTopPredictionPlayer[]
+  entry: PvpTopPredictionEntry | null
+}
+
+export async function fetchPvpTopPrediction(): Promise<PvpTopPredictionStatus> {
+  return fetchApi<PvpTopPredictionStatus>('/user/pvp-top-prediction')
+}
+
+export async function submitPvpTopPrediction(body: {
+  pickRank1: string
+  pickRank2: string
+  pickRank3: string
+  stake: number
+}): Promise<{ ok: boolean; newBalance: number; forPayoutDate: string }> {
+  return fetchApi<{ ok: boolean; newBalance: number; forPayoutDate: string }>(
+    '/user/pvp-top-prediction',
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }
+  )
+}
+
 /** Move website Cobble$ (user_currency cobbledollars) into the Minecraft server via RCON. */
 export async function depositCobbledollars(amount: number): Promise<{ newBalance: number }> {
   return fetchApi<{ newBalance: number }>('/user/cobbledollars/deposit', {

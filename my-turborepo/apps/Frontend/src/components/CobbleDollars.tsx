@@ -15,6 +15,8 @@ const LEDGER_KIND_LABEL: Record<string, string> = {
   pokemon_shop: 'Shiny Pokémon shop',
   daily_login: 'Daily streak',
   pvp_rank_daily: 'PvP rank reward',
+  pvp_prediction_stake: 'PVP top-3 prediction (stake)',
+  pvp_prediction_win: 'PVP top-3 prediction (win)',
   admin_grant: 'Staff grant',
 }
 
