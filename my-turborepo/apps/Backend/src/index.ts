@@ -490,6 +490,47 @@ app.get("/spawn/pokemon", async (req, res) => {
   });
 });
 
+app.get("/spawn/boss", async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const q = String(req.query.q ?? "").trim();
+  const limit = Math.min(Math.max(Number(req.query.limit) || 500, 1), 2000);
+
+  const query = supabase
+    .from("boss_spawn")
+    // Supabase column names in your table appear as: "boss name", "spawn biomes", "normal rate", "shiny rate".
+    .select('id, created_at, boss_name:"boss name", spawn_biomes:"spawn biomes", normal_rate:"normal rate", shiny_rate:"shiny rate", reward')
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  const { data, error } = await query;
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+
+  const rows = (data ?? []) as unknown as Array<{
+    id: number;
+    boss_name?: string | null;
+    spawn_biomes?: string | null;
+    normal_rate?: number | null;
+    shiny_rate?: number | null;
+    reward?: string | null;
+  }>;
+
+  const qLower = q.toLowerCase();
+  const filtered =
+    qLower.length > 0
+      ? rows.filter((r) => String(r.boss_name ?? "").toLowerCase().includes(qLower))
+      : rows;
+
+  res.json({
+    rows: filtered,
+  });
+});
+
 // --- Auth (users table, no Supabase built-in auth) ---
 app.post("/auth/signup", async (req, res) => {
   const { email, password, username } = req.body ?? {};

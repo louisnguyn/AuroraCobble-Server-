@@ -93,6 +93,20 @@ export interface SpawnPokemonResponse {
   }
 }
 
+export interface SpawnBossRow {
+  id: number
+  created_at: string | null
+  boss_name: string | null
+  spawn_biomes: string | null
+  normal_rate: number | null
+  shiny_rate: number | null
+  reward: string | null
+}
+
+export interface SpawnBossResponse {
+  rows: SpawnBossRow[]
+}
+
 /** GET /minecraft/cobbledollars-leaderboard */
 export interface CobbleDollarsLeaderboardResponse {
   ok: boolean

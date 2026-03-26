@@ -50,11 +50,18 @@ function AppContent() {
     <div className="min-h-screen flex flex-col relative">
       <Analytics />
       <header className="sticky top-0 z-20 flex items-center justify-between gap-2 px-3 py-3 sm:px-6 sm:py-4 bg-surface/90 backdrop-blur-md border-b border-border">
-        <img
-          src="/logo.png"
-          alt="Aurora Cobble"
-          className="block h-24 w-auto max-w-[200px] sm:max-w-[280px] object-contain object-left shrink-0"
-        />
+        <button
+          type="button"
+          onClick={() => goTo('main')}
+          aria-label="Go to homepage"
+          className="shrink-0"
+        >
+          <img
+            src="/logo.png"
+            alt="Aurora Cobble"
+            className="block h-24 w-auto max-w-[200px] sm:max-w-[280px] object-contain object-left shrink-0"
+          />
+        </button>
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           {isAuthenticated && user ? (
             <>

@@ -1,12 +1,48 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Dropdown, type DropdownChangeEvent } from 'primereact/dropdown'
-import { fetchSpawnPokemon } from '../api'
-import type { SpawnPokemonResponse } from '../types'
+import { fetchSpawnBoss, fetchSpawnPokemon } from '../api'
+import type { SpawnBossResponse, SpawnPokemonResponse } from '../types'
 
 type SpawnSection = 'pokemon' | 'boss'
 
 function normalize(value: string | null): string {
   return value?.trim() || '—'
+}
+
+function stripMinecraftFormatting(value: string): string {
+  // Removes color/formatting codes like §f, §a, §l...
+  return value.replace(/§[0-9a-fk-or]/gi, '')
+}
+
+function formatRate(value: number | null | undefined): string {
+  if (value == null || Number.isNaN(value)) return '—'
+  const percent = value * 100
+  const decimals = percent < 1 ? 3 : percent < 10 ? 2 : 1
+  return `${percent.toFixed(decimals)}%`
+}
+
+function prettyBiomes(value: string | null): string {
+  const s = normalize(value)
+  return stripMinecraftFormatting(s).replace(/_/g, ' ').replace(/\|/g, ' · ')
+}
+
+function rarityColor(value: string | null): string {
+  const v = stripMinecraftFormatting(normalize(value)).toLowerCase()
+  if (v === '—') return 'text-muted'
+  if (v.includes('common')) return 'text-muted'
+  if (v.includes('uncommon')) return 'text-emerald-300'
+  if (v.includes('rare')) return 'text-sky-300'
+  if (v.includes('epic')) return 'text-purple-300'
+  if (v.includes('legend')) return 'text-amber-300'
+  if (v.includes('mythic')) return 'text-fuchsia-300'
+  // fallback
+  return 'text-[#e2e8f0]'
+}
+
+function truncateWithTitle(text: string, maxLen: number): { shown: string; title: string } {
+  const t = stripMinecraftFormatting(text)
+  if (t.length <= maxLen) return { shown: t, title: t }
+  return { shown: t.slice(0, maxLen).trimEnd() + '…', title: t }
 }
 
 function parseGenSort(generation: string): number {
@@ -25,6 +61,11 @@ export function Spawn() {
   const [search, setSearch] = useState('')
   const [generation, setGeneration] = useState('')
   const [source, setSource] = useState('')
+
+  const [bossSearch, setBossSearch] = useState('')
+  const [bossLoading, setBossLoading] = useState(false)
+  const [bossError, setBossError] = useState<string | null>(null)
+  const [bossData, setBossData] = useState<SpawnBossResponse | null>(null)
 
   useEffect(() => {
     if (section !== 'pokemon') return
@@ -50,6 +91,16 @@ export function Spawn() {
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load spawn data'))
       .finally(() => setLoading(false))
   }, [section, search, generation, source])
+
+  useEffect(() => {
+    if (section !== 'boss') return
+    setBossLoading(true)
+    setBossError(null)
+    fetchSpawnBoss({ q: bossSearch.trim(), limit: 2000 })
+      .then((res) => setBossData(res))
+      .catch((e) => setBossError(e instanceof Error ? e.message : 'Failed to load boss spawn data'))
+      .finally(() => setBossLoading(false))
+  }, [section, bossSearch])
 
   const generations = useMemo(() => {
     const list = allGenerations
@@ -100,8 +151,68 @@ export function Spawn() {
       </div>
 
       {section === 'boss' && (
-        <div className="rounded-2xl bg-surface/80 border border-border p-8 text-center text-muted">
-          Boss spawn section coming next. Send the boss data format and I will wire it in.
+        <div className="rounded-2xl bg-surface/80 border border-border p-4 sm:p-6">
+          <div className="flex flex-wrap gap-3 mb-4">
+            <input
+              type="text"
+              value={bossSearch}
+              onChange={(e) => setBossSearch(e.target.value)}
+              placeholder="Search Boss..."
+              className="min-w-[220px] flex-1 px-3 py-2 rounded-xl bg-[#0f0a1a] border border-border text-sm text-[#e2e8f0] placeholder:text-muted/70 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent/50"
+            />
+          </div>
+
+          {bossLoading ? (
+            <div className="py-10 text-center text-muted">Loading boss spawn data...</div>
+          ) : bossError ? (
+            <div className="p-3 rounded-lg bg-error/15 border border-error/30 text-error text-sm">{bossError}</div>
+          ) : (bossData?.rows.length ?? 0) === 0 ? (
+            <div className="py-10 text-center text-muted">No boss spawn data found.</div>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-border/60 max-h-[60vh] overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 z-10 bg-bg/40">
+                  <tr className="bg-bg/40 border-b border-border">
+                    <th className="text-left py-2 px-3 font-semibold">N.</th>
+                    <th className="text-left py-2 px-3 font-semibold">Boss</th>
+                    <th className="text-left py-2 px-3 font-semibold">Spawn Biomes</th>
+                    <th className="text-left py-2 px-3 font-semibold">Normal Rate</th>
+                    <th className="text-left py-2 px-3 font-semibold">Shiny Rate</th>
+                    <th className="text-left py-2 px-3 font-semibold">Reward</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bossData?.rows.map((row, idx) => (
+                    <tr
+                      key={row.id}
+                      className="border-b border-border/50 align-top transition-colors hover:bg-accent/10"
+                    >
+                      <td className="py-2 px-3 text-muted">{idx + 1}</td>
+                      <td className="py-2 px-3 font-medium text-[#e2e8f0]">
+                        {stripMinecraftFormatting(normalize(row.boss_name))}
+                      </td>
+                      <td className="py-2 px-3 text-muted whitespace-pre-wrap">{prettyBiomes(row.spawn_biomes)}</td>
+                      <td className="py-2 px-3 text-emerald-300 tabular-nums">
+                        {formatRate(row.normal_rate)}
+                      </td>
+                      <td className="py-2 px-3 text-fuchsia-300 tabular-nums">
+                        {formatRate(row.shiny_rate)}
+                      </td>
+                      {(() => {
+                        const title = stripMinecraftFormatting(normalize(row.reward))
+                        const shown = title
+                        return (
+                          <td className="py-2 px-3 text-muted whitespace-pre-wrap break-words" title={title}>
+                            {shown}
+                          </td>
+                        )
+                      })()}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -148,10 +259,10 @@ export function Spawn() {
           ) : (data?.rows.length ?? 0) === 0 ? (
             <div className="py-10 text-center text-muted">No spawn data found.</div>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-border/60">
+            <div className="overflow-x-auto rounded-lg border border-border/60 max-h-[60vh] overflow-y-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-bg/40 border-b border-border">
+                  <tr className="bg-bg/40 border-b border-border sticky top-0 z-10">
                     <th className="text-left py-2 px-3 font-semibold">N.</th>
                     <th className="text-left py-2 px-3 font-semibold">Pokemon</th>
                     <th className="text-left py-2 px-3 font-semibold">Source</th>
@@ -167,13 +278,30 @@ export function Spawn() {
                       key={row.id}
                       className="border-b border-border/50 align-top transition-colors hover:bg-accent/10"
                     >
-                      <td className="py-2 px-3 text-muted">{row.dex_number ?? '—'}</td>
-                      <td className="py-2 px-3 font-medium text-[#e2e8f0]">{row.pokemon}</td>
-                      <td className="py-2 px-3 text-muted">{normalize(row.source)}</td>
-                      <td className="py-2 px-3 text-muted whitespace-pre-wrap">{normalize(row.spawn)}</td>
-                      <td className="py-2 px-3 text-muted">{normalize(row.rarity)}</td>
-                      <td className="py-2 px-3 text-muted whitespace-pre-wrap">{normalize(row.condition)}</td>
-                      <td className="py-2 px-3 text-muted whitespace-pre-wrap">{normalize(row.forms)}</td>
+                      <td className="py-2 px-3 text-muted tabular-nums">{row.dex_number ?? '—'}</td>
+                      <td className="py-2 px-3 font-medium text-[#e2e8f0]">{stripMinecraftFormatting(row.pokemon)}</td>
+                      <td className="py-2 px-3 text-muted whitespace-pre-wrap">{stripMinecraftFormatting(normalize(row.source))}</td>
+                      <td className="py-2 px-3 text-muted whitespace-pre-wrap">
+                        {(() => {
+                          const { shown, title } = truncateWithTitle(normalize(row.spawn), 140)
+                          return <span title={title}>{shown}</span>
+                        })()}
+                      </td>
+                      <td className={`py-2 px-3 ${rarityColor(row.rarity)} whitespace-pre-wrap`}>
+                        {stripMinecraftFormatting(normalize(row.rarity))}
+                      </td>
+                      <td className="py-2 px-3 text-muted whitespace-pre-wrap">
+                        {(() => {
+                          const { shown, title } = truncateWithTitle(normalize(row.condition), 120)
+                          return <span title={title}>{shown}</span>
+                        })()}
+                      </td>
+                      <td className="py-2 px-3 text-muted whitespace-pre-wrap">
+                        {(() => {
+                          const { shown, title } = truncateWithTitle(normalize(row.forms), 120)
+                          return <span title={title}>{shown}</span>
+                        })()}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
