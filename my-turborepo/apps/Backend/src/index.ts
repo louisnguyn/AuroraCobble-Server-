@@ -180,20 +180,54 @@ async function notifyDiscordPull(
   poolName: string,
   rewardType: string
 ): Promise<void> {
-  const content = `**${username}** pulled **${rewardType}** from **${poolName}**!`;
-  await notifyDiscordContent(content);
+  await notifyDiscordEmbed({
+    title: "New Listing",
+    color: 0x8b5cf6,
+    fields: [
+      { name: "Player", value: username, inline: true },
+      { name: "Pool", value: poolName, inline: true },
+      { name: "Reward", value: rewardType, inline: false },
+    ],
+  });
 }
 
 async function notifyDiscordContent(content: string): Promise<void> {
+  return notifyDiscordPayload({ content });
+}
+
+type DiscordEmbedField = {
+  name: string;
+  value: string;
+  inline?: boolean;
+};
+
+type DiscordEmbed = {
+  title?: string;
+  description?: string;
+  color?: number;
+  fields?: DiscordEmbedField[];
+  timestamp?: string;
+};
+
+type DiscordWebhookPayload = {
+  content?: string;
+  embeds?: DiscordEmbed[];
+};
+
+async function notifyDiscordEmbed(embed: DiscordEmbed): Promise<void> {
+  return notifyDiscordPayload({ embeds: [embed] });
+}
+
+async function notifyDiscordPayload(payload: DiscordWebhookPayload): Promise<void> {
   if (!DISCORD_WEBHOOK_URL) {
-    console.warn("[Discord] DISCORD_WEBHOOK_URL is missing; not sending:", content);
+    console.warn("[Discord] DISCORD_WEBHOOK_URL is missing; not sending");
     return;
   }
   const webhookUrl = DISCORD_WEBHOOK_URL;
 
   // Serialize webhook sends + throttle slightly to avoid Discord 429.
   discordSendChain = discordSendChain
-    .then(() => sendDiscordContentNow(webhookUrl, content))
+    .then(() => sendDiscordPayloadNow(webhookUrl, payload))
     .catch((err) => console.warn("[Discord] previous send error:", err));
 
   return discordSendChain;
@@ -210,49 +244,81 @@ function sleep(ms: number): Promise<void> {
 }
 
 async function sendDiscordContentNow(webhookUrl: string, content: string): Promise<void> {
-  // Avoid logging full webhook content if it gets too long
-  const preview = content.length > 180 ? content.slice(0, 180) + "…" : content;
-  console.log("[Discord] sending:", preview);
+  return sendDiscordPayloadNow(webhookUrl, { content });
+}
 
-  if (Date.now() < discordRateLimitUntilMs) {
-    console.warn(
-      `[Discord] in rate-limit cooldown until ${new Date(discordRateLimitUntilMs).toISOString()}; skipping this message`
-    );
-    return;
-  }
+function clampDiscordText(value: string, maxLen: number): string {
+  const trimmed = value.trim();
+  if (trimmed.length <= maxLen) return trimmed || "—";
+  return `${trimmed.slice(0, maxLen - 1)}…`;
+}
+
+async function sendDiscordPayloadNow(
+  webhookUrl: string,
+  payload: DiscordWebhookPayload,
+  attempt = 0
+): Promise<void> {
+  const hasEmbeds = Array.isArray(payload.embeds) && payload.embeds.length > 0;
+  const contentPreview = payload.content
+    ? payload.content.length > 120
+      ? `${payload.content.slice(0, 120)}…`
+      : payload.content
+    : "";
+  console.log("[Discord] sending", hasEmbeds ? "embed" : "text", contentPreview);
 
   const now = Date.now();
-  const waitBefore = Math.max(0, DISCORD_MIN_INTERVAL_MS - (now - discordLastSentAt));
-  if (waitBefore) await sleep(waitBefore);
+  const cooldownWait = Math.max(0, discordRateLimitUntilMs - now);
+  const throttleWait = Math.max(0, DISCORD_MIN_INTERVAL_MS - (now - discordLastSentAt));
+  const waitBefore = Math.max(cooldownWait, throttleWait);
+  if (waitBefore > 0) await sleep(waitBefore);
 
   try {
     const res = await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({
+        ...payload,
+        allowed_mentions: { parse: [] },
+      }),
     });
 
-    console.log("[Discord] webhook status:", res.status);
-
     if (res.status === 429) {
+      let waitMs = 60_000;
       const retryAfterRaw = res.headers.get("retry-after");
       const retryAfterSec = retryAfterRaw ? Number(retryAfterRaw) : NaN;
-      const waitMs =
-        Number.isFinite(retryAfterSec) && retryAfterSec > 0 ? retryAfterSec * 1000 : 60_000;
+      if (Number.isFinite(retryAfterSec) && retryAfterSec > 0) {
+        waitMs = retryAfterSec * 1000;
+      } else {
+        const bodyText = await res.text();
+        try {
+          const parsed = JSON.parse(bodyText) as { retry_after?: number };
+          if (Number.isFinite(Number(parsed.retry_after)) && Number(parsed.retry_after) > 0) {
+            waitMs = Number(parsed.retry_after) * 1000;
+          }
+        } catch {
+          // ignore invalid JSON body
+        }
+      }
+      // Add small jitter so multiple app instances do not hammer at the same millisecond.
+      waitMs += 300;
       discordRateLimitUntilMs = Date.now() + waitMs;
-      const mins = Math.round(waitMs / 60_000);
-      console.warn(
-        `[Discord] rate limited (429). No in-process retry; resume after ${new Date(discordRateLimitUntilMs).toISOString()} (~${mins}m)`
-      );
+      if (attempt < 5) {
+        console.warn(`[Discord] 429; retrying in ${Math.round(waitMs)}ms (attempt ${attempt + 1})`);
+        await sleep(waitMs);
+        return sendDiscordPayloadNow(webhookUrl, payload, attempt + 1);
+      }
+      console.warn("[Discord] 429 persisted; dropping message after retries");
       return;
     }
 
     if (!res.ok) {
       const text = await res.text();
       console.warn("[Discord] webhook failed:", res.status, text);
+      return;
     }
 
     discordLastSentAt = Date.now();
+    discordRateLimitUntilMs = 0;
   } catch (err) {
     console.warn("[Discord] webhook error:", err);
   }
@@ -291,23 +357,37 @@ async function notifyDiscordCobbleLedger(
   let content: string | null = null;
   switch (kind) {
     case "deposit_to_server": {
-      // delta is expected negative
-      content = `**${username}** deposited **${amountStr}** Cobble$ to the server (new balance ${balanceAfterStr})`;
+      content = `${username} deposited ${amountStr} Cobble$ to the server (new balance ${balanceAfterStr})`;
       break;
     }
     case "shop": {
       // detail like: `${item.label} ×${quantity}`
-      content = `**${username}** bought **${detail ?? "item"}** for **${amountStr}** Cobble$ (new balance ${balanceAfterStr})`;
+      content = `${username} bought ${detail ?? "item"} for ${amountStr} Cobble$ (new balance ${balanceAfterStr})`;
       break;
     }
     case "pokemon_shop": {
-      content = `**${username}** bought **${detail ?? "shiny"}** for **${amountStr}** Cobble$ (new balance ${balanceAfterStr})`;
+      content = `${username} bought ${detail ?? "shiny"} for ${amountStr} Cobble$ (new balance ${balanceAfterStr})`;
       break;
     }
   }
 
   if (!content) return;
-  void notifyDiscordContent(content).catch(() => {});
+  void notifyDiscordEmbed({
+    title: "Transaction",
+    color: 0x22c55e,
+    fields: [
+      { name: "Player", value: clampDiscordText(username, 128), inline: true },
+      { name: "Type", value: clampDiscordText(kind.replace(/_/g, " "), 128), inline: true },
+      { name: "Amount", value: `${amountStr} Cobble$`, inline: true },
+      { name: "Balance", value: `${balanceAfterStr} Cobble$`, inline: true },
+      {
+        name: "Detail",
+        value: clampDiscordText(detail ?? content, 1024),
+        inline: false,
+      },
+    ],
+    timestamp: new Date().toISOString(),
+  }).catch(() => {});
 }
 
 // CORS: required when frontend is on a different origin (e.g. deploy frontend + backend separately)
@@ -2002,11 +2082,18 @@ app.get("/pokemon-shop/offers", requireAuth, async (req, res) => {
     pokemonShopLastNotifiedWindowStartIso = windowStartIso;
     const shinyOffers = offers.filter((o) => o.shiny);
     if (shinyOffers.length) {
-      const list = shinyOffers
+      const offerLines = shinyOffers
         .map((o) => `#${o.slot} ${o.label} (${o.category}) - ${o.price.toLocaleString()} Cobble$`)
         .join("\n");
-      const content = `**Pokemon Shop refreshed** (${windowStartIso})\nShiny offers:\n${list}`;
-      void notifyDiscordContent(content).catch(() => {});
+      void notifyDiscordEmbed({
+        title: "Pokemon Shop Refreshed",
+        color: 0xef4444,
+        fields: [
+          { name: "Window Start", value: clampDiscordText(windowStartIso, 1024), inline: false },
+          { name: "Shiny Offers", value: clampDiscordText(offerLines, 1024), inline: false },
+        ],
+        timestamp: new Date().toISOString(),
+      }).catch(() => {});
     }
   }
   const { data: purchases } = await supabase
