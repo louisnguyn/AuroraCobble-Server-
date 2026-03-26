@@ -179,8 +179,12 @@ async function notifyDiscordPull(
   poolName: string,
   rewardType: string
 ): Promise<void> {
-  if (!DISCORD_WEBHOOK_URL) return;
   const content = `**${username}** pulled **${rewardType}** from **${poolName}**!`;
+  void notifyDiscordContent(content);
+}
+
+async function notifyDiscordContent(content: string): Promise<void> {
+  if (!DISCORD_WEBHOOK_URL) return;
   try {
     const res = await fetch(DISCORD_WEBHOOK_URL, {
       method: "POST",
@@ -194,6 +198,70 @@ async function notifyDiscordPull(
   } catch (err) {
     console.warn("[Discord] webhook error:", err);
   }
+}
+
+const discordUsernameCache = new Map<number, string>();
+async function resolveDiscordUsername(userId: number): Promise<string> {
+  const cached = discordUsernameCache.get(userId);
+  if (cached) return cached;
+  if (!supabase) return `user#${userId}`;
+  const { data, error } = await supabase.from("users").select("username").eq("id", userId).maybeSingle();
+  if (error) return `user#${userId}`;
+  const username = (data as { username?: string } | null)?.username?.trim();
+  if (username) {
+    discordUsernameCache.set(userId, username);
+    return username;
+  }
+  return `user#${userId}`;
+}
+
+const DISCORD_COBBLEDOLLAR_LEDGER_KINDS = new Set([
+  "deposit_to_server",
+  "daily_login",
+  "pokemon_shop",
+]);
+
+async function notifyDiscordCobbleLedger(
+  userId: number,
+  delta: number,
+  balanceAfter: number,
+  kind: string,
+  detail: string | null
+): Promise<void> {
+  if (!DISCORD_COBBLEDOLLAR_LEDGER_KINDS.has(kind)) return;
+  const username = await resolveDiscordUsername(userId);
+  const absDelta = Math.abs(delta);
+  const amountStr = absDelta.toLocaleString();
+  const balanceAfterStr = balanceAfter.toLocaleString();
+
+  let content: string | null = null;
+  switch (kind) {
+    case "deposit_to_server": {
+      // delta is expected negative
+      content = `**${username}** deposited **${amountStr}** Cobble$ to the server (new balance ${balanceAfterStr})`;
+      break;
+    }
+    case "shop": {
+      // detail like: `${item.label} ×${quantity}`
+      content = `**${username}** bought **${detail ?? "item"}** for **${amountStr}** Cobble$ (new balance ${balanceAfterStr})`;
+      break;
+    }
+    case "pokemon_shop": {
+      content = `**${username}** bought **${detail ?? "shiny"}** for **${amountStr}** Cobble$ (new balance ${balanceAfterStr})`;
+      break;
+    }
+    case "daily_login": {
+      content = `**${username}** claimed daily login: **${detail ?? "reward"}** (new balance ${balanceAfterStr})`;
+      break;
+    }
+    case "pvp_rank_daily": {
+      content = `**${username}** got PVP daily payout: **${detail ?? "reward"}** (+${amountStr} Cobble$ · new balance ${balanceAfterStr})`;
+      break;
+    }
+  }
+
+  if (!content) return;
+  await notifyDiscordContent(content);
 }
 
 // CORS: required when frontend is on a different origin (e.g. deploy frontend + backend separately)
@@ -1363,7 +1431,12 @@ async function recordCobbledollarLedger(
     kind,
     detail,
   });
-  if (error) console.warn("[cobbledollars ledger]", error.message);
+  if (error) {
+    console.warn("[cobbledollars ledger]", error.message);
+    return;
+  }
+  // Best-effort Discord notification (do not block ledger write).
+  void notifyDiscordCobbleLedger(userId, delta, balanceAfter, kind, detail).catch(() => {});
 }
 
 async function incrementUserCurrency(
@@ -1827,6 +1900,7 @@ app.post("/shop/buy", requireAuth, async (req, res) => {
   }
 });
 
+let pokemonShopLastNotifiedWindowStartIso = "";
 app.get("/pokemon-shop/offers", requireAuth, async (req, res) => {
   const user = res.locals.user!;
   if (!supabase) {
@@ -1834,19 +1908,32 @@ app.get("/pokemon-shop/offers", requireAuth, async (req, res) => {
     return;
   }
   const { start, end } = currentPokemonShopWindow();
-  const offers = buildPokemonShopOffers(start.toISOString());
+  const windowStartIso = start.toISOString();
+  const offers = buildPokemonShopOffers(windowStartIso);
+
+  if (pokemonShopLastNotifiedWindowStartIso !== windowStartIso) {
+    pokemonShopLastNotifiedWindowStartIso = windowStartIso;
+    const shinyOffers = offers.filter((o) => o.shiny);
+    if (shinyOffers.length) {
+      const list = shinyOffers
+        .map((o) => `#${o.slot} ${o.label} (${o.category}) - ${o.price.toLocaleString()} Cobble$`)
+        .join("\n");
+      const content = `**Pokemon Shop refreshed** (${windowStartIso})\nShiny offers:\n${list}`;
+      void notifyDiscordContent(content).catch(() => {});
+    }
+  }
   const { data: purchases } = await supabase
     .from("user_pokemon_shop_purchases")
     .select("slot, claimed_at")
     .eq("user_id", user.userId)
-    .eq("window_start", start.toISOString());
+    .eq("window_start", windowStartIso);
   const purchasedMap = new Map<number, { claimed_at: string | null }>();
   for (const p of (purchases ?? []) as { slot: number; claimed_at: string | null }[]) {
     purchasedMap.set(p.slot, { claimed_at: p.claimed_at });
   }
   res.json({
     refreshHours: POKEMON_SHOP_REFRESH_HOURS,
-    windowStart: start.toISOString(),
+    windowStart: windowStartIso,
     windowEnd: end.toISOString(),
     offers: offers.map((o) => ({
       ...o,
