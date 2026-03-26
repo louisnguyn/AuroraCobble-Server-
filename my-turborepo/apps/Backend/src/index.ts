@@ -189,22 +189,67 @@ async function notifyDiscordContent(content: string): Promise<void> {
     console.warn("[Discord] DISCORD_WEBHOOK_URL is missing; not sending:", content);
     return;
   }
-  try {
-    // Avoid logging full webhook content if it gets too long
-    const preview = content.length > 180 ? content.slice(0, 180) + "…" : content;
-    console.log("[Discord] sending:", preview);
-    const res = await fetch(DISCORD_WEBHOOK_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content }),
-    });
-    console.log("[Discord] webhook status:", res.status);
-    if (!res.ok) {
-      const text = await res.text();
-      console.warn("[Discord] webhook failed:", res.status, text);
+  const webhookUrl = DISCORD_WEBHOOK_URL;
+
+  // Serialize webhook sends + throttle slightly to avoid Discord 429.
+  discordSendChain = discordSendChain
+    .then(() => sendDiscordContentNow(webhookUrl, content))
+    .catch((err) => console.warn("[Discord] previous send error:", err));
+
+  return discordSendChain;
+}
+
+const DISCORD_MIN_INTERVAL_MS = 1100;
+let discordLastSentAt = 0;
+let discordSendChain: Promise<void> = Promise.resolve();
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function sendDiscordContentNow(webhookUrl: string, content: string): Promise<void> {
+  // Avoid logging full webhook content if it gets too long
+  const preview = content.length > 180 ? content.slice(0, 180) + "…" : content;
+  console.log("[Discord] sending:", preview);
+
+  const now = Date.now();
+  const waitBefore = Math.max(0, DISCORD_MIN_INTERVAL_MS - (now - discordLastSentAt));
+  if (waitBefore) await sleep(waitBefore);
+
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+
+      console.log("[Discord] webhook status:", res.status);
+
+      if (res.status === 429) {
+        const retryAfterRaw = res.headers.get("retry-after");
+        const retryAfterSec = retryAfterRaw ? Number(retryAfterRaw) : NaN;
+        const waitMs = Number.isFinite(retryAfterSec) && retryAfterSec > 0 ? retryAfterSec * 1000 : 5000 * attempt;
+        console.warn(`[Discord] rate limited (429). Waiting ${waitMs}ms then retry... (attempt ${attempt}/${maxAttempts})`);
+        await sleep(waitMs);
+        continue;
+      }
+
+      if (!res.ok) {
+        const text = await res.text();
+        console.warn("[Discord] webhook failed:", res.status, text);
+      }
+
+      discordLastSentAt = Date.now();
+      return;
+    } catch (err) {
+      if (attempt === maxAttempts) {
+        console.warn("[Discord] webhook error:", err);
+        return;
+      }
+      await sleep(500 * attempt);
     }
-  } catch (err) {
-    console.warn("[Discord] webhook error:", err);
   }
 }
 
@@ -269,7 +314,7 @@ async function notifyDiscordCobbleLedger(
   }
 
   if (!content) return;
-  await notifyDiscordContent(content);
+  void notifyDiscordContent(content).catch(() => {});
 }
 
 // CORS: required when frontend is on a different origin (e.g. deploy frontend + backend separately)
