@@ -73,6 +73,7 @@ let cobbledollarsPublicCache: {
 const COBBLE_API_KEY = process.env.COBBLE_API_KEY;
 const CORS_ORIGIN = process.env.CORS_ORIGIN ?? "*";
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL?.trim() || null;
+console.log("[Discord] webhook configured:", DISCORD_WEBHOOK_URL ? "yes" : "no");
 
 type PvpLeaderboardRow = {
   rank: number;
@@ -180,17 +181,24 @@ async function notifyDiscordPull(
   rewardType: string
 ): Promise<void> {
   const content = `**${username}** pulled **${rewardType}** from **${poolName}**!`;
-  void notifyDiscordContent(content);
+  await notifyDiscordContent(content);
 }
 
 async function notifyDiscordContent(content: string): Promise<void> {
-  if (!DISCORD_WEBHOOK_URL) return;
+  if (!DISCORD_WEBHOOK_URL) {
+    console.warn("[Discord] DISCORD_WEBHOOK_URL is missing; not sending:", content);
+    return;
+  }
   try {
+    // Avoid logging full webhook content if it gets too long
+    const preview = content.length > 180 ? content.slice(0, 180) + "…" : content;
+    console.log("[Discord] sending:", preview);
     const res = await fetch(DISCORD_WEBHOOK_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content }),
     });
+    console.log("[Discord] webhook status:", res.status);
     if (!res.ok) {
       const text = await res.text();
       console.warn("[Discord] webhook failed:", res.status, text);
