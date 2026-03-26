@@ -199,8 +199,10 @@ async function notifyDiscordContent(content: string): Promise<void> {
   return discordSendChain;
 }
 
-const DISCORD_MIN_INTERVAL_MS = 1100;
+const DISCORD_MIN_INTERVAL_MS = 2500;
 let discordLastSentAt = 0;
+/** When set, Discord asked us to back off — do not block the queue with long sleeps. */
+let discordRateLimitUntilMs = 0;
 let discordSendChain: Promise<void> = Promise.resolve();
 
 function sleep(ms: number): Promise<void> {
@@ -212,44 +214,47 @@ async function sendDiscordContentNow(webhookUrl: string, content: string): Promi
   const preview = content.length > 180 ? content.slice(0, 180) + "…" : content;
   console.log("[Discord] sending:", preview);
 
+  if (Date.now() < discordRateLimitUntilMs) {
+    console.warn(
+      `[Discord] in rate-limit cooldown until ${new Date(discordRateLimitUntilMs).toISOString()}; skipping this message`
+    );
+    return;
+  }
+
   const now = Date.now();
   const waitBefore = Math.max(0, DISCORD_MIN_INTERVAL_MS - (now - discordLastSentAt));
   if (waitBefore) await sleep(waitBefore);
 
-  const maxAttempts = 3;
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      const res = await fetch(webhookUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
-      });
+  try {
+    const res = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+    });
 
-      console.log("[Discord] webhook status:", res.status);
+    console.log("[Discord] webhook status:", res.status);
 
-      if (res.status === 429) {
-        const retryAfterRaw = res.headers.get("retry-after");
-        const retryAfterSec = retryAfterRaw ? Number(retryAfterRaw) : NaN;
-        const waitMs = Number.isFinite(retryAfterSec) && retryAfterSec > 0 ? retryAfterSec * 1000 : 5000 * attempt;
-        console.warn(`[Discord] rate limited (429). Waiting ${waitMs}ms then retry... (attempt ${attempt}/${maxAttempts})`);
-        await sleep(waitMs);
-        continue;
-      }
-
-      if (!res.ok) {
-        const text = await res.text();
-        console.warn("[Discord] webhook failed:", res.status, text);
-      }
-
-      discordLastSentAt = Date.now();
+    if (res.status === 429) {
+      const retryAfterRaw = res.headers.get("retry-after");
+      const retryAfterSec = retryAfterRaw ? Number(retryAfterRaw) : NaN;
+      const waitMs =
+        Number.isFinite(retryAfterSec) && retryAfterSec > 0 ? retryAfterSec * 1000 : 60_000;
+      discordRateLimitUntilMs = Date.now() + waitMs;
+      const mins = Math.round(waitMs / 60_000);
+      console.warn(
+        `[Discord] rate limited (429). No in-process retry; resume after ${new Date(discordRateLimitUntilMs).toISOString()} (~${mins}m)`
+      );
       return;
-    } catch (err) {
-      if (attempt === maxAttempts) {
-        console.warn("[Discord] webhook error:", err);
-        return;
-      }
-      await sleep(500 * attempt);
     }
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.warn("[Discord] webhook failed:", res.status, text);
+    }
+
+    discordLastSentAt = Date.now();
+  } catch (err) {
+    console.warn("[Discord] webhook error:", err);
   }
 }
 
@@ -268,11 +273,7 @@ async function resolveDiscordUsername(userId: number): Promise<string> {
   return `user#${userId}`;
 }
 
-const DISCORD_COBBLEDOLLAR_LEDGER_KINDS = new Set([
-  "deposit_to_server",
-  "daily_login",
-  "pokemon_shop",
-]);
+const DISCORD_COBBLEDOLLAR_LEDGER_KINDS = new Set(["deposit_to_server", "shop", "pokemon_shop"]);
 
 async function notifyDiscordCobbleLedger(
   userId: number,
@@ -301,14 +302,6 @@ async function notifyDiscordCobbleLedger(
     }
     case "pokemon_shop": {
       content = `**${username}** bought **${detail ?? "shiny"}** for **${amountStr}** Cobble$ (new balance ${balanceAfterStr})`;
-      break;
-    }
-    case "daily_login": {
-      content = `**${username}** claimed daily login: **${detail ?? "reward"}** (new balance ${balanceAfterStr})`;
-      break;
-    }
-    case "pvp_rank_daily": {
-      content = `**${username}** got PVP daily payout: **${detail ?? "reward"}** (+${amountStr} Cobble$ · new balance ${balanceAfterStr})`;
       break;
     }
   }
