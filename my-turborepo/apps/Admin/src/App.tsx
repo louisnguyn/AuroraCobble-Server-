@@ -2,20 +2,16 @@ import { useEffect, useState } from 'react'
 import { getToken, setToken, clearToken, fetchMe } from './authApi'
 import type { AuthUser } from './authApi'
 import { Login } from './components/Login.tsx'
-import { Overview } from './components/Overview.tsx'
-import { LeaderboardAdmin } from './components/LeaderboardAdmin.tsx'
 import { UsageStatsAdmin } from './components/UsageStatsAdmin.tsx'
 import { UsersAdmin } from './components/UsersAdmin.tsx'
 import { MinecraftDashboard } from './components/MinecraftDashboard.tsx'
 
-type Section = 'overview' | 'leaderboard' | 'usage' | 'users' | 'minecraft' | 'settings' | 'bans'
+type Section = 'usage' | 'users' | 'minecraft' | 'settings' | 'bans'
 
 const SECTIONS: { id: Section; label: string }[] = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'leaderboard', label: 'Leaderboard' },
+  { id: 'minecraft', label: 'Server Dashboard' },
   { id: 'usage', label: 'Usage stats' },
   { id: 'users', label: 'Ticket Management' },
-  { id: 'minecraft', label: 'Server Dashboard' },
   { id: 'settings', label: 'Settings' },
   { id: 'bans', label: 'Bans' },
 ]
@@ -32,7 +28,7 @@ function Placeholder({ title }: { title: string }) {
 export default function App() {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
-  const [section, setSection] = useState<Section>('overview')
+  const [section, setSection] = useState<Section>('minecraft')
   const [menuOpen, setMenuOpen] = useState(false)
 
   useEffect(() => {
@@ -167,11 +163,9 @@ export default function App() {
       {/* Main */}
       <main className="flex-1 p-4 sm:p-6 min-w-0">
         <div className={section === 'minecraft' ? 'max-w-6xl mx-auto' : 'max-w-5xl mx-auto'}>
-          {section === 'overview' && <Overview />}
-          {section === 'leaderboard' && <LeaderboardAdmin />}
           {section === 'usage' && <UsageStatsAdmin />}
           {section === 'users' && <UsersAdmin />}
-          {section === 'minecraft' && <MinecraftDashboard />}
+          {section === 'minecraft' && <MinecraftDashboard viewerUsername={user.username} />}
           {section === 'settings' && <Placeholder title="Settings" />}
           {section === 'bans' && <Placeholder title="Bans" />}
         </div>

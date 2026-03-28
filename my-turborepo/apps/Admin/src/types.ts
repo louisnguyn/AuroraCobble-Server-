@@ -70,3 +70,35 @@ export interface LeaderboardEntry {
   losses?: number
   [key: string]: unknown
 }
+
+/** GET /minecraft/cobbledollars-leaderboard */
+export interface CobbleDollarsLeaderboardResponse {
+  ok: boolean
+  disabled?: boolean
+  top10: { name: string; balance: number }[]
+  error: string | null
+  updatedAt: string | null
+}
+
+/** GET /minecraft/battle-tower-leaderboard */
+export interface BattleTowerLeaderboardRow {
+  rank: number
+  name: string
+  floor?: number
+  streak?: number
+  legendary?: boolean
+  detail?: string
+}
+
+export interface BattleTowerLeaderboardResponse {
+  ok: boolean
+  disabled?: boolean
+  mode: string
+  top: number
+  floorRows: BattleTowerLeaderboardRow[]
+  streakRows: BattleTowerLeaderboardRow[]
+  fallbackFloorLines: string[]
+  fallbackStreakLines: string[]
+  error: string | null
+  updatedAt: string | null
+}

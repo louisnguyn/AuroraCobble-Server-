@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { fetchMinecraftDashboard, type MinecraftDashboardResponse } from '../authApi'
+import { DashboardLeaderboardPanel } from './DashboardLeaderboardPanel.tsx'
 
 function StatCard({
   label,
@@ -82,7 +83,7 @@ function formatOfflineDuration(seconds: number | null): string {
   return s > 0 ? `${s}s` : '<1m'
 }
 
-export function MinecraftDashboard() {
+export function MinecraftDashboard({ viewerUsername }: { viewerUsername?: string }) {
   const [data, setData] = useState<MinecraftDashboardResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -286,51 +287,7 @@ export function MinecraftDashboard() {
             </div>
           )}
 
-          {data.cobbledollarsRconError && (
-            <div className="rounded-xl border border-amber-500/20 bg-amber-950/20 px-4 py-3 text-xs text-amber-100/90 leading-relaxed break-words">
-              <strong className="text-amber-200">Cobble$ (RCON)</strong> — {data.cobbledollarsRconError}
-            </div>
-          )}
-
-          <div className="rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-950/40 to-orange-950/20 p-5 shadow-lg shadow-black/15">
-            <h3 className="text-sm font-semibold text-amber-200/95 m-0 flex items-center gap-2 mb-4">
-              <span className="inline-block h-2 w-2 rounded-full bg-amber-400 shadow-[0_0_8px_#fbbf24]" />
-              Top 10 Cobble$ <span className="font-normal text-amber-100/50">(in-game leaderboard)</span>
-            </h3>
-            {(data.cobbledollarsTop10?.length ?? 0) > 0 ? (
-              <ol className="m-0 list-none p-0 space-y-2">
-                {data.cobbledollarsTop10!.map((row, i) => (
-                  <li
-                    key={`${row.name}-${row.balance}-${i}`}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-white/5 bg-black/20 px-4 py-2.5"
-                  >
-                    <span className="flex min-w-0 items-center gap-3">
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-xs font-bold tabular-nums text-amber-300">
-                        {i + 1}
-                      </span>
-                      <span className="font-mono text-sm text-white truncate" title={row.name}>
-                        {row.name}
-                      </span>
-                    </span>
-                    <span className="shrink-0 text-sm font-semibold tabular-nums text-amber-100">
-                      {Number(row.balance).toLocaleString()}
-                    </span>
-                  </li>
-                ))}
-              </ol>
-            ) : (
-              <div className="rounded-xl border border-amber-500/10 bg-black/25 px-4 py-3 text-sm text-amber-100/70 leading-relaxed">
-                {data.cobbledollarsRconError ? (
-                  <p className="m-0">RCON did not return a usable leaderboard (see Cobble$ error above).</p>
-                ) : (
-                  <p className="m-0">
-                    No balances parsed from <code className="text-amber-200/90">cobbledollars leaderboard</code> RCON
-                    output. Check the Cobble$ error above or server logs if this persists.
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
+          <DashboardLeaderboardPanel viewerUsername={viewerUsername} />
 
           {/* Players */}
           <div className="rounded-2xl border border-white/10 bg-surface/30 backdrop-blur-md overflow-hidden shadow-xl shadow-black/20">

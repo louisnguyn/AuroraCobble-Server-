@@ -1,11 +1,10 @@
-type Page = 'main' | 'leaderboard' | 'cobbledollars' | 'usage' | 'wiki' | 'rules' | 'gacha' | 'spawn'
+type Page = 'main' | 'leaderboard' | 'usage' | 'wiki' | 'rules' | 'gacha' | 'spawn'
 
 const QUICK_LINKS: { id: Exclude<Page, 'main'>; label: string; description: string }[] = [
-  { id: 'leaderboard', label: 'Leaderboard', description: 'Rankings, ELO & tier standings' },
   {
-    id: 'cobbledollars',
-    label: 'Cobble$',
-    description: 'Richest players on the Minecraft server (live)',
+    id: 'leaderboard',
+    label: 'Leaderboard',
+    description: 'PvP ranks, Cobble$ economy & Battle Tower (live)',
   },
   { id: 'usage', label: 'Usage Stats', description: 'Pokémon usage by tier and format' },
   { id: 'wiki', label: 'Wiki', description: 'Pokédex, moves, evolution & forms' },

@@ -10,12 +10,9 @@ import { Gacha } from './components/Gacha.tsx'
 import { AuthModal } from './components/AuthModal.tsx'
 import { Account } from './components/Account.tsx'
 import { Spawn } from './components/Spawn.tsx'
-import { CobbleDollars } from './components/CobbleDollars.tsx'
-
 type Page =
   | 'main'
   | 'leaderboard'
-  | 'cobbledollars'
   | 'usage'
   | 'wiki'
   | 'rules'
@@ -26,7 +23,6 @@ type Page =
 const PAGES: { id: Page; label: string }[] = [
   { id: 'main', label: 'Main' },
   { id: 'leaderboard', label: 'Leaderboard' },
-  { id: 'cobbledollars', label: 'Cobble$' },
   { id: 'usage', label: 'Usage Stats' },
   { id: 'wiki', label: 'Wiki' },
   { id: 'rules', label: 'Rules' },
@@ -127,7 +123,6 @@ function AppContent() {
         {page === 'main' && <Home onNavigate={goTo} />}
         {page === 'usage' && <UsageStats />}
         {page === 'leaderboard' && <Leaderboard />}
-        {page === 'cobbledollars' && <CobbleDollars />}
         {page === 'wiki' && <Wiki />}
         {page === 'rules' && <Rules />}
         {page === 'gacha' && <Gacha />}

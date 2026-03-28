@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import {
   buyPokemonShopOffer,
@@ -24,9 +24,10 @@ import {
   type ShopItem,
 } from '../authApi'
 import { AuthModal } from './AuthModal'
+import { CobbleWebsiteWallet } from './CobbleWebsiteWallet.tsx'
 
 export function Account() {
-  type AccountTab = 'account' | 'daily' | 'predict' | 'shop' | 'inventory'
+  type AccountTab = 'account' | 'daily' | 'predict' | 'shop' | 'inventory' | 'cobble'
   const { isAuthenticated, user } = useAuth()
   const [showAuth, setShowAuth] = useState(false)
   const [currentPassword, setCurrentPassword] = useState('')
@@ -74,6 +75,12 @@ export function Account() {
   const [predictBusy, setPredictBusy] = useState(false)
   const [predictError, setPredictError] = useState<string | null>(null)
   const [predictSuccess, setPredictSuccess] = useState<string | null>(null)
+  const refreshWebsiteCobbleBalance = useCallback(() => {
+    fetchUserCurrencies().then(({ currencies }) => {
+      setCobbleBalance(currencies.find((c) => c.currency_type === 'cobbledollars')?.balance ?? 0)
+    })
+  }, [])
+
   const PVP_DAILY_REWARD_BY_RANK: Record<number, number> = {
     1: 60_000,
     2: 50_000,
@@ -362,6 +369,7 @@ export function Account() {
           ['predict', 'PVP predict'],
           ['shop', 'Shop'],
           ['inventory', 'Inventory'],
+          ['cobble', 'C$ balance'],
           ['account', 'Account'],
         ] as const).map(([id, label]) => (
           <button
@@ -378,6 +386,8 @@ export function Account() {
           </button>
         ))}
       </div>
+
+      {activeTab === 'cobble' && <CobbleWebsiteWallet onBalanceUpdated={refreshWebsiteCobbleBalance} />}
 
       {activeTab === 'daily' && (
         <>

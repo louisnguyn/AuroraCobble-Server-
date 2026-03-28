@@ -115,3 +115,26 @@ export interface CobbleDollarsLeaderboardResponse {
   error: string | null
   updatedAt: string | null
 }
+
+/** GET /minecraft/battle-tower-leaderboard */
+export interface BattleTowerLeaderboardRow {
+  rank: number
+  name: string
+  floor?: number
+  streak?: number
+  legendary?: boolean
+  detail?: string
+}
+
+export interface BattleTowerLeaderboardResponse {
+  ok: boolean
+  disabled?: boolean
+  mode: string
+  top: number
+  floorRows: BattleTowerLeaderboardRow[]
+  streakRows: BattleTowerLeaderboardRow[]
+  fallbackFloorLines: string[]
+  fallbackStreakLines: string[]
+  error: string | null
+  updatedAt: string | null
+}

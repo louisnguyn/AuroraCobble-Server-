@@ -18,6 +18,16 @@ export async function fetchCobbleDollarsLeaderboard() {
   return get<import('./types').CobbleDollarsLeaderboardResponse>('/minecraft/cobbledollars-leaderboard')
 }
 
+export async function fetchBattleTowerLeaderboard(params?: { mode?: string; top?: 10 | 25 | 50 | 100 }) {
+  const sp = new URLSearchParams()
+  if (params?.mode) sp.set('mode', params.mode)
+  if (params?.top != null) sp.set('top', String(params.top))
+  const q = sp.toString()
+  return get<import('./types').BattleTowerLeaderboardResponse>(
+    `/minecraft/battle-tower-leaderboard${q ? `?${q}` : ''}`
+  )
+}
+
 export async function fetchSpawnPokemon(params?: { q?: string; generation?: string; source?: string; limit?: number }) {
   const sp = new URLSearchParams()
   if (params?.q) sp.set('q', params.q)

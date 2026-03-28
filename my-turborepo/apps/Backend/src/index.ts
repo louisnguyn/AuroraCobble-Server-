@@ -19,6 +19,12 @@ import {
 } from "./minecraftRoster.js";
 import { syncAndEnrichPresence } from "./minecraftPresence.js";
 import { fetchCobbledollarsViaRcon, topBalancesFromMap } from "./minecraftRconCobbledollars.js";
+import {
+  fetchBattleTowerLeaderboardViaRcon,
+  normalizeBattleTowerMode,
+  normalizeBattleTowerTop,
+  type BattleTowerLeaderboardRow,
+} from "./minecraftRconBattleTower.js";
 import { executeMinecraftRconCommand } from "./minecraftRconExecute.js";
 import {
   buildGivePokemonOtherCommand,
@@ -70,6 +76,21 @@ let cobbledollarsPublicCache: {
     updatedAt: string | null;
   };
 } | null = null;
+
+type BattleTowerPublicBody = {
+  ok: boolean;
+  disabled: boolean;
+  mode: string;
+  top: number;
+  floorRows: BattleTowerLeaderboardRow[];
+  streakRows: BattleTowerLeaderboardRow[];
+  fallbackFloorLines: string[];
+  fallbackStreakLines: string[];
+  error: string | null;
+  updatedAt: string | null;
+};
+const battleTowerPublicCache = new Map<string, { at: number; body: BattleTowerPublicBody }>();
+
 const COBBLE_API_KEY = process.env.COBBLE_API_KEY;
 const CORS_ORIGIN = process.env.CORS_ORIGIN ?? "*";
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL?.trim() || null;
@@ -527,6 +548,65 @@ app.get("/minecraft/cobbledollars-leaderboard", async (_req, res) => {
       ok: false,
       disabled: false,
       top10: [],
+      error: msg,
+      updatedAt: null,
+    });
+  }
+});
+
+/** Public Battle Tower leaderboard via RCON: `bt leaderboard <mode> top<N>` (Cobblemon Battle Tower). Cached ~90s per mode+top. */
+app.get("/minecraft/battle-tower-leaderboard", async (req, res) => {
+  if (process.env.MC_BT_DISABLE === "true") {
+    res.json({
+      ok: false,
+      disabled: true,
+      mode: "singles",
+      top: 10,
+      floorRows: [],
+      streakRows: [],
+      fallbackFloorLines: [],
+      fallbackStreakLines: [],
+      error: null,
+      updatedAt: null,
+    });
+    return;
+  }
+  const mode = normalizeBattleTowerMode(String(req.query.mode ?? "singles"));
+  const top = normalizeBattleTowerTop(String(req.query.top ?? "10"));
+  const cacheKey = `${mode}:${top}`;
+  const now = Date.now();
+  const cached = battleTowerPublicCache.get(cacheKey);
+  if (cached && now - cached.at < COBBLEDOLLARS_PUBLIC_CACHE_TTL_MS) {
+    res.json(cached.body);
+    return;
+  }
+  try {
+    const r = await fetchBattleTowerLeaderboardViaRcon(mode, top);
+    const body: BattleTowerPublicBody = {
+      ok: !r.error,
+      disabled: false,
+      mode,
+      top: parseInt(top, 10),
+      floorRows: r.floorRows,
+      streakRows: r.streakRows,
+      fallbackFloorLines: r.fallbackFloorLines,
+      fallbackStreakLines: r.fallbackStreakLines,
+      error: r.error ?? null,
+      updatedAt: new Date().toISOString(),
+    };
+    battleTowerPublicCache.set(cacheKey, { at: now, body });
+    res.json(body);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.json({
+      ok: false,
+      disabled: false,
+      mode,
+      top: parseInt(top, 10),
+      floorRows: [],
+      streakRows: [],
+      fallbackFloorLines: [],
+      fallbackStreakLines: [],
       error: msg,
       updatedAt: null,
     });
@@ -2584,8 +2664,6 @@ app.get("/admin/minecraft/dashboard", requireAuth, requireAdmin, async (_req, re
       players
     );
 
-    const cobbledollarsRcon = await fetchCobbledollarsViaRcon();
-
     let rosterNote: string | undefined;
     if (accountCount === 0 && data.online === 0) {
       rosterNote =
@@ -2601,8 +2679,6 @@ app.get("/admin/minecraft/dashboard", requireAuth, requireAdmin, async (_req, re
       ...serverInfo,
       players: playersEnriched,
       presenceTracking,
-      cobbledollarsRconError: cobbledollarsRcon.error,
-      cobbledollarsTop10: topBalancesFromMap(cobbledollarsRcon.balances, 10),
       rosterAccountCount: accountCount,
       rosterExtraFromEnv: extraEnvCount > 0 ? extraEnvCount : undefined,
       rosterFromServerWhitelist: rosterRcon.size > 0 ? rosterRcon.size : undefined,

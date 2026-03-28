@@ -143,10 +143,6 @@ export type MinecraftDashboardResponse = {
     lastSeenOnline: string | null
     offlineSeconds: number | null
   }[]
-  /** When RCON failed to fetch CobbleDollars */
-  cobbledollarsRconError?: string
-  /** Top balances from parsed in-game leaderboard (RCON), highest first */
-  cobbledollarsTop10?: { name: string; balance: number }[]
   /** True when Supabase table minecraft_player_presence exists and sync worked */
   presenceTracking?: boolean
   rosterAccountCount?: number
