@@ -1519,7 +1519,7 @@ const POKEMON_SHOP_REFRESH_HOURS = 4;
 const POKEMON_SHOP_OFFER_COUNT = 3;
 const POKEMON_SHOP_CATEGORIES = {
   starter: {
-    price: 750_000,
+    price: 375_000,
     species: [
       "bulbasaur", "charmander", "squirtle", "chikorita", "cyndaquil", "totodile", "treecko",
       "torchic", "mudkip", "turtwig", "chimchar", "piplup", "snivy", "tepig", "oshawott",
@@ -1536,14 +1536,14 @@ const POKEMON_SHOP_CATEGORIES = {
     ],
   },
   pseudo_legend: {
-    price: 1_500_000,
+    price: 1_000_000,
     species: [
       "dragonite", "tyranitar", "salamence", "metagross", "garchomp", "hydreigon",
       "goodra", "kommo-o", "dragapult", "baxcalibur",
     ],
   },
   legend: {
-    price: 7_500_000,
+    price: 5_000_000,
     species: [
       "articuno", "zapdos", "moltres", "mewtwo", "raikou", "entei", "suicune", "lugia", "ho-oh",
       "regirock", "regice", "registeel", "latias", "latios", "kyogre", "groudon", "rayquaza",
