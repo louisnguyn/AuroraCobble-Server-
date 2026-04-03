@@ -364,14 +364,16 @@ export function Account() {
       </p>
 
       <div className="mb-6 grid grid-cols-2 sm:grid-cols-3 gap-2">
-        {([
-          ['daily', 'Daily'],
-          ['predict', 'PVP predict'],
-          ['shop', 'Shop'],
-          ['inventory', 'Inventory'],
-          ['cobble', 'C$ balance'],
-          ['account', 'Account'],
-        ] as const).map(([id, label]) => (
+        {(
+          [
+            ['daily', 'Daily'],
+            ['predict', 'PVP predict'],
+            ['shop', 'Shop'],
+            ['inventory', 'Inventory'],
+            ['cobble', 'C$ balance'],
+            ['account', 'Account'],
+          ] as const
+        ).map(([id, label]) => (
           <button
             key={id}
             type="button"
@@ -479,18 +481,19 @@ export function Account() {
                     </div>
                   )}
                   {[1, 2, 3].map((rank) => {
+                    const locked = pvpPredict.entry!
                     const sk =
                       rank === 1
-                        ? (pvpPredict.entry.stake_rank1_only ?? 0)
+                        ? (locked.stake_rank1_only ?? 0)
                         : rank === 2
-                          ? (pvpPredict.entry.stake_rank2_only ?? 0)
-                          : (pvpPredict.entry.stake_rank3_only ?? 0)
+                          ? (locked.stake_rank2_only ?? 0)
+                          : (locked.stake_rank3_only ?? 0)
                     const pk =
                       rank === 1
-                        ? pvpPredict.entry.pick_rank1_only
+                        ? locked.pick_rank1_only
                         : rank === 2
-                          ? pvpPredict.entry.pick_rank2_only
-                          : pvpPredict.entry.pick_rank3_only
+                          ? locked.pick_rank2_only
+                          : locked.pick_rank3_only
                     if (!sk) return null
                     return (
                       <div

@@ -65,6 +65,15 @@ export function pokemonSpriteUrl(id: number): string {
   return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`
 }
 
+/**
+ * Pokémon Showdown HOME sprites (same art as the teambuilder).
+ * https://play.pokemonshowdown.com/sprites/home/
+ */
+export function showdownHomeSpriteUrl(speciesSlug: string): string {
+  const s = speciesSlug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '')
+  return `https://play.pokemonshowdown.com/sprites/home/${encodeURIComponent(s)}.png`
+}
+
 /** Fetch full Pokémon details for wiki. Cached by id/name. */
 const detailCache = new Map<string, PokemonDetail>()
 
@@ -122,17 +131,16 @@ async function fetchEvolutionChainForSpecies(speciesId: number): Promise<Evoluti
       evolutionCache.set(speciesId, [])
       return []
     }
-    const chainData = (await chainRes.json()) as {
-      chain?: {
-        species?: { name?: string; url?: string }
-        evolves_to?: any[]
-      }
+    type ChainNode = {
+      species?: { name?: string; url?: string }
+      evolves_to?: ChainNode[]
     }
+    const chainData = (await chainRes.json()) as { chain?: ChainNode }
     const speciesUrls: string[] = []
-    function walk(node: any) {
-      if (!node || !node.species?.url) return
+    function walk(node: ChainNode | undefined) {
+      if (!node?.species?.url) return
       speciesUrls.push(node.species.url)
-      ;(node.evolves_to ?? []).forEach((child: any) => walk(child))
+      for (const child of node.evolves_to ?? []) walk(child)
     }
     walk(chainData.chain)
     const stages: EvolutionStage[] = []

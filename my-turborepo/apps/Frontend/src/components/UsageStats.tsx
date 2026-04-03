@@ -1,9 +1,63 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { fetchUsageStats } from '../api'
-import { fetchPokemonInfo, fetchMoveType, fetchItemImage } from '../pokemonApi'
+import {
+  fetchPokemonInfo,
+  fetchMoveType,
+  fetchItemImage,
+  showdownHomeSpriteUrl,
+  toPokeApiName,
+} from '../pokemonApi'
 import type { UsageStatsResponse, FormatUsage, SpeciesUsage } from '../types'
 
 const FORMAT_ORDER = ['singles', 'doubles', 'triples'] as const
+
+/** Showdown HOME sprite first, then PokéAPI official art — same as tournament team thumbnails. */
+function SpeciesSpriteImg({
+  name,
+  className,
+  alt = '',
+}: {
+  name: string
+  className?: string
+  alt?: string
+}) {
+  const slug = name.trim() ? toPokeApiName(name) : ''
+  const [src, setSrc] = useState<string | null>(() => (slug ? showdownHomeSpriteUrl(slug) : null))
+  const fallbackAttempted = useRef(false)
+
+  useEffect(() => {
+    fallbackAttempted.current = false
+    if (!slug) {
+      setSrc(null)
+      return
+    }
+    setSrc(showdownHomeSpriteUrl(slug))
+  }, [slug])
+
+  if (!slug) {
+    return (
+      <span
+        className={`inline-block w-full h-full min-h-[1.5rem] rounded bg-surface-hover shrink-0 ${className ?? ''}`}
+        aria-hidden
+      />
+    )
+  }
+  return (
+    <img
+      src={src ?? showdownHomeSpriteUrl(slug)}
+      alt={alt}
+      className={className}
+      loading="lazy"
+      onError={() => {
+        if (fallbackAttempted.current) return
+        fallbackAttempted.current = true
+        void fetchPokemonInfo(name).then((info) => {
+          if (info?.image) setSrc(info.image)
+        })
+      }}
+    />
+  )
+}
 type FormatId = (typeof FORMAT_ORDER)[number]
 
 function getFormatDisplayName(id: string): string {
@@ -172,28 +226,10 @@ function ItemRow({ name, pct }: { name: string; pct: number }) {
 }
 
 function TeammateRow({ name, pct }: { name: string; pct: number }) {
-  const [info, setInfo] = useState<{ image: string; types: string[] } | null | 'loading'>('loading')
-
-  useEffect(() => {
-    let cancelled = false
-    fetchPokemonInfo(name).then((data) => {
-      if (!cancelled) setInfo(data ?? null)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [name])
-
   return (
     <div className="flex items-center gap-2 py-1 px-2 rounded-lg bg-surface-hover">
       <div className="w-8 h-8 lg:w-10 lg:h-10 shrink-0 rounded bg-surface flex items-center justify-center overflow-hidden">
-        {info === 'loading' ? (
-          <span className="text-muted text-[10px]">…</span>
-        ) : info?.image ? (
-          <img src={info.image} alt={name} className="w-full h-full object-contain" />
-        ) : (
-          <span className="text-muted text-[10px]">?</span>
-        )}
+        <SpeciesSpriteImg name={name} className="w-full h-full object-contain [image-rendering:auto]" alt={name} />
       </div>
       <span className="text-xs font-medium truncate max-w-[100px]">{name}</span>
       <span className="text-xs text-muted shrink-0">{pct.toFixed(0)}%</span>
@@ -203,27 +239,9 @@ function TeammateRow({ name, pct }: { name: string; pct: number }) {
 
 /** Large sprite used on the detail header */
 function DetailSprite({ name }: { name: string }) {
-  const [info, setInfo] = useState<{ image: string; types: string[] } | null | 'loading'>('loading')
-
-  useEffect(() => {
-    let cancelled = false
-    fetchPokemonInfo(name).then((data) => {
-      if (!cancelled) setInfo(data ?? null)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [name])
-
   return (
     <div className="w-20 h-20 md:w-28 md:h-28 rounded-2xl bg-surface-hover flex items-center justify-center overflow-hidden">
-      {info === 'loading' ? (
-        <span className="text-muted text-xs">…</span>
-      ) : info?.image ? (
-        <img src={info.image} alt={name} className="w-full h-full object-contain" />
-      ) : (
-        <span className="text-muted text-xs">?</span>
-      )}
+      <SpeciesSpriteImg name={name} className="w-full h-full object-contain [image-rendering:auto]" alt={name} />
     </div>
   )
 }
@@ -237,13 +255,13 @@ function SpeciesCard({
   rank: number
   onOpenDetail?: (s: SpeciesUsage, rank: number) => void
 }) {
-  const [info, setInfo] = useState<{ image: string; types: string[] } | null | 'loading'>('loading')
+  const [types, setTypes] = useState<string[] | null | 'loading'>('loading')
 
   useEffect(() => {
     let cancelled = false
-    setInfo('loading')
+    setTypes('loading')
     fetchPokemonInfo(s.name).then((data) => {
-      if (!cancelled) setInfo(data)
+      if (!cancelled) setTypes(data?.types?.length ? data.types : [])
     })
     return () => {
       cancelled = true
@@ -260,23 +278,21 @@ function SpeciesCard({
         <div className="w-10 text-sm font-semibold text-muted">#{rank}</div>
         <div className="flex items-center gap-4 flex-1 min-w-0">
           <div className="w-16 h-16 md:w-32 md:h-32 lg:w-50 lg:h-50 shrink-0 rounded-xl bg-surface-hover flex items-center justify-center overflow-hidden">
-            {info === 'loading' ? (
-              <span className="text-muted text-xs">…</span>
-            ) : info?.image ? (
-              <img src={info.image} alt={s.name} className="w-full h-full object-contain" />
-            ) : (
-              <span className="text-muted text-xs" title="No sprite">
-                ?
-              </span>
-            )}
+            <SpeciesSpriteImg
+              name={s.name}
+              className="w-full h-full object-contain [image-rendering:auto]"
+              alt={s.name}
+            />
           </div>
           <div className="min-w-0">
             <div className="font-semibold truncate text-[0.95rem] sm:text-base">
               {s.name}
             </div>
             <div className="flex flex-wrap gap-1 mt-0.5">
-              {info && info !== 'loading' && info.types.length > 0 ? (
-                info.types.map((t) => (
+              {types === 'loading' ? (
+                <span className="text-muted text-xs">…</span>
+              ) : types && types.length > 0 ? (
+                types.map((t) => (
                   <span
                     key={t}
                     className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium capitalize text-white ${

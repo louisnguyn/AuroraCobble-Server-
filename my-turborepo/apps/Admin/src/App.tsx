@@ -5,11 +5,13 @@ import { Login } from './components/Login.tsx'
 import { UsageStatsAdmin } from './components/UsageStatsAdmin.tsx'
 import { UsersAdmin } from './components/UsersAdmin.tsx'
 import { MinecraftDashboard } from './components/MinecraftDashboard.tsx'
+import { TournamentAdmin } from './components/TournamentAdmin.tsx'
 
-type Section = 'usage' | 'users' | 'minecraft' | 'settings' | 'bans'
+type Section = 'usage' | 'users' | 'minecraft' | 'tournament' | 'settings' | 'bans'
 
 const SECTIONS: { id: Section; label: string }[] = [
   { id: 'minecraft', label: 'Server Dashboard' },
+  { id: 'tournament', label: 'Tournaments' },
   { id: 'usage', label: 'Usage stats' },
   { id: 'users', label: 'Ticket Management' },
   { id: 'settings', label: 'Settings' },
@@ -162,10 +164,15 @@ export default function App() {
 
       {/* Main */}
       <main className="flex-1 p-4 sm:p-6 min-w-0">
-        <div className={section === 'minecraft' ? 'max-w-6xl mx-auto' : 'max-w-5xl mx-auto'}>
+        <div
+          className={
+            section === 'minecraft' || section === 'tournament' ? 'max-w-6xl mx-auto' : 'max-w-5xl mx-auto'
+          }
+        >
           {section === 'usage' && <UsageStatsAdmin />}
           {section === 'users' && <UsersAdmin />}
           {section === 'minecraft' && <MinecraftDashboard viewerUsername={user.username} />}
+          {section === 'tournament' && <TournamentAdmin />}
           {section === 'settings' && <Placeholder title="Settings" />}
           {section === 'bans' && <Placeholder title="Bans" />}
         </div>

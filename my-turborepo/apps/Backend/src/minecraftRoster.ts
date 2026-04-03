@@ -58,9 +58,12 @@ export function mergeOnlineWithRoster(
   const accountCount = fullRoster.size;
 
   const players: PlayerWithStatus[] = [];
+  const onlineAdded = new Set<string>();
 
   for (const p of online) {
     const key = p.name.toLowerCase();
+    if (onlineAdded.has(key)) continue;
+    onlineAdded.add(key);
     const display = fullRoster.get(key) ?? p.name;
     players.push({ name: display, status: "online" });
   }

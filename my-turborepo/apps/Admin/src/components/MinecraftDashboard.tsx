@@ -359,8 +359,11 @@ export function MinecraftDashboard({ viewerUsername }: { viewerUsername?: string
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
-                    {filtered.map((p) => (
-                      <tr key={`${p.name}-${p.status}`} className="hover:bg-white/[0.03] transition-colors">
+                    {filtered.map((p, rowIdx) => (
+                      <tr
+                        key={`${rowIdx}-${p.status}-${p.name}`}
+                        className="hover:bg-white/[0.03] transition-colors"
+                      >
                         <td className="px-5 py-3 align-middle">
                           <div className="flex items-center gap-3 min-w-0">
                             <span

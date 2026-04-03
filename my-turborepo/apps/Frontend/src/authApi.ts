@@ -4,6 +4,7 @@ export interface AuthUser {
   id: number
   email: string
   username: string
+  is_admin?: boolean
 }
 
 export interface AuthResponse {
@@ -434,4 +435,75 @@ export async function exchangeTickets(toCurrency: string): Promise<{
     method: 'POST',
     body: JSON.stringify({ to_currency: toCurrency }),
   })
+}
+
+// --- Tournaments (public bracket; admin lives in apps/Admin) ---
+
+export interface PublishedTournamentSummary {
+  slug: string
+  title: string
+  updatedAt: string
+}
+
+export async function fetchPublishedTournaments(): Promise<{ tournaments: PublishedTournamentSummary[] }> {
+  const base = API_BASE.replace(/\/$/, '')
+  const res = await fetch(`${base}/tournaments`)
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error((data as { error?: string }).error ?? `Request failed: ${res.status}`)
+  return data as { tournaments: PublishedTournamentSummary[] }
+}
+
+export interface TournamentBracketSlot {
+  kind: 'participant' | 'tbd' | 'winner_of' | 'loser_of'
+  id?: number
+  name?: string
+  teamPreview?: { species?: string; speciesSlug?: string }[]
+  matchKey?: string
+}
+
+export interface TournamentBracketMatch {
+  key: string
+  round: 'qualifying' | 'quarter' | 'semi' | 'final' | 'third'
+  label: string
+  left: TournamentBracketSlot
+  right: TournamentBracketSlot
+  winnerParticipantId: number | null
+  canSetWinner: boolean
+}
+
+export async function fetchPublicTournament(slug: string): Promise<{
+  tournament: {
+    slug: string
+    title: string
+    subtitle: string | null
+    prizes: unknown
+    updatedAt: string
+    /** QF slot i faces winner of qual qfQualFeed[i] (0–3). */
+    qfQualFeed?: [number, number, number, number]
+  }
+  bracket: TournamentBracketMatch[]
+}> {
+  const base = API_BASE.replace(/\/$/, '')
+  const res = await fetch(`${base}/tournaments/${encodeURIComponent(slug)}`)
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error((data as { error?: string }).error ?? `Request failed: ${res.status}`)
+  return data as Awaited<ReturnType<typeof fetchPublicTournament>>
+}
+
+export async function fetchTournamentParticipantTeam(
+  slug: string,
+  participantId: number
+): Promise<{
+  participant: {
+    id: number
+    seedRank: number
+    displayName: string
+    team: unknown
+  }
+}> {
+  const base = API_BASE.replace(/\/$/, '')
+  const res = await fetch(`${base}/tournaments/${encodeURIComponent(slug)}/participants/${participantId}`)
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error((data as { error?: string }).error ?? `Request failed: ${res.status}`)
+  return data as Awaited<ReturnType<typeof fetchTournamentParticipantTeam>>
 }

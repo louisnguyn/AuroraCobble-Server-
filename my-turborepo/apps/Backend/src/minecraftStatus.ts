@@ -1,5 +1,36 @@
 import { queryFull, status } from "minecraft-server-util";
 
+/** Java Edition valid IGN: 3–16 chars, [a-zA-Z0-9_]. Used to drop MOTD / mod “sample” lines (§ codes, etc.). */
+const MC_JAVA_USERNAME = /^[a-zA-Z0-9_]{3,16}$/;
+
+function isLikelyRealPlayerName(name: string): boolean {
+  const t = name.trim();
+  if (!t) return false;
+  if (/§|[\n\r\t]/.test(t)) return false;
+  return MC_JAVA_USERNAME.test(t);
+}
+
+/**
+ * Query / server-list “player” lists are often polluted by plugins (fake sample rows, MOTD lines).
+ * Trust `onlineCount` from the protocol: if zero, ignore the list entirely.
+ * Otherwise keep only plausible IGNs, dedupe, and cap at `onlineCount`.
+ */
+function sanitizeOnlinePlayerNames(onlineCount: number, raw: { name: string }[]): { name: string }[] {
+  if (onlineCount <= 0) return [];
+  const out: { name: string }[] = [];
+  const seen = new Set<string>();
+  for (const p of raw) {
+    if (!isLikelyRealPlayerName(p.name)) continue;
+    const display = p.name.trim();
+    const key = display.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ name: display });
+    if (out.length >= onlineCount) break;
+  }
+  return out;
+}
+
 export type MinecraftServerPayload = {
   ok: true;
   source: "query" | "status";
@@ -58,7 +89,8 @@ export async function fetchMinecraftServerPayload(): Promise<MinecraftServerPayl
   try {
     const full = await queryFull(host, queryPort, { timeout, enableSRV: true });
     const s = await enrichFromStatus();
-    const onlinePlayerNames = full.players.list.map((name) => ({ name }));
+    const rawQueryNames = full.players.list.map((name) => ({ name }));
+    const onlinePlayerNames = sanitizeOnlinePlayerNames(full.players.online, rawQueryNames);
 
     return {
       ok: true,
@@ -83,6 +115,8 @@ export async function fetchMinecraftServerPayload(): Promise<MinecraftServerPayl
       const s = await status(host, gamePort, { timeout, enableSRV: true });
       const sample = s.players.sample ?? [];
       const online = s.players.online;
+      const rawSample = sample.map((p) => ({ name: p.name }));
+      const onlinePlayerNames = sanitizeOnlinePlayerNames(online, rawSample);
       const note =
         online > 0 && sample.length < online
           ? "Server list ping only includes a sample of players when many are online. Enable query in server.properties for full list."
@@ -92,7 +126,7 @@ export async function fetchMinecraftServerPayload(): Promise<MinecraftServerPayl
         source: "status",
         online,
         maxPlayers: s.players.max,
-        onlinePlayerNames: sample.map((p) => ({ name: p.name })),
+        onlinePlayerNames,
         motd: s.motd.clean,
         version: s.version.name,
         protocol: s.version.protocol,

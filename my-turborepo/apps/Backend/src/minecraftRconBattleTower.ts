@@ -101,7 +101,7 @@ export function parseBattleTowerLeaderboardOutput(text: string): {
   const raw = stripAnsi(stripMinecraftFormatCodes(text));
 
   for (const line of raw.split(/\r?\n/)) {
-    let trimmed = line.trim();
+    const trimmed = line.trim();
     if (!trimmed) continue;
     if (/^unknown or incomplete command|^no such command|^wrong number of arguments/i.test(trimmed)) {
       continue;

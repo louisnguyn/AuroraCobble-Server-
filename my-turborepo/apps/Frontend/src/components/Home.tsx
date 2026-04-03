@@ -1,4 +1,13 @@
-type Page = 'main' | 'leaderboard' | 'usage' | 'wiki' | 'rules' | 'gacha' | 'spawn'
+type Page =
+  | 'main'
+  | 'leaderboard'
+  | 'usage'
+  | 'wiki'
+  | 'rules'
+  | 'gacha'
+  | 'spawn'
+  | 'tournament'
+  | 'account'
 
 const QUICK_LINKS: { id: Exclude<Page, 'main'>; label: string; description: string }[] = [
   {
@@ -11,6 +20,16 @@ const QUICK_LINKS: { id: Exclude<Page, 'main'>; label: string; description: stri
   { id: 'rules', label: 'Rules', description: 'Format rules & restrictions' },
   { id: 'gacha', label: 'Gacha', description: 'Open loot & collect rewards (login required)' },
   { id: 'spawn', label: 'Spawn', description: 'Pokemon spawn locations and conditions' },
+  {
+    id: 'tournament',
+    label: 'Tournament',
+    description: 'Live bracket, qualifiers & prizes',
+  },
+  {
+    id: 'account',
+    label: 'Account',
+    description: 'Sign in, profile & site wallet (login required)',
+  },
 ]
 
 interface HomeProps {
@@ -66,7 +85,7 @@ export function Home({ onNavigate }: HomeProps) {
 
       {!onNavigate && (
         <p className="text-center text-sm text-muted/80 mt-8">
-          Use the menu to switch between Leaderboard, Usage Stats, Wiki, and Rules.
+          Use the menu to switch sections — Leaderboard, Usage, Wiki, Rules, Gacha, Spawn, Tournament, and Account.
         </p>
       )}
     </div>

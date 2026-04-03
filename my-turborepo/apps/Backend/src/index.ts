@@ -32,6 +32,7 @@ import {
   isLikelyMinecraftUsername,
   parseRewardForGivePokemon,
 } from "./gachaRewardClaim.js";
+import { registerTournamentRoutes } from "./tournamentRoutes.js";
 import {
   buildCobbledollarsDepositCommand,
   isCobbledollarsDepositEnabled,
@@ -212,10 +213,6 @@ async function notifyDiscordPull(
   });
 }
 
-async function notifyDiscordContent(content: string): Promise<void> {
-  return notifyDiscordPayload({ content });
-}
-
 type DiscordEmbedField = {
   name: string;
   value: string;
@@ -262,10 +259,6 @@ let discordSendChain: Promise<void> = Promise.resolve();
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function sendDiscordContentNow(webhookUrl: string, content: string): Promise<void> {
-  return sendDiscordPayloadNow(webhookUrl, { content });
 }
 
 function clampDiscordText(value: string, maxLen: number): string {
@@ -414,7 +407,7 @@ async function notifyDiscordCobbleLedger(
 // CORS: required when frontend is on a different origin (e.g. deploy frontend + backend separately)
 app.use((_req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", CORS_ORIGIN);
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   next();
 });
@@ -478,6 +471,8 @@ function requireAdmin(
 }
 
 app.use(express.json());
+
+registerTournamentRoutes(app, { requireAuth, requireAdmin });
 
 app.get("/", (_req, res) => {
   res.json({ message: "Backend running" });
@@ -1545,12 +1540,12 @@ const POKEMON_SHOP_CATEGORIES = {
   legend: {
     price: 5_000_000,
     species: [
-      "articuno", "zapdos", "moltres", "mewtwo", "raikou", "entei", "suicune", "lugia", "ho-oh",
+      "articuno", "zapdos", "moltres", "mewtwo", "raikou", "entei", "suicune", "lugia", "hooh",
       "regirock", "regice", "registeel", "latias", "latios", "kyogre", "groudon", "rayquaza",
       "uxie", "mesprit", "azelf", "dialga", "palkia", "heatran", "giratina", "cresselia",
       "cobalion", "terrakion", "virizion", "tornadus", "thundurus", "reshiram", "zekrom",
-      "landorus", "kyurem", "xerneas", "yveltal", "zygarde", "tapu-koko", "tapu-lele",
-      "tapu-bulu", "tapu-fini", "cosmog", "cosmoem", "solgaleo", "lunala", "necrozma",
+      "landorus", "kyurem", "xerneas", "yveltal", "zygarde", "tapukoko", "tapulele",
+      "tapubulu", "tapufini", "cosmog", "cosmoem", "solgaleo", "lunala", "necrozma",
       "zacian", "zamazenta", "eternatus", "kubfu", "urshifu", "regieleki", "regidrago",
       "glastrier", "spectrier", "calyrex", "koraidon", "miraidon",
     ],

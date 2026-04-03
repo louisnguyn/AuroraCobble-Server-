@@ -10,6 +10,8 @@ import { Gacha } from './components/Gacha.tsx'
 import { AuthModal } from './components/AuthModal.tsx'
 import { Account } from './components/Account.tsx'
 import { Spawn } from './components/Spawn.tsx'
+import { Tournament } from './components/Tournament.tsx'
+import { TournamentTeamDetail } from './components/TournamentTeamDetail.tsx'
 type Page =
   | 'main'
   | 'leaderboard'
@@ -19,6 +21,7 @@ type Page =
   | 'gacha'
   | 'spawn'
   | 'account'
+  | 'tournament'
 
 const PAGES: { id: Page; label: string }[] = [
   { id: 'main', label: 'Main' },
@@ -29,6 +32,7 @@ const PAGES: { id: Page; label: string }[] = [
   { id: 'gacha', label: 'Gacha' },
   { id: 'spawn', label: 'Spawn' },
   { id: 'account', label: 'Account' },
+  { id: 'tournament', label: 'Tournament' },
 ]
 
 function AppContent() {
@@ -36,6 +40,9 @@ function AppContent() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [showAuth, setShowAuth] = useState(false)
   const { isAuthenticated, user, logout } = useAuth()
+  const [tournamentNav, setTournamentNav] = useState<{ slug: string; participantId?: number }>({
+    slug: '',
+  })
 
   const goTo = (p: Page) => {
     setPage(p)
@@ -128,6 +135,20 @@ function AppContent() {
         {page === 'gacha' && <Gacha />}
         {page === 'spawn' && <Spawn />}
         {page === 'account' && <Account />}
+        {page === 'tournament' &&
+          (tournamentNav.participantId != null ? (
+            <TournamentTeamDetail
+              slug={tournamentNav.slug}
+              participantId={tournamentNav.participantId}
+              onBack={() => setTournamentNav({ slug: tournamentNav.slug })}
+            />
+          ) : (
+            <Tournament
+              slug={tournamentNav.slug}
+              onSlugChange={(s) => setTournamentNav({ slug: s })}
+              onOpenPlayer={(id) => setTournamentNav({ slug: tournamentNav.slug, participantId: id })}
+            />
+          ))}
       </main>
     </div>
   )

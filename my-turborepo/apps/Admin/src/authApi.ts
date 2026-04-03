@@ -172,3 +172,104 @@ export async function fetchMinecraftDashboard(): Promise<MinecraftDashboardRespo
   }
   return data as MinecraftDashboardResponse
 }
+
+// --- Tournaments (admin API; public bracket lives on the main site) ---
+
+export interface TournamentBracketSlot {
+  kind: 'participant' | 'tbd' | 'winner_of' | 'loser_of'
+  id?: number
+  name?: string
+  teamPreview?: { species?: string; speciesSlug?: string }[]
+  matchKey?: string
+}
+
+export interface TournamentBracketMatch {
+  key: string
+  round: 'qualifying' | 'quarter' | 'semi' | 'final' | 'third'
+  label: string
+  left: TournamentBracketSlot
+  right: TournamentBracketSlot
+  winnerParticipantId: number | null
+  canSetWinner: boolean
+}
+
+export async function adminParsePokepaste(raw: string): Promise<{ team: unknown[]; count: number }> {
+  return fetchJson<{ team: unknown[]; count: number }>('/admin/tournaments/parse-pokepaste', {
+    method: 'POST',
+    body: JSON.stringify({ raw }),
+  })
+}
+
+export async function adminListTournaments(): Promise<{ tournaments: unknown[] }> {
+  return fetchJson<{ tournaments: unknown[] }>('/admin/tournaments')
+}
+
+export async function adminCreateTournament(body: {
+  slug: string
+  title: string
+  subtitle?: string
+  prizes?: unknown[]
+  is_published?: boolean
+}): Promise<{ tournament: unknown }> {
+  return fetchJson<{ tournament: unknown }>('/admin/tournaments', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function adminPatchTournament(
+  id: number,
+  body: {
+    title?: string
+    subtitle?: string
+    prizes?: unknown[]
+    is_published?: boolean
+    /** Length 4, permutation of 0–3: QF slot i gets winner of qual-(value). */
+    qf_qual_feed?: number[]
+  }
+): Promise<{ tournament: unknown }> {
+  return fetchJson<{ tournament: unknown }>(`/admin/tournaments/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function adminUpsertParticipant(
+  tournamentId: number,
+  seedRank: number,
+  body: { display_name: string; pokepaste_raw: string }
+): Promise<{ participant: unknown }> {
+  return fetchJson<{ participant: unknown }>(`/admin/tournaments/${tournamentId}/participants/${seedRank}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function adminFetchBracket(tournamentId: number): Promise<{
+  tournament: unknown
+  participants: unknown[]
+  bracket: TournamentBracketMatch[]
+}> {
+  return fetchJson(`/admin/tournaments/${tournamentId}/bracket`)
+}
+
+export async function adminSetMatchWinner(
+  tournamentId: number,
+  matchKey: string,
+  winnerParticipantId: number
+): Promise<{ ok: boolean }> {
+  return fetchJson<{ ok: boolean }>(
+    `/admin/tournaments/${tournamentId}/matches/${encodeURIComponent(matchKey)}/winner`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ winner_participant_id: winnerParticipantId }),
+    }
+  )
+}
+
+export async function adminClearMatchWinner(tournamentId: number, matchKey: string): Promise<{ ok: boolean }> {
+  return fetchJson<{ ok: boolean }>(
+    `/admin/tournaments/${tournamentId}/matches/${encodeURIComponent(matchKey)}/winner`,
+    { method: 'DELETE' }
+  )
+}
