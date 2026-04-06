@@ -50,21 +50,21 @@ function parseQfDraft(raw: unknown): [number, number, number, number] {
 }
 
 const btnBase =
-  'inline-flex items-center justify-center font-medium rounded-xl transition-all duration-150 active:scale-[0.98] disabled:opacity-45 disabled:pointer-events-none disabled:active:scale-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/75 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0f0a1a]'
+  'inline-flex items-center justify-center font-medium rounded-xl transition-all duration-150 active:scale-[0.98] disabled:opacity-45 disabled:pointer-events-none disabled:active:scale-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/75 focus-visible:ring-offset-2 focus-visible:ring-offset-[#141210]'
 
-const btnPrimary = `${btnBase} px-4 py-2.5 text-sm bg-violet-600 text-white border border-violet-500 shadow-md shadow-violet-950/35 hover:bg-violet-500 hover:shadow-lg hover:shadow-violet-900/45`
-const btnSecondary = `${btnBase} px-3 py-2 text-sm border border-indigo-400/45 bg-indigo-950/50 text-indigo-100 hover:bg-indigo-900/55 hover:border-indigo-300/55 hover:shadow-md hover:shadow-indigo-950/30`
+const btnPrimary = `${btnBase} px-4 py-2.5 text-sm bg-amber-600 text-white border border-amber-500 shadow-md shadow-amber-950/35 hover:bg-amber-500 hover:shadow-lg hover:shadow-amber-900/45`
+const btnSecondary = `${btnBase} px-3 py-2 text-sm border border-stone-400/45 bg-stone-950/50 text-stone-100 hover:bg-stone-900/55 hover:border-stone-300/55 hover:shadow-md hover:shadow-stone-950/30`
 const btnGhost = `${btnBase} px-3 py-2 text-sm border border-white/12 bg-white/[0.06] text-slate-200 hover:bg-white/12 hover:border-white/22`
 const btnSuccess = `${btnBase} px-3 py-2 text-xs border border-emerald-500/45 bg-emerald-950/40 text-emerald-200 hover:bg-emerald-900/45 hover:border-emerald-400/60`
 const btnMuted = `${btnBase} px-3 py-2 text-xs border border-slate-500/35 bg-slate-900/40 text-slate-300 hover:bg-slate-800/55 hover:border-slate-400/40`
-const btnWin = `${btnBase} px-3 py-2 text-xs border border-violet-400/35 bg-violet-950/35 text-violet-100 hover:bg-violet-900/45 hover:border-accent/50 disabled:hover:bg-violet-950/35`
+const btnWin = `${btnBase} px-3 py-2 text-xs border border-amber-400/35 bg-amber-950/35 text-amber-100 hover:bg-amber-900/45 hover:border-accent/50 disabled:hover:bg-amber-950/35`
 const btnClear = `${btnBase} px-3 py-2 text-xs border border-amber-500/40 bg-amber-950/25 text-amber-100 hover:bg-amber-900/35`
 
 const fieldClass =
-  'w-full rounded-xl border border-indigo-500/30 bg-[#15132e]/90 px-3 py-2.5 text-sm text-[#e2e8f0] placeholder:text-slate-500 transition-colors hover:border-indigo-400/45 focus:border-violet-400/60 focus:ring-2 focus:ring-violet-500/25 outline-none'
+  'w-full rounded-xl border border-stone-500/30 bg-[#1f1c18]/90 px-3 py-2.5 text-sm text-[#f5efe6] placeholder:text-slate-500 transition-colors hover:border-stone-400/45 focus:border-amber-400/60 focus:ring-2 focus:ring-amber-500/25 outline-none'
 
 const cardClass =
-  'rounded-2xl border border-indigo-500/25 bg-indigo-950/25 backdrop-blur-sm p-5 space-y-4 shadow-lg shadow-black/25'
+  'rounded-2xl border border-stone-500/25 bg-stone-950/25 backdrop-blur-sm p-5 space-y-4 shadow-lg shadow-black/25'
 
 function slotLine(slot: TournamentBracketSlot): string {
   if (slot.kind === 'participant') return slot.name ?? '—'
@@ -244,12 +244,12 @@ export function TournamentAdmin() {
   }
 
   const selectClass =
-    'w-full rounded-xl border border-indigo-500/30 bg-[#15132e]/90 px-3 py-2.5 text-sm text-[#e2e8f0] transition-colors hover:border-indigo-400/45 focus:border-violet-400/60 focus:ring-2 focus:ring-violet-500/25 outline-none'
+    'w-full rounded-xl border border-stone-500/30 bg-[#1f1c18]/90 px-3 py-2.5 text-sm text-[#f5efe6] transition-colors hover:border-stone-400/45 focus:border-amber-400/60 focus:ring-2 focus:ring-amber-500/25 outline-none'
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 pb-16 text-left">
       <header className="space-y-2">
-        <h2 className="text-2xl font-bold tracking-tight text-white m-0 bg-gradient-to-r from-white via-violet-100 to-indigo-200 bg-clip-text text-transparent">
+        <h2 className="text-2xl font-bold tracking-tight text-white m-0 bg-gradient-to-r from-white via-amber-100 to-stone-200 bg-clip-text text-transparent">
           Tournaments
         </h2>
         <p className="text-sm text-muted m-0 leading-relaxed">
@@ -268,7 +268,7 @@ export function TournamentAdmin() {
       ) : null}
 
       <section className={cardClass}>
-        <h3 className="text-sm font-semibold text-violet-200 m-0 tracking-wide uppercase">New tournament</h3>
+        <h3 className="text-sm font-semibold text-amber-200 m-0 tracking-wide uppercase">New tournament</h3>
         <div className="grid gap-3 sm:grid-cols-2">
           <input className={fieldClass} placeholder="URL slug (e.g. spring-2026)" value={newSlug} onChange={(e) => setNewSlug(e.target.value)} />
           <div className="sm:col-span-2 space-y-3">
@@ -282,7 +282,7 @@ export function TournamentAdmin() {
       </section>
 
       <section className={cardClass}>
-        <h3 className="text-sm font-semibold text-violet-200 m-0 tracking-wide uppercase">Select tournament</h3>
+        <h3 className="text-sm font-semibold text-amber-200 m-0 tracking-wide uppercase">Select tournament</h3>
         <select
           className={selectClass}
           value={selectedId ?? ''}
@@ -310,7 +310,7 @@ export function TournamentAdmin() {
       {selectedId != null ? (
         <>
           <section className={cardClass}>
-            <h3 className="text-sm font-semibold text-violet-200 m-0 tracking-wide uppercase">Prizes</h3>
+            <h3 className="text-sm font-semibold text-amber-200 m-0 tracking-wide uppercase">Prizes</h3>
             <p className="text-xs text-muted m-0 leading-relaxed">
               One line per bullet — same list as on the public tournament page. Empty lines are ignored.
             </p>
@@ -336,7 +336,7 @@ export function TournamentAdmin() {
           </section>
 
           <section className={cardClass}>
-            <h3 className="text-sm font-semibold text-violet-200 m-0 tracking-wide uppercase">Quarter-final pairings</h3>
+            <h3 className="text-sm font-semibold text-amber-200 m-0 tracking-wide uppercase">Quarter-final pairings</h3>
             <p className="text-xs text-muted m-0 leading-relaxed">
               For each quarter-final, pick which <strong className="text-slate-300">qualifier winner</strong> (Qualifier 1 =
               seeds 5 vs 12, …) plays that top seed. Each qualifier must appear once.
@@ -345,7 +345,7 @@ export function TournamentAdmin() {
               {[0, 1, 2, 3].map((qfIdx) => (
                 <label key={qfIdx} className="flex flex-col gap-2 text-xs text-muted">
                   <span>
-                    <span className="text-violet-200/90 font-medium">Quarter-final {qfIdx + 1}</span>
+                    <span className="text-amber-200/90 font-medium">Quarter-final {qfIdx + 1}</span>
                     <span className="text-slate-400"> — top seed {qfIdx + 1} vs winner of</span>
                   </span>
                   <select
@@ -378,7 +378,7 @@ export function TournamentAdmin() {
           </section>
 
           <section className={cardClass}>
-            <h3 className="text-sm font-semibold text-violet-200 m-0 tracking-wide uppercase">Participant (seed 1–12)</h3>
+            <h3 className="text-sm font-semibold text-amber-200 m-0 tracking-wide uppercase">Participant (seed 1–12)</h3>
             <div className="flex flex-wrap gap-3 items-end">
               <label className="flex flex-col gap-1.5 text-xs text-muted">
                 Seed
@@ -423,9 +423,9 @@ export function TournamentAdmin() {
                   .map((p) => (
                     <span
                       key={p.id}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/25 bg-indigo-950/40 px-2.5 py-1 text-xs text-slate-200"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-stone-500/25 bg-stone-950/40 px-2.5 py-1 text-xs text-slate-200"
                     >
-                      <span className="text-violet-300 font-medium">Seed {p.seed_rank}</span>
+                      <span className="text-amber-300 font-medium">Seed {p.seed_rank}</span>
                       <span className="text-slate-500">·</span>
                       <span>{p.display_name}</span>
                     </span>
@@ -435,7 +435,7 @@ export function TournamentAdmin() {
           </section>
 
           <section className={cardClass}>
-            <h3 className="text-sm font-semibold text-violet-200 m-0 tracking-wide uppercase">Matches — pick winner</h3>
+            <h3 className="text-sm font-semibold text-amber-200 m-0 tracking-wide uppercase">Matches — pick winner</h3>
             {loading ? <p className="text-xs text-muted m-0">Loading bracket…</p> : null}
             <div className="space-y-3 max-h-[min(70vh,36rem)] overflow-y-auto pr-1 [scrollbar-color:rgba(129,140,248,0.35)_transparent]">
               {bracket.map((m) => {
@@ -446,13 +446,13 @@ export function TournamentAdmin() {
                 return (
                   <article
                     key={m.key}
-                    className="rounded-xl border border-indigo-500/20 bg-[#0f0d24]/80 p-4 space-y-3 text-sm hover:border-indigo-400/35 transition-colors"
+                    className="rounded-xl border border-stone-500/20 bg-[#1a1814]/80 p-4 space-y-3 text-sm hover:border-stone-400/35 transition-colors"
                   >
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-violet-500/20 text-violet-200 border border-violet-400/25">
+                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-200 border border-amber-400/25">
                         {roundPill(m.round)}
                       </span>
-                      <span className="font-semibold text-[#e2e8f0]">{m.label}</span>
+                      <span className="font-semibold text-[#f5efe6]">{m.label}</span>
                     </div>
                     <p className="text-xs text-slate-400 m-0 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                       <span className="text-slate-300">{slotLine(m.left)}</span>

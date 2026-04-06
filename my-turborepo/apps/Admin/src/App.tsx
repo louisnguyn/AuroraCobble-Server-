@@ -21,7 +21,7 @@ const SECTIONS: { id: Section; label: string }[] = [
 function Placeholder({ title }: { title: string }) {
   return (
     <div className="rounded-lg bg-surface border border-border p-8 text-center text-muted">
-      <h2 className="text-xl font-semibold m-0 mb-2 text-[#e2e8f0]">{title}</h2>
+      <h2 className="text-xl font-semibold m-0 mb-2 text-[#f5efe6]">{title}</h2>
       <p className="m-0">Coming soon. Configure from your server or backend.</p>
     </div>
   )
@@ -121,7 +121,7 @@ export default function App() {
                 {user.username.charAt(0).toUpperCase()}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-[#e2e8f0] truncate" title={user.username}>
+                <p className="text-sm font-medium text-[#f5efe6] truncate" title={user.username}>
                   {user.username}
                 </p>
                 <p className="text-xs text-muted truncate" title={user.email}>
@@ -152,7 +152,7 @@ export default function App() {
                 className={`block w-full text-left py-2.5 px-3 rounded-lg text-sm transition-colors ${
                   section === id
                     ? 'bg-accent/20 text-accent font-medium'
-                    : 'text-muted hover:bg-surface-hover hover:text-[#e2e8f0]'
+                    : 'text-muted hover:bg-surface-hover hover:text-[#f5efe6]'
                 }`}
               >
                 {label}

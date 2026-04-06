@@ -127,7 +127,7 @@ export function UsersAdmin() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-bold text-[#e2e8f0]">Ticket Management</h1>
+      <h1 className="text-xl font-bold text-[#f5efe6]">Ticket Management</h1>
       {error && (
         <div className="p-3 rounded-lg bg-error/15 border border-error/30 text-error text-sm">
           {error}
@@ -148,7 +148,7 @@ export function UsersAdmin() {
                   className={`block w-full text-left px-4 py-3 border-b border-border/50 text-sm transition-colors ${
                     selectedUser?.id === u.id
                       ? 'bg-accent/20 text-accent font-medium'
-                      : 'hover:bg-surface-hover text-[#e2e8f0]'
+                      : 'hover:bg-surface-hover text-[#f5efe6]'
                   }`}
                 >
                   <span className="font-medium">{u.username}</span>
@@ -172,17 +172,17 @@ export function UsersAdmin() {
           ) : (
             <>
               <div className="rounded-lg bg-surface border border-border p-4">
-                <h2 className="text-sm font-semibold text-[#e2e8f0] mb-3">
+                <h2 className="text-sm font-semibold text-[#f5efe6] mb-3">
                   Currency · {selectedUser.username}
                 </h2>
                 <div className="flex flex-wrap gap-4 mb-4">
                   {currencies.map((c) => (
                     <div
                       key={c.id}
-                      className="px-3 py-2 rounded-lg bg-[#0f0a1a]/50 border border-border text-sm"
+                      className="px-3 py-2 rounded-lg bg-[#0f0d0b]/50 border border-border text-sm"
                     >
                       <span className="text-muted">{c.currency_type}:</span>{' '}
-                      <span className="font-medium text-[#e2e8f0]">{c.balance}</span>
+                      <span className="font-medium text-[#f5efe6]">{c.balance}</span>
                     </div>
                   ))}
                   {currencies.length === 0 && (
@@ -198,7 +198,7 @@ export function UsersAdmin() {
                       id="grant-type"
                       value={grantType}
                       onChange={(e) => setGrantType(e.target.value)}
-                      className="min-w-[140px] px-2 py-1.5 rounded bg-[#0f0a1a] border border-border text-sm text-[#e2e8f0]"
+                      className="min-w-[140px] px-2 py-1.5 rounded bg-[#0f0d0b] border border-border text-sm text-[#f5efe6]"
                     >
                       <option value="tickets">tickets</option>
                       <option value="mythic tickets">mythic tickets</option>
@@ -218,13 +218,13 @@ export function UsersAdmin() {
                       min="1"
                       value={grantAmount}
                       onChange={(e) => setGrantAmount(e.target.value)}
-                      className="w-24 px-2 py-1.5 rounded bg-[#0f0a1a] border border-border text-sm text-[#e2e8f0]"
+                      className="w-24 px-2 py-1.5 rounded bg-[#0f0d0b] border border-border text-sm text-[#f5efe6]"
                     />
                   </div>
                   <button
                     type="submit"
                     disabled={granting}
-                    className="px-3 py-1.5 rounded-lg bg-accent text-[#0f0a1a] text-sm font-medium hover:bg-accent/90 disabled:opacity-50"
+                    className="px-3 py-1.5 rounded-lg bg-accent text-[#1a1510] text-sm font-medium hover:bg-accent/90 disabled:opacity-50"
                   >
                     {granting ? 'Granting…' : 'Grant'}
                   </button>
@@ -232,7 +232,7 @@ export function UsersAdmin() {
               </div>
 
               <div className="rounded-lg bg-surface border border-border p-4">
-                <h2 className="text-sm font-semibold text-[#e2e8f0] mb-3">Gacha history · Given in-game</h2>
+                <h2 className="text-sm font-semibold text-[#f5efe6] mb-3">Gacha history · Given in-game</h2>
                 <p className="text-xs text-muted mb-3">
                   Tick when you have given this reward to the user in-game. Use Delete to remove a row from history (e.g. after it’s been handled).
                 </p>
@@ -245,7 +245,7 @@ export function UsersAdmin() {
                     {history.map((entry) => (
                       <li
                         key={entry.id}
-                        className="flex items-center gap-3 py-2 px-3 rounded-lg bg-[#0f0a1a]/50 border border-border/50"
+                        className="flex items-center gap-3 py-2 px-3 rounded-lg bg-[#0f0d0b]/50 border border-border/50"
                       >
                         <button
                           type="button"
@@ -270,7 +270,7 @@ export function UsersAdmin() {
                           )}
                         </button>
                         <div className="min-w-0 flex-1">
-                          <span className="text-sm font-medium text-[#e2e8f0]">{entry.rewardType}</span>
+                          <span className="text-sm font-medium text-[#f5efe6]">{entry.rewardType}</span>
                           <span className="block text-xs text-muted">
                             {entry.poolName} · {formatDate(entry.pulledAt)}
                           </span>
@@ -305,14 +305,14 @@ export function UsersAdmin() {
             className="w-full max-w-md rounded-xl bg-surface border border-border shadow-xl p-6"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 id="delete-confirm-title" className="text-lg font-semibold text-[#e2e8f0] m-0 mb-2">
+            <h3 id="delete-confirm-title" className="text-lg font-semibold text-[#f5efe6] m-0 mb-2">
               Remove from history?
             </h3>
             <p className="text-sm text-muted m-0 mb-4">
               This will permanently remove this pull from the user’s gacha history. You can’t undo this.
             </p>
-            <div className="rounded-lg bg-[#0f0a1a]/50 border border-border/50 px-3 py-2 mb-6">
-              <p className="text-sm font-medium text-[#e2e8f0] m-0">{deleteConfirmEntry.rewardType}</p>
+            <div className="rounded-lg bg-[#0f0d0b]/50 border border-border/50 px-3 py-2 mb-6">
+              <p className="text-sm font-medium text-[#f5efe6] m-0">{deleteConfirmEntry.rewardType}</p>
               <p className="text-xs text-muted m-0 mt-1">
                 {deleteConfirmEntry.poolName} · {formatDate(deleteConfirmEntry.pulledAt)}
               </p>
@@ -322,7 +322,7 @@ export function UsersAdmin() {
                 type="button"
                 onClick={closeDeleteConfirm}
                 disabled={deleteConfirmBusy}
-                className="px-4 py-2 rounded-lg text-sm border border-border text-muted hover:bg-surface-hover hover:text-[#e2e8f0] disabled:opacity-50"
+                className="px-4 py-2 rounded-lg text-sm border border-border text-muted hover:bg-surface-hover hover:text-[#f5efe6] disabled:opacity-50"
               >
                 Cancel
               </button>

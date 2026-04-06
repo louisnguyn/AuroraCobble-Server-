@@ -52,7 +52,7 @@ export function AuthModal({ onClose, defaultMode = 'login' }: AuthModalProps) {
       >
         <div className="p-6 sm:p-8">
           <div className="flex items-center justify-between mb-6">
-            <h2 id="auth-modal-title" className="text-2xl font-bold text-[#e2e8f0]">
+            <h2 id="auth-modal-title" className="text-2xl font-bold text-[#f5efe6]">
               {isLogin ? 'Log in' : 'Create account'}
             </h2>
             <button
@@ -124,7 +124,7 @@ export function AuthModal({ onClose, defaultMode = 'login' }: AuthModalProps) {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 pixel-btn-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#2a2652] disabled:opacity-60"
+              className="w-full py-3 pixel-btn-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#1f1c18] disabled:opacity-60"
             >
               {loading ? 'Please wait…' : isLogin ? 'Log in' : 'Sign up'}
             </button>

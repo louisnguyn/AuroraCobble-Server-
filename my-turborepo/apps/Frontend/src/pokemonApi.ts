@@ -74,6 +74,12 @@ export function showdownHomeSpriteUrl(speciesSlug: string): string {
   return `https://play.pokemonshowdown.com/sprites/home/${encodeURIComponent(s)}.png`
 }
 
+/** Shiny variant: https://play.pokemonshowdown.com/sprites/home-shiny/ */
+export function showdownHomeShinySpriteUrl(speciesSlug: string): string {
+  const s = speciesSlug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '')
+  return `https://play.pokemonshowdown.com/sprites/home-shiny/${encodeURIComponent(s)}.png`
+}
+
 /** Fetch full Pokémon details for wiki. Cached by id/name. */
 const detailCache = new Map<string, PokemonDetail>()
 

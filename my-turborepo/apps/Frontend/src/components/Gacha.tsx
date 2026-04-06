@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import {
   fetchGachaPools,
@@ -17,9 +17,81 @@ import {
   type ExchangeRate,
 } from '../authApi'
 import { AuthModal } from './AuthModal'
+import { showdownHomeShinySpriteUrl, showdownHomeSpriteUrl } from '../pokemonApi'
 
-const CHEST_OPEN_MS = 1800
-const REWARD_REVEAL_MS = 500
+/** Min time on “rolling” before the strip appears (feels fair even on fast API). */
+const MIN_LOOT_MS = 2200
+/** Seconds for the horizontal ease-out roll (CS:GO-style). */
+const GACHA_SPIN_SEC = 8.8
+const GACHA_ITEM_WIDTH_PX = 120
+const GACHA_ITEM_GAP_PX = 8
+const GACHA_ITEM_STRIDE = GACHA_ITEM_WIDTH_PX + GACHA_ITEM_GAP_PX
+
+function stripMinecraftFormatting(value: string): string {
+  return value.replace(/§[0-9a-fk-or]/gi, '').trim()
+}
+
+/**
+ * Pokémon Showdown HOME art — no PokéAPI.
+ * Uses home-shiny when the label contains the word "shiny" (case-insensitive).
+ */
+function gachaShowdownSpriteUrl(rawLabel: string): string | null {
+  const label = stripMinecraftFormatting(rawLabel).trim()
+  if (!label) return null
+  const shiny = /\bshiny\b/i.test(label)
+  const base = label.replace(/\bshiny\b/gi, ' ').replace(/\s+/g, ' ').trim()
+  if (!base) return null
+  const slug = base.toLowerCase().replace(/[^a-z0-9-]/g, '')
+  if (!slug) return null
+  return shiny ? showdownHomeShinySpriteUrl(base) : showdownHomeSpriteUrl(base)
+}
+
+function GachaStripSprite({
+  label,
+  src,
+  imgClassName,
+}: {
+  label: string
+  src: string | null
+  imgClassName?: string
+}) {
+  const [broken, setBroken] = useState(false)
+  const display = stripMinecraftFormatting(label)
+
+  if (!src || broken) {
+    return <span className="gacha-strip-fallback">{display}</span>
+  }
+
+  return (
+    <img
+      src={src}
+      alt={display}
+      className={imgClassName}
+      draggable={false}
+      onError={() => setBroken(true)}
+    />
+  )
+}
+
+function buildLootStrip(winType: string, pool: PoolReward[]): { items: string[]; winIndex: number } {
+  const types = pool.length > 0 ? pool.map((r) => r.reward_type) : [winType]
+  const winIndex = 22 + Math.floor(Math.random() * 14)
+  const items: string[] = []
+  for (let i = 0; i < winIndex; i++) {
+    items.push(types[Math.floor(Math.random() * types.length)]!)
+  }
+  items.push(winType)
+  for (let k = 0; k < 20; k++) {
+    items.push(types[Math.floor(Math.random() * types.length)]!)
+  }
+  return { items, winIndex }
+}
+
+function stripRarityClass(label: string, pool: PoolReward[], totalWeight: number): string {
+  const row = pool.find((r) => r.reward_type === label || stripMinecraftFormatting(r.reward_type) === stripMinecraftFormatting(label))
+  const w = row?.weight ?? Math.max(1, Math.floor(totalWeight / 10))
+  return getRarity(w, totalWeight).className
+}
 
 function getRarity(weight: number, totalWeight: number): { label: string; className: string } {
   const pct = totalWeight > 0 ? (weight / totalWeight) * 100 : 0
@@ -40,7 +112,12 @@ export function Gacha() {
   const [balance, setBalance] = useState<number | null>(null)
   const [pulling, setPulling] = useState(false)
   const [lastReward, setLastReward] = useState<GachaRewardResult | null>(null)
-  const [chestPhase, setChestPhase] = useState<'idle' | 'opening' | 'reveal'>('idle')
+  const [lootPhase, setLootPhase] = useState<'idle' | 'fetching' | 'spinning' | 'result'>('idle')
+  const [stripItems, setStripItems] = useState<string[]>([])
+  const [winIndex, setWinIndex] = useState(-1)
+  const [stripTranslate, setStripTranslate] = useState(0)
+  const [stripTransition, setStripTransition] = useState('none')
+  const [stripSpriteUrls, setStripSpriteUrls] = useState<Record<string, string | null>>({})
   const [poolRewards, setPoolRewards] = useState<PoolReward[]>([])
   const [history, setHistory] = useState<GachaHistoryEntry[]>([])
   const [exchangeRates, setExchangeRates] = useState<ExchangeRate[]>([])
@@ -48,9 +125,32 @@ export function Gacha() {
   const [exchanging, setExchanging] = useState<string | null>(null)
   const [claimingId, setClaimingId] = useState<number | null>(null)
   const [claimPending, setClaimPending] = useState<{ pullId: number; rewardLabel: string } | null>(null)
-  const openStartRef = useRef(0)
   const pendingRewardRef = useRef<GachaRewardResult | null>(null)
-  const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([])
+  const stripViewportRef = useRef<HTMLDivElement>(null)
+  const spinSettledRef = useRef(false)
+
+  const completeLootSpin = useCallback(() => {
+    if (spinSettledRef.current) return
+    spinSettledRef.current = true
+    const result = pendingRewardRef.current
+    if (result) {
+      setLastReward(result)
+      setBalance(result.newBalance)
+    }
+    pendingRewardRef.current = null
+    setLootPhase('result')
+    setPulling(false)
+  }, [])
+
+  const dismissGachaResult = useCallback(() => {
+    setLootPhase('idle')
+    setStripItems([])
+    setWinIndex(-1)
+    setStripTransition('none')
+    setStripTranslate(0)
+    setStripSpriteUrls({})
+    spinSettledRef.current = false
+  }, [])
 
   useEffect(() => {
     if (!isAuthenticated) return
@@ -125,47 +225,77 @@ export function Gacha() {
     }
   }
 
-  const triggerReveal = () => {
-    const result = pendingRewardRef.current
-    if (result) {
-      setLastReward(result)
-      setBalance(result.newBalance)
+  useLayoutEffect(() => {
+    if (lootPhase !== 'spinning' || stripItems.length === 0 || winIndex < 0) return
+    const el = stripViewportRef.current
+    if (!el) return
+
+    const vw = el.offsetWidth
+    const finalT = vw / 2 - GACHA_ITEM_WIDTH_PX / 2 - winIndex * GACHA_ITEM_STRIDE
+    const extraSlots = 32 + Math.floor(Math.random() * 22)
+    const startT = finalT + extraSlots * GACHA_ITEM_STRIDE
+
+    let alive = true
+    setStripTransition('none')
+    setStripTranslate(startT)
+
+    const t = window.setTimeout(() => {
+      if (!alive) return
+      setStripTransition(`transform ${GACHA_SPIN_SEC}s cubic-bezier(0.06, 0.75, 0.12, 1)`)
+      setStripTranslate(finalT)
+    }, 48)
+
+    return () => {
+      alive = false
+      window.clearTimeout(t)
     }
-    setChestPhase('reveal')
-    const t = setTimeout(() => setChestPhase('idle'), REWARD_REVEAL_MS)
-    timeoutsRef.current.push(t)
+  }, [lootPhase, stripItems, winIndex])
+
+  const handleStripTransitionEnd = (e: React.TransitionEvent<HTMLDivElement>) => {
+    if (e.propertyName !== 'transform' || e.target !== e.currentTarget) return
+    completeLootSpin()
   }
 
   useEffect(() => {
-    return () => timeoutsRef.current.forEach(clearTimeout)
-  }, [])
+    if (lootPhase !== 'spinning') return
+    const ms = Math.ceil(GACHA_SPIN_SEC * 1000) + 600
+    const t = window.setTimeout(() => completeLootSpin(), ms)
+    return () => window.clearTimeout(t)
+  }, [lootPhase, completeLootSpin])
 
   const handlePull = async () => {
-    if (!selectedPool || pulling || chestPhase !== 'idle') return
+    if (!selectedPool || pulling || lootPhase !== 'idle') return
     setError(null)
     setLastReward(null)
     setPulling(true)
-    setChestPhase('opening')
+    spinSettledRef.current = false
+    setLootPhase('fetching')
     pendingRewardRef.current = null
-    openStartRef.current = Date.now()
+    setStripItems([])
+    setWinIndex(-1)
 
-    const minOpenT = setTimeout(() => {
-      if (pendingRewardRef.current != null) triggerReveal()
-    }, CHEST_OPEN_MS)
-    timeoutsRef.current.push(minOpenT)
-
+    const started = Date.now()
     try {
       const result = await gachaPull(selectedPool.id)
       pendingRewardRef.current = result
       fetchGachaHistory(30).then(({ history: h }) => setHistory(h)).catch(() => {})
-      const elapsed = Date.now() - openStartRef.current
-      if (elapsed >= CHEST_OPEN_MS) triggerReveal()
+
+      const elapsed = Date.now() - started
+      if (elapsed < MIN_LOOT_MS) {
+        await new Promise((r) => setTimeout(r, MIN_LOOT_MS - elapsed))
+      }
+
+      const { items, winIndex: wIdx } = buildLootStrip(result.reward.reward_type, poolRewards)
+      const unique = [...new Set(items)]
+      setStripSpriteUrls(Object.fromEntries(unique.map((label) => [label, gachaShowdownSpriteUrl(label)])))
+      setStripItems(items)
+      setWinIndex(wIdx)
+      setLootPhase('spinning')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Pull failed')
-      setChestPhase('idle')
+      setLootPhase('idle')
       setPulling(false)
-    } finally {
-      setPulling(false)
+      pendingRewardRef.current = null
     }
   }
 
@@ -184,14 +314,14 @@ export function Gacha() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
             </div>
-            <h2 className="text-xl font-bold text-[#e2e8f0] mb-2">Log in to use Gacha</h2>
+            <h2 className="text-xl font-bold text-[#f5efe6] mb-2">Log in to use Gacha</h2>
             <p className="text-muted mb-6 max-w-sm mx-auto">
               Sign in or create an account to open loot and collect rewards.
             </p>
             <button
               type="button"
               onClick={() => setShowAuth(true)}
-              className="px-6 py-3 pixel-btn-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0f0a1a]"
+              className="px-6 py-3 pixel-btn-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#141210]"
             >
               Log in / Sign up
             </button>
@@ -204,7 +334,7 @@ export function Gacha() {
 
   return (
     <div className="w-full max-w-2xl mx-auto py-6 sm:py-10 px-4">
-      <h1 className="text-2xl font-bold text-[#e2e8f0] mb-6">Gacha</h1>
+      <h1 className="text-2xl font-bold text-[#f5efe6] mb-6">Gacha</h1>
 
       {loading && (
         <p className="text-muted text-center py-8">Loading pools…</p>
@@ -238,7 +368,7 @@ export function Gacha() {
                         className="inline-flex items-center px-3 py-1.5 pixel-well text-base"
                       >
                         <span className="text-muted">{c.currency_type.replace(/_/g, ' ')}:</span>
-                        <span className="ml-1.5 font-medium text-[#e2e8f0]">{c.balance}</span>
+                        <span className="ml-1.5 font-medium text-[#f5efe6]">{c.balance}</span>
                       </span>
                     ))
                   )}
@@ -251,7 +381,7 @@ export function Gacha() {
                   const busy = exchanging === rate.to_currency
                   return (
                     <li key={rate.to_currency} className="flex flex-wrap items-center justify-between gap-3 py-2 px-3 pixel-well">
-                      <span className="text-[#e2e8f0] text-sm">
+                      <span className="text-[#f5efe6] text-sm">
                         {rate.cost_tickets} tickets → <span className="font-medium text-accent">{rate.label}</span>
                       </span>
                       <button
@@ -279,7 +409,7 @@ export function Gacha() {
                   selectedPool?.id === pool.id ? 'ring-2 ring-accent/50 brightness-110' : 'hover:brightness-110'
                 }`}
               >
-                <span className="font-semibold text-[#e2e8f0]">{pool.name}</span>
+                <span className="font-semibold text-[#f5efe6]">{pool.name}</span>
                 <span className="block text-sm text-muted mt-0.5">{pool.type || 'Open loot'}</span>
               </button>
             ))}
@@ -287,20 +417,20 @@ export function Gacha() {
 
           {selectedPool && (
             <div className="pixel-panel-soft p-6 sm:p-8">
-              <h2 className="text-lg font-semibold text-[#e2e8f0] mb-4">{selectedPool.name}</h2>
+              <h2 className="text-lg font-semibold text-[#f5efe6] mb-4">{selectedPool.name}</h2>
               <p className="text-muted text-sm mb-4">
                 Cost: <span className="text-accent font-medium">{cost} {currencyType}</span> per pull
                 {balance !== null && (
-                  <> · Your balance: <span className="text-[#e2e8f0]">{balance} {currencyType}</span></>
+                  <> · Your balance: <span className="text-[#f5efe6]">{balance} {currencyType}</span></>
                 )}
               </p>
               <button
                 type="button"
                 onClick={handlePull}
-                disabled={pulling || chestPhase !== 'idle' || (balance !== null && balance < cost)}
-                className="w-full sm:w-auto min-w-[180px] py-3 px-6 pixel-btn-primary disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#2a2652] touch-manipulation"
+                disabled={pulling || lootPhase !== 'idle' || (balance !== null && balance < cost)}
+                className="w-full sm:w-auto min-w-[180px] py-3 px-6 pixel-btn-primary disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#1f1c18] touch-manipulation"
               >
-                {chestPhase !== 'idle' || pulling ? 'Opening…' : 'Open chest'}
+                {pulling ? (lootPhase === 'spinning' ? 'Spinning…' : 'Opening…') : 'Open loot'}
               </button>
 
               {poolRewards.length > 0 && (
@@ -313,7 +443,7 @@ export function Gacha() {
                       const { label, className } = getRarity(r.weight, totalWeight)
                       return (
                         <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-2 px-3 pixel-well">
-                          <span className="text-[#e2e8f0] text-sm">{r.reward_type}</span>
+                          <span className="text-[#f5efe6] text-sm">{r.reward_type}</span>
                           <span className={`text-xs font-medium px-2 py-0.5 rounded border ${className}`}>{label}</span>
                         </li>
                       )
@@ -323,102 +453,132 @@ export function Gacha() {
                 </div>
               )}
 
-              {/* Chest open overlay */}
-              {(chestPhase === 'opening' || chestPhase === 'reveal') && (
+              {/* CS:GO-style horizontal loot roll */}
+              {lootPhase !== 'idle' && (
                 <div
-                  className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm px-4"
-                  aria-hidden="true"
+                  className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/80 px-3 py-6"
+                  role={lootPhase === 'result' ? 'dialog' : 'presentation'}
+                  aria-modal={lootPhase === 'result' ? true : undefined}
+                  aria-labelledby={lootPhase === 'result' ? 'gacha-result-title' : undefined}
+                  aria-live="polite"
                 >
-                  {chestPhase === 'opening' && (
-                    <div className="gacha-chest-glow flex flex-col items-center">
-                      <div className="gacha-chest-wrap gacha-chest-shake relative w-48 h-32 sm:w-64 sm:h-40">
-                        {/* Golden light beam when lid opens */}
-                        <div
-                          className="absolute inset-0 pointer-events-none gacha-chest-beam"
-                          style={{
-                            background: 'radial-gradient(ellipse 80% 60% at 50% 45%, rgba(201, 162, 39, 0.4) 0%, transparent 70%)',
-                          }}
-                          aria-hidden
-                        />
-                        <svg
-                          viewBox="0 0 160 100"
-                          className="absolute inset-0 w-full h-full"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <defs>
-                            <linearGradient id="chest-wood" x1="0%" y1="0%" x2="0%" y2="100%">
-                              <stop offset="0%" stopColor="#7a5c2e" />
-                              <stop offset="35%" stopColor="#a67c4a" />
-                              <stop offset="100%" stopColor="#5c3d1e" />
-                            </linearGradient>
-                            <linearGradient id="chest-lid-wood" x1="0%" y1="0%" x2="0%" y2="100%">
-                              <stop offset="0%" stopColor="#8b6914" />
-                              <stop offset="50%" stopColor="#b8862e" />
-                              <stop offset="100%" stopColor="#6b4423" />
-                            </linearGradient>
-                            <linearGradient id="chest-metal" x1="0%" y1="0%" x2="0%" y2="100%">
-                              <stop offset="0%" stopColor="#d4af37" />
-                              <stop offset="30%" stopColor="#c9a227" />
-                              <stop offset="100%" stopColor="#8b6914" />
-                            </linearGradient>
-                            <filter id="chest-shadow" x="-20%" y="-20%" width="140%" height="140%">
-                              <feDropShadow dx="0" dy="4" stdDeviation="3" floodOpacity="0.35" />
-                            </filter>
-                          </defs>
-                          {/* Body – rounded box */}
-                          <rect
-                            x="26"
-                            y="52"
-                            width="108"
-                            height="38"
-                            rx="6"
-                            ry="6"
-                            fill="url(#chest-wood)"
-                            stroke="#4a3520"
-                            strokeWidth="2"
-                            filter="url(#chest-shadow)"
-                          />
-                          {/* Metal bands on body */}
-                          <path d="M28 62h104" stroke="url(#chest-metal)" strokeWidth="4" strokeLinecap="round" />
-                          <path d="M28 78h104" stroke="url(#chest-metal)" strokeWidth="4" strokeLinecap="round" />
-                          <rect x="48" y="52" width="8" height="36" rx="2" fill="url(#chest-metal)" stroke="#8b6914" strokeWidth="1" />
-                          <rect x="104" y="52" width="8" height="36" rx="2" fill="url(#chest-metal)" stroke="#8b6914" strokeWidth="1" />
-                          {/* Lid – arched top, opens upward */}
-                          <g className="gacha-chest-lid-open">
-                            <path
-                              d="M32 52 L32 28 Q80 8 128 28 L128 52 Z"
-                              fill="url(#chest-lid-wood)"
-                              stroke="#4a3520"
-                              strokeWidth="2"
-                            />
-                            <path d="M38 52 L38 34 Q80 18 122 34 L122 52" stroke="url(#chest-metal)" strokeWidth="3" fill="none" strokeLinecap="round" />
-                          </g>
-                          {/* Lock – disappears before lid opens */}
-                          <g className="gacha-chest-lock-hide">
-                            <rect x="72" y="44" width="16" height="14" rx="3" fill="url(#chest-metal)" stroke="#8b6914" strokeWidth="1.5" />
-                            <circle cx="80" cy="52" r="2" fill="#2a1810" />
-                          </g>
-                        </svg>
-                      </div>
-                      <p className="text-muted mt-6 text-sm font-medium">Opening chest...</p>
+                  {lootPhase === 'fetching' && (
+                    <div className="text-center max-w-sm">
+                      <p className="gacha-loot-wait-dots text-lg sm:text-xl font-bold text-amber-300 uppercase tracking-[0.2em]">
+                        Opening loot
+                      </p>
+                      <p className="text-muted text-base mt-3 m-0">Fetching your drop from the server…</p>
                     </div>
                   )}
-                  {chestPhase === 'reveal' && lastReward && (
-                    <div className="gacha-reward-pop gacha-reward-shine pixel-panel p-6 sm:p-8 text-center max-w-sm ring-2 ring-accent/50 shadow-[4px_4px_0_#0a0618]">
-                      <p className="text-accent font-semibold text-sm uppercase tracking-wider mb-2">You got</p>
-                      <p className="text-xl sm:text-2xl font-bold text-[#e2e8f0]">{lastReward.reward.reward_type}</p>
-                      <p className="text-muted text-sm mt-3">Balance: {lastReward.newBalance} {currencyType}</p>
+                  {lootPhase === 'result' && lastReward && (
+                    <div
+                      className="w-full max-w-md mx-auto pixel-panel-soft p-6 sm:p-8 text-center ring-2 ring-accent/40 shadow-[4px_4px_0_#0a0618]"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <h2 id="gacha-result-title" className="text-sm font-bold text-amber-400 uppercase tracking-widest m-0 mb-4">
+                        Drop secured
+                      </h2>
+                      <div className="flex flex-col items-center gap-4 mb-6">
+                        <div className="w-[120px] h-[120px] flex items-center justify-center pixel-well rounded-sm overflow-hidden">
+                          <GachaStripSprite
+                            label={lastReward.reward.reward_type}
+                            src={gachaShowdownSpriteUrl(lastReward.reward.reward_type)}
+                            imgClassName="max-h-[112px] max-w-[112px] w-auto h-auto object-contain"
+                          />
+                        </div>
+                        <p className="text-[#f5efe6] text-lg font-semibold m-0 px-2">
+                          {stripMinecraftFormatting(lastReward.reward.reward_type)}
+                        </p>
+                        <p className="text-muted text-sm m-0">
+                          New balance:{' '}
+                          <span className="text-[#f5efe6] font-medium">
+                            {lastReward.newBalance} {currencyType}
+                          </span>
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={dismissGachaResult}
+                        className="w-full py-3 px-6 pixel-btn-primary text-base uppercase tracking-wide touch-manipulation"
+                      >
+                        Continue
+                      </button>
+                    </div>
+                  )}
+                  {lootPhase === 'spinning' && stripItems.length > 0 && (
+                    <div className="w-full max-w-xl mx-auto">
+                      <p className="text-center text-sm font-bold text-amber-400 uppercase tracking-widest mb-4 m-0">
+                        Case opening
+                      </p>
+                      <div ref={stripViewportRef} className="gacha-strip-viewport">
+                        <div
+                          className="pointer-events-none absolute inset-y-0 left-0 w-12 sm:w-16 z-10 bg-gradient-to-r from-[#141210] via-[#141210]/92 to-transparent"
+                          aria-hidden
+                        />
+                        <div
+                          className="pointer-events-none absolute inset-y-0 right-0 w-12 sm:w-16 z-10 bg-gradient-to-l from-[#141210] via-[#141210]/92 to-transparent"
+                          aria-hidden
+                        />
+                        <div
+                          className="pointer-events-none absolute left-1/2 top-0 bottom-0 z-20 w-1 -translate-x-1/2 bg-amber-500 shadow-[0_0_14px_rgba(232,168,56,0.75)]"
+                          aria-hidden
+                        />
+                        <div
+                          className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-1 z-20 text-amber-400 text-xs leading-none"
+                          aria-hidden
+                        >
+                          ▼
+                        </div>
+                        <div
+                          className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-1 z-20 text-amber-400 text-xs leading-none rotate-180"
+                          aria-hidden
+                        >
+                          ▼
+                        </div>
+                        <div
+                          className="flex h-full items-center gap-2 py-2"
+                          style={{
+                            transform: `translateX(${stripTranslate}px)`,
+                            transition: stripTransition,
+                            willChange: stripTransition !== 'none' ? 'transform' : undefined,
+                          }}
+                          onTransitionEnd={handleStripTransitionEnd}
+                        >
+                          {(() => {
+                            const totalW = poolRewards.reduce((s, r) => s + r.weight, 0) || 1
+                            return stripItems.map((label, i) => {
+                              const sprite = stripSpriteUrls[label]
+                              const display = stripMinecraftFormatting(label)
+                              return (
+                                <div
+                                  key={`${i}-${label}`}
+                                  className={`gacha-strip-item ${stripRarityClass(label, poolRewards, totalW)}`}
+                                  title={display}
+                                >
+                                  <GachaStripSprite
+                                    label={label}
+                                    src={sprite}
+                                    imgClassName="gacha-strip-sprite"
+                                  />
+                                </div>
+                              )
+                            })
+                          })()}
+                        </div>
+                      </div>
+                      <p className="text-center text-muted text-sm mt-4 m-0">
+                        Sprites scroll past — your reward stops in the center.
+                      </p>
                     </div>
                   )}
                 </div>
               )}
 
-              {lastReward && chestPhase === 'idle' && (
+              {lastReward && lootPhase === 'idle' && (
                 <div className="mt-6 p-4 pixel-panel-soft ring-2 ring-accent/35">
                   <p className="text-sm text-muted mb-2">You got:</p>
                   <div className="flex flex-wrap items-center gap-4">
-                    <span className="text-[#e2e8f0] font-medium">{lastReward.reward.reward_type}</span>
+                    <span className="text-[#f5efe6] font-medium">{lastReward.reward.reward_type}</span>
                     <span className="text-muted text-sm">New balance: {lastReward.newBalance} {currencyType}</span>
                   </div>
                 </div>
@@ -428,14 +588,14 @@ export function Gacha() {
 
           {isAuthenticated && (
             <div className="mt-8 pixel-panel-soft p-4 sm:p-6">
-              <h3 className="text-lg font-semibold text-[#e2e8f0] mb-1">Your pull history</h3>
+              <h3 className="text-lg font-semibold text-[#f5efe6] mb-1">Your pull history</h3>
               <p className="text-xs text-muted mb-3 m-0">
                 Claim sends the Pokémon to your in-game party via the server. You must be{' '}
-                <strong className="text-[#e2e8f0]">online</strong> on the server, and your{' '}
-                <strong className="text-[#e2e8f0]">Minecraft name must match</strong> your website username.
+                <strong className="text-[#f5efe6]">online</strong> on the server, and your{' '}
+                <strong className="text-[#f5efe6]">Minecraft name must match</strong> your website username.
               </p>
               {history.length === 0 ? (
-                <p className="text-muted text-sm">No pulls yet. Open a chest to see your rewards here.</p>
+                <p className="text-muted text-sm">No pulls yet. Open loot to see your rewards here.</p>
               ) : (
                 <ul className="space-y-2 max-h-64 overflow-y-auto">
                   {history.map((entry) => (
@@ -444,7 +604,7 @@ export function Gacha() {
                       className="flex flex-wrap items-center justify-between gap-2 py-2 px-3 pixel-well text-base"
                     >
                       <div className="min-w-0 flex-1">
-                        <span className="text-[#e2e8f0] block">{entry.rewardType}</span>
+                        <span className="text-[#f5efe6] block">{entry.rewardType}</span>
                         <span className="text-muted text-xs">
                           {entry.poolName} ·{' '}
                           {new Date(entry.pulledAt).toLocaleDateString(undefined, {
@@ -492,10 +652,10 @@ export function Gacha() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-6 sm:p-8">
-              <h2 id="claim-modal-title" className="text-lg font-bold text-[#e2e8f0] m-0 mb-3">
+              <h2 id="claim-modal-title" className="text-lg font-bold text-[#f5efe6] m-0 mb-3">
                 Claim in-game?
               </h2>
-              <p className="text-sm text-[#e2e8f0] m-0 mb-4">
+              <p className="text-sm text-[#f5efe6] m-0 mb-4">
                 Send <span className="font-semibold text-amber-200/95">“{claimPending.rewardLabel}”</span> to your
                 party on the Minecraft server.
               </p>

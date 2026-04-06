@@ -1,20 +1,20 @@
 @import "tailwindcss";
 
 @theme {
-  /* Blue–purple gradient theme (match Frontend) */
-  --color-bg: #0f0a1a;
-  --color-surface: #1e1b4b;
-  --color-surface-hover: #312e81;
-  --color-border: #3730a3;
-  --color-muted: #a5b4d4;
-  --color-accent: #a78bfa;
-  --color-error: #f87171;
-  --color-copper: #b87333;
-  --color-silver: #c0c0c0;
-  --color-gold: #e8b923;
-  --color-emerald: #50c878;
-  --color-diamond: #6ee7f0;
-  --color-netherite: #c4b5fd;
+  /* Retro CRT / amber — aligned with public Frontend */
+  --color-bg: #141210;
+  --color-surface: #1f1c18;
+  --color-surface-hover: #2a2620;
+  --color-border: #3d3830;
+  --color-muted: #9c9588;
+  --color-accent: #e8a838;
+  --color-error: #c45c5c;
+  --color-copper: #d97706;
+  --color-silver: #a8a29e;
+  --color-gold: #eab308;
+  --color-emerald: #6b9b72;
+  --color-diamond: #7eb8c9;
+  --color-netherite: #b8956a;
 }
 
 @layer base {
@@ -22,15 +22,39 @@
     @apply box-border;
   }
   body {
+    isolation: isolate;
     margin: 0;
     min-width: 320px;
     min-height: 100vh;
-    color: #e2e8f0;
+    color: #ebe4d6;
+    font-family: "VT323", ui-monospace, monospace;
+    font-size: 1.125rem;
+    line-height: 1.45;
     font-synthesis: none;
-    text-rendering: optimizeLegibility;
-    -webkit-font-smoothing: antialiased;
-    background: linear-gradient(165deg, #0f0a1a 0%, #1e1b4b 35%, #312e81 65%, #1e1b4b 100%);
+    text-rendering: geometricPrecision;
+    -webkit-font-smoothing: none;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: #141210;
+    background-image:
+      radial-gradient(ellipse 100% 80% at 50% 0%, rgba(232, 168, 56, 0.08), transparent 50%),
+      radial-gradient(ellipse 70% 50% at 100% 100%, rgba(139, 90, 43, 0.12), transparent 45%),
+      linear-gradient(180deg, #181512 0%, #12100e 45%, #0e0c0a 100%);
     background-attachment: fixed;
+  }
+  body::after {
+    content: "";
+    pointer-events: none;
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    opacity: 0.055;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 0, 0, 0.4) 2px,
+      rgba(0, 0, 0, 0.4) 4px
+    );
   }
   #root {
     @apply min-h-screen;
@@ -39,7 +63,7 @@
     @apply text-accent no-underline;
   }
   a:hover {
-    @apply underline;
+    @apply underline text-amber-200;
   }
 }
 

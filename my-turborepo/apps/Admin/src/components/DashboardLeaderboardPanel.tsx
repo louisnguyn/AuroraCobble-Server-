@@ -42,7 +42,7 @@ const TIER_COLOR_CLASS: Record<string, string> = {
   gold: 'text-amber-300',
   emerald: 'text-emerald-300',
   diamond: 'text-cyan-300',
-  netherite: 'text-violet-300',
+  netherite: 'text-netherite',
 }
 
 function getFormatDisplayName(id: string): string {
@@ -85,7 +85,7 @@ function MainTab({
       onClick={onClick}
       className={`py-3 px-5 rounded-xl text-sm font-semibold transition-all duration-200 border ${
         active
-          ? 'border-violet-400/50 text-violet-100 bg-violet-600/20 shadow-[0_0_20px_rgba(139,92,246,0.22)] ring-1 ring-violet-400/30'
+          ? 'border-amber-400/50 text-amber-100 bg-amber-600/20 shadow-[0_0_20px_rgba(232,168,56,0.22)] ring-1 ring-amber-400/30'
           : 'border-white/10 text-slate-400 bg-black/20 hover:text-white hover:bg-white/5 hover:border-white/20'
       }`}
     >
@@ -111,7 +111,7 @@ function SubTab({
       onClick={onClick}
       className={`py-2.5 px-4 rounded-xl text-sm font-medium transition-all duration-200 border ${
         active
-          ? 'border-violet-400/45 text-violet-100 bg-violet-600/15 shadow-[0_0_16px_rgba(139,92,246,0.18)] ring-1 ring-violet-400/25'
+          ? 'border-amber-400/45 text-amber-100 bg-amber-600/15 shadow-[0_0_16px_rgba(232,168,56,0.18)] ring-1 ring-amber-400/25'
           : 'border-white/10 text-slate-400 bg-black/15 hover:text-white hover:bg-white/5'
       }`}
     >
@@ -181,7 +181,7 @@ function BattleTowerMetricColumn({
               ref={isYou ? youRowRef : undefined}
               className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 transition-shadow duration-300 scroll-mt-24 ${
                 isYou
-                  ? 'border-violet-400/50 bg-violet-500/10 ring-2 ring-violet-400/35 shadow-[0_0_20px_rgba(139,92,246,0.2)]'
+                  ? 'border-amber-400/50 bg-amber-500/10 ring-2 ring-amber-400/35 shadow-[0_0_20px_rgba(232,168,56,0.2)]'
                   : 'border-white/5 bg-black/25'
               }`}
             >
@@ -351,11 +351,11 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
   const mainDescription = MAIN_SECTIONS.find((s) => s.id === mainSection)?.description ?? ''
 
   return (
-    <div className="rounded-2xl border border-violet-500/20 bg-gradient-to-br from-indigo-950/50 via-slate-950/40 to-slate-950/60 p-5 sm:p-6 shadow-xl shadow-black/20">
+    <div className="rounded-2xl border border-amber-500/20 bg-gradient-to-br from-stone-950/50 via-slate-950/40 to-slate-950/60 p-5 sm:p-6 shadow-xl shadow-black/20">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
         <div>
           <h2 className="text-lg font-semibold text-white m-0 flex items-center gap-2">
-            <span className="inline-block h-2 w-2 rounded-full bg-violet-400 shadow-[0_0_8px_#a78bfa]" />
+            <span className="inline-block h-2 w-2 rounded-full bg-amber-400 shadow-[0_0_8px_#e8a838]" />
             Leaderboards
           </h2>
           <p className="text-xs text-slate-500 m-0 mt-1">
@@ -409,15 +409,15 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
                 <>
                   {yourRankPlayer ? (
                     <div
-                      className="rounded-xl border border-violet-400/40 bg-violet-500/10 px-4 py-3 mb-3 shadow-[0_0_20px_rgba(139,92,246,0.15)]"
+                      className="rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-3 mb-3 shadow-[0_0_20px_rgba(232,168,56,0.15)]"
                       role="status"
                     >
-                      <p className="text-xs font-semibold uppercase tracking-wide text-violet-200 m-0 mb-1">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-amber-200 m-0 mb-1">
                         Your current rank
                       </p>
                       <p className="text-sm text-slate-100 m-0">
                         <span className="font-mono font-semibold">{yourRankPlayer.playerName}</span> —{' '}
-                        <strong className="text-violet-200 tabular-nums">#{yourRankPlayer.rank}</strong> in{' '}
+                        <strong className="text-amber-200 tabular-nums">#{yourRankPlayer.rank}</strong> in{' '}
                         {getFormatDisplayName(rankFormatId)} · {yourRankPlayer.elo} ELO ·{' '}
                         <span className={TIER_COLOR_CLASS[getTier(yourRankPlayer.elo).slug] ?? 'text-slate-400'}>
                           {getTier(yourRankPlayer.elo).displayName}
@@ -475,7 +475,7 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
                             ref={isYou ? rankYouRef : undefined}
                             className={`scroll-mt-24 ${
                               isYou
-                                ? 'bg-violet-500/10 ring-1 ring-inset ring-violet-400/30 hover:bg-violet-500/[0.14]'
+                                ? 'bg-amber-500/10 ring-1 ring-inset ring-amber-400/30 hover:bg-amber-500/[0.14]'
                                 : 'hover:bg-white/[0.04]'
                             }`}
                           >
@@ -540,15 +540,15 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
               </header>
               {cdYourIndex >= 0 && cdData.top10[cdYourIndex] ? (
                 <div
-                  className="rounded-xl border border-violet-400/40 bg-violet-500/10 px-4 py-3 mb-3 max-w-2xl"
+                  className="rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-3 mb-3 max-w-2xl"
                   role="status"
                 >
-                  <p className="text-xs font-semibold uppercase tracking-wide text-violet-200 m-0 mb-1">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-amber-200 m-0 mb-1">
                     Your position
                   </p>
                   <p className="text-sm text-slate-100 m-0">
                     <span className="font-mono font-semibold">{cdData.top10[cdYourIndex].name}</span> — rank{' '}
-                    <strong className="tabular-nums text-violet-200">{cdYourIndex + 1}</strong> with{' '}
+                    <strong className="tabular-nums text-amber-200">{cdYourIndex + 1}</strong> with{' '}
                     <strong className="tabular-nums text-amber-200">
                       {Number(cdData.top10[cdYourIndex].balance).toLocaleString()}
                     </strong>{' '}
@@ -563,7 +563,7 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
                     ref={i === cdYourIndex ? cdYouRef : undefined}
                     className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 transition-shadow scroll-mt-24 ${
                       i === cdYourIndex
-                        ? 'border-violet-400/50 bg-violet-500/10 ring-2 ring-violet-400/35'
+                        ? 'border-amber-400/50 bg-amber-500/10 ring-2 ring-amber-400/35'
                         : 'border-white/5 bg-black/25'
                     }`}
                   >
@@ -642,13 +642,13 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
               </header>
               {(battleFloorYou || battleStreakYou) && (
                 <div
-                  className="rounded-xl border border-violet-400/40 bg-violet-500/10 px-4 py-3"
+                  className="rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-3"
                   role="status"
                 >
-                  <p className="text-xs font-semibold uppercase tracking-wide text-violet-200 m-0 mb-1.5">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-amber-200 m-0 mb-1.5">
                     Your entries
                   </p>
-                  <ul className="m-0 pl-4 text-sm text-slate-100 space-y-1 list-disc marker:text-violet-400/80">
+                  <ul className="m-0 pl-4 text-sm text-slate-100 space-y-1 list-disc marker:text-amber-400/80">
                     {battleFloorYou ? (
                       <li>
                         <span className="font-mono">{battleFloorYou.name}</span> — floor list #

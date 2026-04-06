@@ -179,7 +179,7 @@ function BattleTowerMetricColumn({
               }`}
             >
               <span className="flex min-w-0 items-center gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center pixel-well text-base font-bold tabular-nums text-sky-300">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center pixel-well text-base font-bold tabular-nums text-amber-400/90">
                   {row.rank}
                 </span>
                 <span className="font-mono text-base text-[#e2e8f0] truncate" title={row.name}>
@@ -206,7 +206,7 @@ function BattleTowerMetricColumn({
               key={`${metric}-fb-${idx}-${line.slice(0, 24)}`}
               className="flex items-start gap-3 pixel-panel-soft px-4 py-3"
             >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center pixel-well text-base font-bold tabular-nums text-sky-300">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center pixel-well text-base font-bold tabular-nums text-amber-400/90">
                 {idx + 1}
               </span>
               <span className="text-base text-[#e2e8f0]/95 leading-snug break-words min-w-0 pt-0.5">{line}</span>
@@ -523,7 +523,7 @@ export function Leaderboard() {
           </div>
 
           <p className="text-xs text-muted m-0">
-            Top 10 per mode · <code className="text-sky-300/90">bt leaderboard</code> (RCON) · cached ~90s
+            Top 10 per mode · <code className="text-amber-400/90/90">bt leaderboard</code> (RCON) · cached ~90s
           </p>
 
           {btLoading && !btData ? (

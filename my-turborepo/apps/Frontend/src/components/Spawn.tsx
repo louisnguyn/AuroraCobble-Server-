@@ -31,10 +31,10 @@ function rarityColor(value: string | null): string {
   if (v === '—') return 'text-muted'
   if (v.includes('common')) return 'text-muted'
   if (v.includes('uncommon')) return 'text-emerald-300'
-  if (v.includes('rare')) return 'text-sky-300'
+  if (v.includes('rare')) return 'text-amber-400'
   if (v.includes('epic')) return 'text-purple-300'
   if (v.includes('legend')) return 'text-amber-300'
-  if (v.includes('mythic')) return 'text-fuchsia-300'
+  if (v.includes('mythic')) return 'text-orange-400'
   // fallback
   return 'text-[#e2e8f0]'
 }
@@ -191,7 +191,7 @@ export function Spawn() {
                       <td className="py-2 px-3 text-emerald-300 tabular-nums">
                         {formatRate(row.normal_rate)}
                       </td>
-                      <td className="py-2 px-3 text-fuchsia-300 tabular-nums">
+                      <td className="py-2 px-3 text-orange-400 tabular-nums">
                         {formatRate(row.shiny_rate)}
                       </td>
                       {(() => {

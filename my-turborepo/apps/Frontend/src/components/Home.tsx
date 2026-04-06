@@ -42,14 +42,14 @@ export function Home({ onNavigate }: HomeProps) {
       {/* Hero */}
       <section className="relative text-center mb-12 sm:mb-16">
         <div className="absolute inset-0 -z-10 overflow-hidden pointer-events-none">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(120%,600px)] h-[min(120%,400px)] rounded-full blur-3xl bg-gradient-to-br from-sky-500/10 via-fuchsia-500/10 to-transparent" />
-          <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-sky-400/40 to-transparent" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(120%,600px)] h-[min(120%,400px)] rounded-full blur-3xl bg-gradient-to-br from-amber-600/12 via-orange-900/10 to-transparent" />
+          <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-amber-600/35 to-transparent" />
         </div>
         <div className="relative">
           <img
             src="/logo.png"
             alt="Aurora Cobble"
-            className="block w-full max-w-[min(480px,90vw)] h-auto mx-auto mb-6 object-contain drop-shadow-[0_0_48px_rgba(56,189,248,0.25)]"
+            className="block w-full max-w-[min(480px,90vw)] h-auto mx-auto mb-6 object-contain drop-shadow-[0_0_40px_rgba(232,168,56,0.22)]"
           />
           <p className="text-xl sm:text-2xl text-muted font-semibold tracking-wide m-0">
             Cobblemon ranked stats & leaderboards
@@ -67,9 +67,9 @@ export function Home({ onNavigate }: HomeProps) {
             key={id}
             type="button"
             onClick={() => onNavigate?.(id)}
-            className="group pixel-panel-soft text-left w-full p-5 sm:p-6 transition-[filter] duration-150 hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#050510]"
+            className="group pixel-panel-soft text-left w-full p-5 sm:p-6 transition-[filter] duration-150 hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/65 focus-visible:ring-offset-2 focus-visible:ring-offset-[#141210]"
           >
-            <span className="block text-lg font-bold text-[#e2e8f0] group-hover:text-accent transition-colors">
+            <span className="block text-lg font-bold text-[#f5efe6] group-hover:text-accent transition-colors">
               {label}
             </span>
             <span className="block text-base text-muted mt-1.5">{description}</span>

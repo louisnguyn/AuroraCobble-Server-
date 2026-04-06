@@ -11,17 +11,15 @@ function StatCard({
   label: string
   value: ReactNode
   sub?: string
-  accent?: 'emerald' | 'violet' | 'amber' | 'sky'
+  accent?: 'emerald' | 'amber' | 'sky'
 }) {
   /* Static classes so Tailwind always emits them (dynamic strings can break + layout). */
   const accentBg =
     accent === 'emerald'
       ? 'bg-gradient-to-br from-emerald-500/20 to-teal-600/10'
-      : accent === 'amber'
-        ? 'bg-gradient-to-br from-amber-500/20 to-orange-600/10'
-        : accent === 'sky'
-          ? 'bg-gradient-to-br from-sky-500/20 to-blue-600/10'
-          : 'bg-gradient-to-br from-violet-500/20 to-indigo-600/10'
+      : accent === 'sky'
+        ? 'bg-gradient-to-br from-sky-500/20 to-blue-600/10'
+        : 'bg-gradient-to-br from-amber-500/20 to-orange-600/10'
 
   return (
     <div
@@ -52,7 +50,7 @@ function DetailGrid({ data }: { data: MinecraftDashboardResponse }) {
 
   return (
     <div className="rounded-2xl border border-white/10 bg-surface/40 backdrop-blur-sm p-5">
-      <h3 className="text-sm font-semibold text-violet-200/90 m-0 mb-4 flex items-center gap-2">
+      <h3 className="text-sm font-semibold text-amber-200/90 m-0 mb-4 flex items-center gap-2">
         <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]" />
         Server metadata
       </h3>
@@ -134,7 +132,7 @@ export function MinecraftDashboard({ viewerUsername }: { viewerUsername?: string
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-white m-0 bg-gradient-to-r from-white via-violet-100 to-indigo-200 bg-clip-text text-transparent">
+          <h1 className="text-3xl font-bold tracking-tight text-white m-0 bg-gradient-to-r from-white via-amber-100 to-stone-200 bg-clip-text text-transparent">
             Server Dashboard
           </h1>
         </div>
@@ -142,7 +140,7 @@ export function MinecraftDashboard({ viewerUsername }: { viewerUsername?: string
           type="button"
           onClick={load}
           disabled={loading}
-          className="shrink-0 inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 border border-white/10 shadow-lg shadow-violet-900/40 disabled:opacity-50 transition-all"
+          className="shrink-0 inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-amber-600 to-stone-600 hover:from-amber-500 hover:to-stone-500 border border-white/10 shadow-lg shadow-amber-900/40 disabled:opacity-50 transition-all"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
             <path
@@ -172,8 +170,8 @@ export function MinecraftDashboard({ viewerUsername }: { viewerUsername?: string
       {data && (
         <>
           {/* Hero */}
-          <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-indigo-950/90 via-[#1e1b4b]/90 to-slate-950/90 p-6 sm:p-8 shadow-2xl shadow-indigo-950/50">
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(139,92,246,0.25),transparent)] pointer-events-none" />
+          <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-stone-950/90 via-[#2a2218]/90 to-slate-950/90 p-6 sm:p-8 shadow-2xl shadow-stone-950/50">
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(232,168,56,0.2),transparent)] pointer-events-none" />
             {/* Grid (not flex) avoids flex-1 + nested grid overlap bugs on narrow / lg layouts */}
             <div className="relative grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:items-start lg:gap-10">
               <div className="flex min-w-0 items-start gap-5">
@@ -193,7 +191,7 @@ export function MinecraftDashboard({ viewerUsername }: { viewerUsername?: string
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-violet-300/80 m-0">Your server</p>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-amber-300/80 m-0">Your server</p>
                   <p className="text-xl sm:text-2xl font-bold text-white m-0 mt-1 line-clamp-3">
                     {data.motd || 'Minecraft server'}
                   </p>
@@ -228,7 +226,7 @@ export function MinecraftDashboard({ viewerUsername }: { viewerUsername?: string
                     sub="Round-trip"
                     accent="sky"
                   />
-                  <StatCard label="Protocol" value={data.protocol ?? '—'} accent="violet" />
+                  <StatCard label="Protocol" value={data.protocol ?? '—'} accent="amber" />
                   <StatCard
                     label="Accounts"
                     value={data.rosterAccountCount ?? data.players.length}
@@ -243,7 +241,7 @@ export function MinecraftDashboard({ viewerUsername }: { viewerUsername?: string
           {/* Stats row 2 */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="rounded-2xl border border-white/10 bg-surface/40 backdrop-blur-sm p-5">
-              <h3 className="text-sm font-semibold text-violet-200/90 m-0 mb-3">Message of the day</h3>
+              <h3 className="text-sm font-semibold text-amber-200/90 m-0 mb-3">Message of the day</h3>
               <p className="text-lg text-slate-100 m-0 leading-snug">{data.motd || '—'}</p>
             </div>
             <DetailGrid data={data} />
@@ -251,14 +249,14 @@ export function MinecraftDashboard({ viewerUsername }: { viewerUsername?: string
 
           {data.plugins && data.plugins.length > 0 && (
             <div className="rounded-2xl border border-white/10 bg-surface/40 backdrop-blur-sm p-5">
-              <h3 className="text-sm font-semibold text-violet-200/90 m-0 mb-4">
+              <h3 className="text-sm font-semibold text-amber-200/90 m-0 mb-4">
                 Plugins / mods ({data.plugins.length})
               </h3>
               <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto pr-1">
                 {data.plugins.map((line, i) => (
                   <span
                     key={`${i}-${line.slice(0, 48)}`}
-                    className="inline-block max-w-full truncate rounded-lg border border-indigo-500/25 bg-indigo-950/40 px-3 py-1.5 text-xs font-mono text-indigo-100/90"
+                    className="inline-block max-w-full truncate rounded-lg border border-stone-500/25 bg-stone-950/40 px-3 py-1.5 text-xs font-mono text-stone-100/90"
                     title={line}
                   >
                     {line}
@@ -275,7 +273,7 @@ export function MinecraftDashboard({ viewerUsername }: { viewerUsername?: string
           )}
 
           {data.rosterNote && (
-            <div className="rounded-xl border border-violet-500/25 bg-violet-950/30 px-4 py-3 text-sm text-violet-100/90">
+            <div className="rounded-xl border border-amber-500/25 bg-amber-950/30 px-4 py-3 text-sm text-amber-100/90">
               {data.rosterNote}
             </div>
           )}
@@ -316,7 +314,7 @@ export function MinecraftDashboard({ viewerUsername }: { viewerUsername?: string
                   placeholder="Search name…"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/50 min-w-[200px]"
+                  className="rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 min-w-[200px]"
                 />
                 <div className="flex rounded-xl border border-white/10 p-0.5 bg-black/20">
                   {(['all', 'online', 'offline'] as const).map((f) => (
@@ -326,7 +324,7 @@ export function MinecraftDashboard({ viewerUsername }: { viewerUsername?: string
                       onClick={() => setFilter(f)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors ${
                         filter === f
-                          ? 'bg-violet-600 text-white shadow'
+                          ? 'bg-amber-600 text-white shadow'
                           : 'text-slate-400 hover:text-white'
                       }`}
                     >
@@ -392,7 +390,7 @@ export function MinecraftDashboard({ viewerUsername }: { viewerUsername?: string
                             {p.status}
                           </span>
                         </td>
-                        <td className="px-2 py-3 align-middle text-center text-sm text-violet-200/90 font-semibold tabular-nums">
+                        <td className="px-2 py-3 align-middle text-center text-sm text-amber-200/90 font-semibold tabular-nums">
                           {p.streakDays > 0 ? `${p.streakDays}d` : '—'}
                         </td>
                         <td className="px-4 py-3 align-middle text-center text-sm text-slate-300 tabular-nums">

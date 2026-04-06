@@ -75,14 +75,14 @@ function PlayerSlot({
     const label = formatPendingMatchLabel(slot.matchKey ?? '')
     return (
       <div
-        className="rounded-lg border border-sky-500/35 bg-sky-950/40 px-2 py-2 text-center leading-snug shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+        className="rounded-lg border border-amber-900/40 bg-[#1f1c18]/90 px-2 py-2 text-center leading-snug shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
         role="status"
         aria-label={`Pending: winner of ${label}`}
       >
-        <span className="block text-[10px] font-semibold uppercase tracking-wider text-sky-400/85 mb-1">
+        <span className="block text-[10px] font-semibold uppercase tracking-wider text-amber-500/90 mb-1">
           Pending
         </span>
-        <span className="text-xs text-sky-100/90">Winner of {label}</span>
+        <span className="text-xs text-[#f0ebe3]/90">Winner of {label}</span>
       </div>
     )
   }
@@ -90,14 +90,14 @@ function PlayerSlot({
     const label = formatPendingMatchLabel(slot.matchKey ?? '')
     return (
       <div
-        className="rounded-lg border border-sky-500/35 bg-sky-950/40 px-2 py-2 text-center leading-snug shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+        className="rounded-lg border border-amber-900/40 bg-[#1f1c18]/90 px-2 py-2 text-center leading-snug shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
         role="status"
         aria-label={`Pending: loser of ${label}`}
       >
-        <span className="block text-[10px] font-semibold uppercase tracking-wider text-sky-400/85 mb-1">
+        <span className="block text-[10px] font-semibold uppercase tracking-wider text-amber-500/90 mb-1">
           Pending
         </span>
-        <span className="text-xs text-sky-100/90">Loser of {label}</span>
+        <span className="text-xs text-[#f0ebe3]/90">Loser of {label}</span>
       </div>
     )
   }
@@ -112,7 +112,7 @@ function PlayerSlot({
         won ? 'border-emerald-500/60 bg-emerald-500/10 ring-1 ring-emerald-500/30' : 'border-border bg-surface/80'
       }`}
     >
-      <div className={`text-xs font-semibold truncate mb-1 ${won ? 'text-emerald-200' : 'text-sky-300'}`}>
+      <div className={`text-xs font-semibold truncate mb-1 ${won ? 'text-emerald-200' : 'text-amber-200/90'}`}>
         {slot.name}
       </div>
       <div className="flex w-full min-w-0 flex-nowrap items-center justify-between">
@@ -132,8 +132,8 @@ function MatchCard({
   onOpenPlayer: (id: number) => void
 }) {
   return (
-    <div className="rounded-xl border border-sky-400/25 bg-sky-950/20 p-2 space-y-1 w-full min-w-0">
-      <p className="text-[10px] uppercase tracking-wider text-sky-200/70 font-semibold m-0 text-center">{m.label}</p>
+    <div className="rounded-xl border border-amber-800/30 bg-[#1a1814]/70 p-2 space-y-1 w-full min-w-0">
+      <p className="text-[10px] uppercase tracking-wider text-[#c4b8a5]/85 font-semibold m-0 text-center">{m.label}</p>
       <PlayerSlot slot={m.left} winnerId={m.winnerParticipantId} onOpen={onOpenPlayer} />
       <PlayerSlot slot={m.right} winnerId={m.winnerParticipantId} onOpen={onOpenPlayer} />
     </div>
@@ -203,7 +203,7 @@ export function Tournament({
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6 pb-12">
       <header className="space-y-2">
-        <h1 className="text-2xl font-semibold text-[#e2e8f0] m-0">Tournament</h1>
+        <h1 className="text-2xl font-semibold text-[#f5efe6] m-0">Tournament</h1>
         <p className="text-sm text-muted m-0">
           Qualifying (seeds 5–12) → Quarter-finals (seeds 1–4 enter) → Semi-finals → Final & 3rd place. Click a player
           for team details.
@@ -256,9 +256,9 @@ export function Tournament({
       ) : err ? (
         <p className="text-error text-sm">{err}</p>
       ) : data ? (
-        <div className="relative rounded-3xl border border-sky-500/20 overflow-hidden bg-gradient-to-br from-sky-950/40 via-[#0c4a6e]/25 to-slate-950/80 p-4 sm:p-6">
+        <div className="relative rounded-3xl border border-amber-900/35 overflow-hidden bg-gradient-to-br from-[#1f1c18]/95 via-[#2a2218]/55 to-[#0f0d0b] p-4 sm:p-6">
           <div
-            className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-[0.07] text-4xl sm:text-6xl font-black text-sky-100 tracking-widest select-none"
+            className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-[0.07] text-4xl sm:text-6xl font-black text-[#f5efe6] tracking-widest select-none"
             aria-hidden
           >
             AURORA COBBLE
@@ -266,11 +266,11 @@ export function Tournament({
           <div className="relative space-y-6 w-full min-w-0">
             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
               <div>
-                <h2 className="text-xl font-bold text-sky-100 m-0">{data.tournament.title}</h2>
+                <h2 className="text-xl font-bold text-[#f5efe6] m-0">{data.tournament.title}</h2>
                 {data.tournament.subtitle ? (
-                  <p className="text-sm text-sky-200/80 m-0 mt-1">{data.tournament.subtitle}</p>
+                  <p className="text-sm text-[#d9cec0]/85 m-0 mt-1">{data.tournament.subtitle}</p>
                 ) : null}
-                <p className="text-xs text-sky-300/60 m-0 mt-2">
+                <p className="text-xs text-[#b8a995]/75 m-0 mt-2">
                   Updated {new Date(data.tournament.updatedAt).toLocaleString()} · auto-refresh ~20s
                 </p>
               </div>
@@ -287,7 +287,7 @@ export function Tournament({
             </div>
 
             <section className="w-full min-w-0">
-              <h3 className="text-sm font-semibold text-sky-200 m-0 mb-3">Qualifying (seeds 5–12)</h3>
+              <h3 className="text-sm font-semibold text-[#d9cec0] m-0 mb-3">Qualifying (seeds 5–12)</h3>
               {/*
                 Space goes *between* cards: equal columns + wide column-gap (not a lump of empty space on the right).
                 md+ = four across; smaller screens = 2×2 with the same gap logic.
@@ -300,7 +300,7 @@ export function Tournament({
             </section>
 
             <section className="w-full min-w-0">
-              <h3 className="text-sm font-semibold text-sky-200 m-0 mb-3">Quarter-finals</h3>
+              <h3 className="text-sm font-semibold text-[#d9cec0] m-0 mb-3">Quarter-finals</h3>
               <div className="grid w-full min-w-0 grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-4 sm:gap-x-6 sm:gap-y-5 md:gap-x-8 md:gap-y-5 lg:gap-x-10">
                 {byRound('quarter').map((m) => (
                   <MatchCard key={m.key} m={m} onOpenPlayer={onOpenPlayer} />
@@ -310,7 +310,7 @@ export function Tournament({
 
             <section className="w-full min-w-0">
               <div className="max-w-4xl mx-auto">
-                <h3 className="text-sm font-semibold text-sky-200 m-0 mb-3 text-center">Semi-finals</h3>
+                <h3 className="text-sm font-semibold text-[#d9cec0] m-0 mb-3 text-center">Semi-finals</h3>
                 <div className="grid w-full min-w-0 grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 sm:gap-x-8">
                   {byRound('semi').map((m) => (
                     <MatchCard key={m.key} m={m} onOpenPlayer={onOpenPlayer} />
