@@ -127,15 +127,33 @@ function PlayerSlot({
 function MatchCard({
   m,
   onOpenPlayer,
+  onComparePair,
 }: {
   m: TournamentBracketMatch
   onOpenPlayer: (id: number) => void
+  onComparePair?: (participantIdA: number, participantIdB: number) => void
 }) {
+  const canCompare =
+    onComparePair &&
+    m.left.kind === 'participant' &&
+    m.right.kind === 'participant' &&
+    m.left.id != null &&
+    m.right.id != null
+
   return (
     <div className="rounded-xl border border-amber-800/30 bg-[#1a1814]/70 p-2 space-y-1 w-full min-w-0">
       <p className="text-[10px] uppercase tracking-wider text-[#c4b8a5]/85 font-semibold m-0 text-center">{m.label}</p>
       <PlayerSlot slot={m.left} winnerId={m.winnerParticipantId} onOpen={onOpenPlayer} />
       <PlayerSlot slot={m.right} winnerId={m.winnerParticipantId} onOpen={onOpenPlayer} />
+      {canCompare ? (
+        <button
+          type="button"
+          onClick={() => onComparePair!(m.left.id!, m.right.id!)}
+          className="w-full mt-1 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-accent border border-accent/35 rounded-lg bg-accent/5 hover:bg-accent/15 hover:border-accent/55 transition-colors"
+        >
+          Compare both teams
+        </button>
+      ) : null}
     </div>
   )
 }
@@ -144,10 +162,17 @@ export function Tournament({
   slug: initialSlug,
   onOpenPlayer,
   onSlugChange,
+  comparePickFirst,
+  onCancelComparePick,
+  onComparePair,
 }: {
   slug: string
   onOpenPlayer: (participantId: number) => void
   onSlugChange?: (slug: string) => void
+  /** When set, the next participant slot opens compare view with this id as the first team. */
+  comparePickFirst?: number
+  onCancelComparePick?: () => void
+  onComparePair?: (participantIdA: number, participantIdB: number) => void
 }) {
   const [slugInput, setSlugInput] = useState(initialSlug)
   useEffect(() => {
@@ -206,8 +231,25 @@ export function Tournament({
         <h1 className="text-2xl font-semibold text-[#f5efe6] m-0">Tournament</h1>
         <p className="text-sm text-muted m-0">
           Qualifying (seeds 5–12) → Quarter-finals (seeds 1–4 enter) → Semi-finals → Final & 3rd place. Click a player
-          for team details.
+          for team details. Use <span className="text-[#f5efe6]/90">Compare both teams</span> on a match when both slots
+          are filled.
         </p>
+        {comparePickFirst != null ? (
+          <div
+            className="flex flex-wrap items-center justify-between gap-3 p-3 pixel-panel-soft border-l-4 border-accent"
+            role="status"
+          >
+            <p className="text-sm text-[#f5efe6] m-0">
+              Comparing teams: pick <strong className="text-accent">another player</strong> on the bracket. Same slot again
+              cancels.
+            </p>
+            {onCancelComparePick ? (
+              <button type="button" onClick={onCancelComparePick} className="shrink-0 py-1.5 px-3 text-sm pixel-btn">
+                Cancel
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
           <label className="flex flex-col gap-1 text-xs text-muted min-w-[min(100%,280px)] sm:max-w-md">
             Bracket
@@ -294,7 +336,7 @@ export function Tournament({
               */}
               <div className="grid w-full min-w-0 grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-4 sm:gap-x-6 sm:gap-y-5 md:gap-x-8 md:gap-y-5 lg:gap-x-10">
                 {byRound('qualifying').map((m) => (
-                  <MatchCard key={m.key} m={m} onOpenPlayer={onOpenPlayer} />
+                  <MatchCard key={m.key} m={m} onOpenPlayer={onOpenPlayer} onComparePair={onComparePair} />
                 ))}
               </div>
             </section>
@@ -303,7 +345,7 @@ export function Tournament({
               <h3 className="text-sm font-semibold text-[#d9cec0] m-0 mb-3">Quarter-finals</h3>
               <div className="grid w-full min-w-0 grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-4 sm:gap-x-6 sm:gap-y-5 md:gap-x-8 md:gap-y-5 lg:gap-x-10">
                 {byRound('quarter').map((m) => (
-                  <MatchCard key={m.key} m={m} onOpenPlayer={onOpenPlayer} />
+                  <MatchCard key={m.key} m={m} onOpenPlayer={onOpenPlayer} onComparePair={onComparePair} />
                 ))}
               </div>
             </section>
@@ -313,7 +355,7 @@ export function Tournament({
                 <h3 className="text-sm font-semibold text-[#d9cec0] m-0 mb-3 text-center">Semi-finals</h3>
                 <div className="grid w-full min-w-0 grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 sm:gap-x-8">
                   {byRound('semi').map((m) => (
-                    <MatchCard key={m.key} m={m} onOpenPlayer={onOpenPlayer} />
+                    <MatchCard key={m.key} m={m} onOpenPlayer={onOpenPlayer} onComparePair={onComparePair} />
                   ))}
                 </div>
               </div>
@@ -327,7 +369,7 @@ export function Tournament({
                   </h3>
                   <div className="grid grid-cols-1 gap-2 sm:gap-3 w-full min-w-0">
                     {byRound('final').map((m) => (
-                      <MatchCard key={m.key} m={m} onOpenPlayer={onOpenPlayer} />
+                      <MatchCard key={m.key} m={m} onOpenPlayer={onOpenPlayer} onComparePair={onComparePair} />
                     ))}
                   </div>
                 </div>
@@ -335,7 +377,7 @@ export function Tournament({
                   <h3 className="text-sm font-semibold text-slate-300 m-0 mb-3 text-center">3rd place</h3>
                   <div className="grid grid-cols-1 gap-2 sm:gap-3 w-full min-w-0">
                     {byRound('third').map((m) => (
-                      <MatchCard key={m.key} m={m} onOpenPlayer={onOpenPlayer} />
+                      <MatchCard key={m.key} m={m} onOpenPlayer={onOpenPlayer} onComparePair={onComparePair} />
                     ))}
                   </div>
                 </div>

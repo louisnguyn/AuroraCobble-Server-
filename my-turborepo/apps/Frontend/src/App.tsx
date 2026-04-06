@@ -11,6 +11,7 @@ import { AuthModal } from './components/AuthModal.tsx'
 import { Account } from './components/Account.tsx'
 import { Spawn } from './components/Spawn.tsx'
 import { Tournament } from './components/Tournament.tsx'
+import { TournamentTeamCompare } from './components/TournamentTeamCompare.tsx'
 import { TournamentTeamDetail } from './components/TournamentTeamDetail.tsx'
 type Page =
   | 'main'
@@ -40,9 +41,12 @@ function AppContent() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [showAuth, setShowAuth] = useState(false)
   const { isAuthenticated, user, logout } = useAuth()
-  const [tournamentNav, setTournamentNav] = useState<{ slug: string; participantId?: number }>({
-    slug: '',
-  })
+  const [tournamentNav, setTournamentNav] = useState<{
+    slug: string
+    participantId?: number
+    compareWithId?: number
+    comparePickFirst?: number
+  }>({ slug: '' })
 
   const goTo = (p: Page) => {
     setPage(p)
@@ -132,17 +136,50 @@ function AppContent() {
         {page === 'spawn' && <Spawn />}
         {page === 'account' && <Account />}
         {page === 'tournament' &&
-          (tournamentNav.participantId != null ? (
+          (tournamentNav.participantId != null && tournamentNav.compareWithId != null ? (
+            <TournamentTeamCompare
+              slug={tournamentNav.slug}
+              participantIdA={tournamentNav.participantId}
+              participantIdB={tournamentNav.compareWithId}
+              onBack={() => setTournamentNav({ slug: tournamentNav.slug })}
+            />
+          ) : tournamentNav.participantId != null ? (
             <TournamentTeamDetail
               slug={tournamentNav.slug}
               participantId={tournamentNav.participantId}
               onBack={() => setTournamentNav({ slug: tournamentNav.slug })}
+              onCompareWithOther={() =>
+                setTournamentNav({
+                  slug: tournamentNav.slug,
+                  comparePickFirst: tournamentNav.participantId,
+                })
+              }
             />
           ) : (
             <Tournament
               slug={tournamentNav.slug}
               onSlugChange={(s) => setTournamentNav({ slug: s })}
-              onOpenPlayer={(id) => setTournamentNav({ slug: tournamentNav.slug, participantId: id })}
+              comparePickFirst={tournamentNav.comparePickFirst}
+              onCancelComparePick={() => setTournamentNav({ slug: tournamentNav.slug })}
+              onComparePair={(a, b) =>
+                setTournamentNav({ slug: tournamentNav.slug, participantId: a, compareWithId: b })
+              }
+              onOpenPlayer={(id) => {
+                const pick = tournamentNav.comparePickFirst
+                if (pick != null) {
+                  if (id === pick) {
+                    setTournamentNav({ slug: tournamentNav.slug })
+                  } else {
+                    setTournamentNav({
+                      slug: tournamentNav.slug,
+                      participantId: pick,
+                      compareWithId: id,
+                    })
+                  }
+                  return
+                }
+                setTournamentNav({ slug: tournamentNav.slug, participantId: id })
+              }}
             />
           ))}
       </main>
