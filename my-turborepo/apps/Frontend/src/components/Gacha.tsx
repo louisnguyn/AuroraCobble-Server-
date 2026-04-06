@@ -178,7 +178,7 @@ export function Gacha() {
     return (
       <>
         <div className="w-full max-w-2xl mx-auto py-8 sm:py-12 px-4">
-          <div className="rounded-2xl bg-surface/80 border border-border p-8 sm:p-10 text-center">
+          <div className="pixel-panel-soft p-8 sm:p-10 text-center text-base">
             <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-accent/20 flex items-center justify-center">
               <svg className="w-8 h-8 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -191,7 +191,7 @@ export function Gacha() {
             <button
               type="button"
               onClick={() => setShowAuth(true)}
-              className="px-6 py-3 rounded-xl bg-accent text-[#0f0a1a] font-semibold hover:bg-accent/90 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-[#0f0a1a]"
+              className="px-6 py-3 pixel-btn-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0f0a1a]"
             >
               Log in / Sign up
             </button>
@@ -210,13 +210,13 @@ export function Gacha() {
         <p className="text-muted text-center py-8">Loading pools…</p>
       )}
       {error && (
-        <div className="mb-4 p-4 rounded-xl bg-error/15 border border-error/30 text-error text-sm">
+        <div className="mb-4 p-4 text-error text-base bg-[#1a0f16] border-2 border-error/45 rounded-sm">
           {error}
         </div>
       )}
 
       {!loading && pools.length === 0 && !error && (
-        <div className="rounded-2xl bg-surface/80 border border-border p-8 text-center text-muted">
+        <div className="pixel-panel-soft p-8 text-center text-muted text-base">
           No gacha pools available yet. Check back later!
         </div>
       )}
@@ -224,7 +224,7 @@ export function Gacha() {
       {!loading && pools.length > 0 && (
         <div className="space-y-6">
           {exchangeRates.length > 0 && (
-            <div className="rounded-2xl bg-surface/80 border border-border p-4 sm:p-6">
+            <div className="pixel-panel-soft p-4 sm:p-6">
               <h3 className="text-sm font-semibold text-muted uppercase tracking-wider mb-3">Exchange tickets</h3>
               <div className="mb-4">
                 <p className="text-xs text-muted uppercase tracking-wider mb-2">Your currencies</p>
@@ -235,7 +235,7 @@ export function Gacha() {
                     currencies.map((c) => (
                       <span
                         key={c.currency_type}
-                        className="inline-flex items-center px-3 py-1.5 rounded-lg bg-[#0f0a1a]/50 border border-border/50 text-sm"
+                        className="inline-flex items-center px-3 py-1.5 pixel-well text-base"
                       >
                         <span className="text-muted">{c.currency_type.replace(/_/g, ' ')}:</span>
                         <span className="ml-1.5 font-medium text-[#e2e8f0]">{c.balance}</span>
@@ -250,7 +250,7 @@ export function Gacha() {
                   const canAfford = ticketsBalance >= rate.cost_tickets
                   const busy = exchanging === rate.to_currency
                   return (
-                    <li key={rate.to_currency} className="flex flex-wrap items-center justify-between gap-3 py-2 px-3 rounded-lg bg-[#0f0a1a]/50 border border-border/50">
+                    <li key={rate.to_currency} className="flex flex-wrap items-center justify-between gap-3 py-2 px-3 pixel-well">
                       <span className="text-[#e2e8f0] text-sm">
                         {rate.cost_tickets} tickets → <span className="font-medium text-accent">{rate.label}</span>
                       </span>
@@ -258,7 +258,7 @@ export function Gacha() {
                         type="button"
                         onClick={() => handleExchange(rate.to_currency)}
                         disabled={!canAfford || !!exchanging}
-                        className="px-3 py-1.5 rounded-lg bg-accent/20 text-accent text-sm font-medium border border-accent/40 hover:bg-accent/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-3 py-2 pixel-btn-primary text-base disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {busy ? '…' : 'Exchange'}
                       </button>
@@ -275,10 +275,8 @@ export function Gacha() {
                 key={pool.id}
                 type="button"
                 onClick={() => { setSelectedPool(pool); setLastReward(null); }}
-                className={`text-left p-4 rounded-xl border transition-all touch-manipulation ${
-                  selectedPool?.id === pool.id
-                    ? 'bg-surface-hover border-accent/60 ring-2 ring-accent/30'
-                    : 'bg-surface/80 border-border hover:border-accent/40'
+                className={`text-left p-4 pixel-panel transition-[filter] duration-150 touch-manipulation ${
+                  selectedPool?.id === pool.id ? 'ring-2 ring-accent/50 brightness-110' : 'hover:brightness-110'
                 }`}
               >
                 <span className="font-semibold text-[#e2e8f0]">{pool.name}</span>
@@ -288,7 +286,7 @@ export function Gacha() {
           </div>
 
           {selectedPool && (
-            <div className="rounded-2xl bg-surface/80 border border-border p-6 sm:p-8">
+            <div className="pixel-panel-soft p-6 sm:p-8">
               <h2 className="text-lg font-semibold text-[#e2e8f0] mb-4">{selectedPool.name}</h2>
               <p className="text-muted text-sm mb-4">
                 Cost: <span className="text-accent font-medium">{cost} {currencyType}</span> per pull
@@ -300,7 +298,7 @@ export function Gacha() {
                 type="button"
                 onClick={handlePull}
                 disabled={pulling || chestPhase !== 'idle' || (balance !== null && balance < cost)}
-                className="w-full sm:w-auto min-w-[180px] py-3 px-6 rounded-xl bg-accent text-[#0f0a1a] font-semibold hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-surface transition-colors touch-manipulation"
+                className="w-full sm:w-auto min-w-[180px] py-3 px-6 pixel-btn-primary disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#2a2652] touch-manipulation"
               >
                 {chestPhase !== 'idle' || pulling ? 'Opening…' : 'Open chest'}
               </button>
@@ -314,7 +312,7 @@ export function Gacha() {
                       return poolRewards.map((r) => {
                       const { label, className } = getRarity(r.weight, totalWeight)
                       return (
-                        <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-2 px-3 rounded-lg bg-[#0f0a1a]/50 border border-border/50">
+                        <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-2 px-3 pixel-well">
                           <span className="text-[#e2e8f0] text-sm">{r.reward_type}</span>
                           <span className={`text-xs font-medium px-2 py-0.5 rounded border ${className}`}>{label}</span>
                         </li>
@@ -407,7 +405,7 @@ export function Gacha() {
                     </div>
                   )}
                   {chestPhase === 'reveal' && lastReward && (
-                    <div className="gacha-reward-pop gacha-reward-shine rounded-2xl bg-surface border-2 border-accent/60 p-6 sm:p-8 text-center max-w-sm shadow-[0_0_40px_rgba(167,139,250,0.35)]">
+                    <div className="gacha-reward-pop gacha-reward-shine pixel-panel p-6 sm:p-8 text-center max-w-sm ring-2 ring-accent/50 shadow-[4px_4px_0_#0a0618]">
                       <p className="text-accent font-semibold text-sm uppercase tracking-wider mb-2">You got</p>
                       <p className="text-xl sm:text-2xl font-bold text-[#e2e8f0]">{lastReward.reward.reward_type}</p>
                       <p className="text-muted text-sm mt-3">Balance: {lastReward.newBalance} {currencyType}</p>
@@ -417,7 +415,7 @@ export function Gacha() {
               )}
 
               {lastReward && chestPhase === 'idle' && (
-                <div className="mt-6 p-4 rounded-xl bg-accent/10 border border-accent/30">
+                <div className="mt-6 p-4 pixel-panel-soft ring-2 ring-accent/35">
                   <p className="text-sm text-muted mb-2">You got:</p>
                   <div className="flex flex-wrap items-center gap-4">
                     <span className="text-[#e2e8f0] font-medium">{lastReward.reward.reward_type}</span>
@@ -429,7 +427,7 @@ export function Gacha() {
           )}
 
           {isAuthenticated && (
-            <div className="mt-8 rounded-2xl bg-surface/80 border border-border p-4 sm:p-6">
+            <div className="mt-8 pixel-panel-soft p-4 sm:p-6">
               <h3 className="text-lg font-semibold text-[#e2e8f0] mb-1">Your pull history</h3>
               <p className="text-xs text-muted mb-3 m-0">
                 Claim sends the Pokémon to your in-game party via the server. You must be{' '}
@@ -443,7 +441,7 @@ export function Gacha() {
                   {history.map((entry) => (
                     <li
                       key={entry.id}
-                      className="flex flex-wrap items-center justify-between gap-2 py-2 px-3 rounded-lg bg-[#0f0a1a]/50 border border-border/50 text-sm"
+                      className="flex flex-wrap items-center justify-between gap-2 py-2 px-3 pixel-well text-base"
                     >
                       <div className="min-w-0 flex-1">
                         <span className="text-[#e2e8f0] block">{entry.rewardType}</span>
@@ -466,7 +464,7 @@ export function Gacha() {
                             type="button"
                             onClick={() => setClaimPending({ pullId: entry.id, rewardLabel: entry.rewardType })}
                             disabled={claimingId !== null}
-                            className="px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-200 text-xs font-semibold border border-amber-500/40 hover:bg-amber-500/30 disabled:opacity-50 touch-manipulation"
+                            className="px-3 py-2 pixel-btn-gold disabled:opacity-50 touch-manipulation text-sm"
                           >
                             {claimingId === entry.id ? '…' : 'Claim'}
                           </button>
@@ -490,7 +488,7 @@ export function Gacha() {
           onClick={() => setClaimPending(null)}
         >
           <div
-            className="w-full max-w-md rounded-2xl bg-surface border border-border shadow-xl overflow-hidden"
+            className="w-full max-w-md pixel-panel overflow-hidden shadow-[4px_4px_0_#0a0618]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-6 sm:p-8">
@@ -501,7 +499,7 @@ export function Gacha() {
                 Send <span className="font-semibold text-amber-200/95">“{claimPending.rewardLabel}”</span> to your
                 party on the Minecraft server.
               </p>
-              <div className="rounded-xl bg-amber-500/10 border border-amber-500/25 px-4 py-3 mb-6">
+              <div className="pixel-panel-soft ring-2 ring-amber-500/30 px-4 py-3 mb-6">
                 <p className="text-sm text-amber-100/90 m-0 leading-relaxed">
                   You must be <strong className="text-amber-50">online</strong> on the server. Your in-game name must
                   match your site account:{' '}
@@ -513,14 +511,14 @@ export function Gacha() {
                 <button
                   type="button"
                   onClick={() => setClaimPending(null)}
-                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-border text-muted hover:text-[#e2e8f0] hover:bg-surface-hover text-sm font-medium touch-manipulation"
+                  className="w-full sm:w-auto px-4 py-2.5 pixel-btn text-base touch-manipulation"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   onClick={() => void executeClaim()}
-                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-amber-500/90 text-[#0f0a1a] text-sm font-semibold hover:bg-amber-400 border border-amber-400/50 touch-manipulation"
+                  className="w-full sm:w-auto px-4 py-2.5 pixel-btn-gold text-base touch-manipulation"
                 >
                   Claim now
                 </button>

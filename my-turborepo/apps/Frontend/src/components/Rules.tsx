@@ -152,19 +152,19 @@ function RulesContentNationalDexOUSingles() {
   const { source, playRestrictions, bannedPokemon, bannedAbilities, bannedItems, bannedMoves } = NATIONAL_DEX_OU_SINGLES
   return (
     <div className="space-y-6">
-      <p className="text-sm text-muted">
+      <p className="text-base text-muted">
         Source:{' '}
         <a href={source} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
           Smogon National Dex
         </a>
       </p>
 
-      <section className="rounded-lg bg-surface border border-border p-4 sm:p-5">
+      <section className="pixel-panel p-4 sm:p-5">
         <h3 className="text-base font-semibold m-0 mb-3">Play restrictions</h3>
-        <p className="text-sm text-muted m-0 mb-2">Players cannot use these strategies:</p>
+        <p className="text-base text-muted m-0 mb-2">Players cannot use these strategies:</p>
         <ul className="list-none m-0 p-0 space-y-2">
           {playRestrictions.map((r) => (
-            <li key={r.name} className="text-sm">
+            <li key={r.name} className="text-base">
               <span className="font-medium text-[#e2e8f0]">{r.name}:</span>{' '}
               <span className="text-muted">{r.desc}</span>
             </li>
@@ -172,9 +172,9 @@ function RulesContentNationalDexOUSingles() {
         </ul>
       </section>
 
-      <section className="rounded-lg bg-surface border border-border p-4 sm:p-5">
+      <section className="pixel-panel p-4 sm:p-5">
         <h3 className="text-base font-semibold m-0 mb-3">Pokémon restrictions</h3>
-        <p className="text-sm text-muted m-0 mb-2">Players cannot use the following Pokémon:</p>
+        <p className="text-base text-muted m-0 mb-2">Players cannot use the following Pokémon:</p>
         <div className="flex flex-wrap gap-2">
           {bannedPokemon.map((name) => (
             <BannedPokemonTag key={name} name={name} />
@@ -182,21 +182,21 @@ function RulesContentNationalDexOUSingles() {
         </div>
       </section>
 
-      <section className="rounded-lg bg-surface border border-border p-4 sm:p-5">
+      <section className="pixel-panel p-4 sm:p-5">
         <h3 className="text-base font-semibold m-0 mb-3">Ability restrictions</h3>
-        <p className="text-sm text-muted m-0 mb-2">Players cannot use the following abilities:</p>
+        <p className="text-base text-muted m-0 mb-2">Players cannot use the following abilities:</p>
         <div className="flex flex-wrap gap-2">
           {bannedAbilities.map((name) => (
-            <span key={name} className="inline-block py-0.5 px-2 rounded text-sm bg-bg/60 text-muted border border-border/50">
+            <span key={name} className="inline-block py-0.5 px-2 rounded-sm text-base bg-bg/60 text-muted border border-border/50">
               {name}
             </span>
           ))}
         </div>
       </section>
 
-      <section className="rounded-lg bg-surface border border-border p-4 sm:p-5">
+      <section className="pixel-panel p-4 sm:p-5">
         <h3 className="text-base font-semibold m-0 mb-3">Item restrictions</h3>
-        <p className="text-sm text-muted m-0 mb-2">Players cannot use the following items:</p>
+        <p className="text-base text-muted m-0 mb-2">Players cannot use the following items:</p>
         <div className="flex flex-wrap gap-2">
           {bannedItems.map((name) => (
             <BannedItemTag key={name} name={name} />
@@ -204,9 +204,9 @@ function RulesContentNationalDexOUSingles() {
         </div>
       </section>
 
-      <section className="rounded-lg bg-surface border border-border p-4 sm:p-5">
+      <section className="pixel-panel p-4 sm:p-5">
         <h3 className="text-base font-semibold m-0 mb-3">Move restrictions</h3>
-        <p className="text-sm text-muted m-0 mb-2">Players cannot use the following moves:</p>
+        <p className="text-base text-muted m-0 mb-2">Players cannot use the following moves:</p>
         <div className="flex flex-wrap gap-2">
           {bannedMoves.map((name) => (
             <BannedMoveTag key={name} name={name} />
@@ -226,41 +226,37 @@ export function Rules() {
   return (
     <div className="w-full max-w-[60rem] mx-auto space-y-6">
       <header>
-        <h1 className="text-2xl sm:text-3xl font-semibold m-0">Rules</h1>
-        <p className="text-sm text-muted m-0 mt-1">
+        <h1 className="text-3xl sm:text-4xl font-bold m-0">Rules</h1>
+        <p className="text-base text-muted m-0 mt-2">
           Format and battle style rules. Source: Smogon where applicable.
         </p>
       </header>
 
-      <div className="flex flex-wrap gap-4 items-center">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted">Format:</span>
-          <div className="flex rounded-lg bg-surface border border-border p-0.5">
+      <div className="flex flex-wrap gap-8 items-start">
+        <div className="flex flex-col gap-1">
+          <span className="text-base font-semibold text-muted">Format</span>
+          <div className="flex flex-wrap gap-2">
             {FORMATS.map((f) => (
               <button
                 key={f.id}
                 type="button"
                 onClick={() => setFormat(f.id)}
-                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-                  format === f.id ? 'bg-accent text-white' : 'text-muted hover:text-[#e2e8f0] hover:bg-surface-hover'
-                }`}
+                className={`px-3 py-2 text-base font-bold ${format === f.id ? 'pixel-pill pixel-pill-active-gold' : 'pixel-pill'}`}
               >
                 {f.label}
               </button>
             ))}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted">Battle style:</span>
-          <div className="flex rounded-lg bg-surface border border-border p-0.5">
+        <div className="flex flex-col gap-1">
+          <span className="text-base font-semibold text-muted">Battle style</span>
+          <div className="flex flex-wrap gap-2">
             {STYLES.map((s) => (
               <button
                 key={s.id}
                 type="button"
                 onClick={() => setStyle(s.id)}
-                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-                  style === s.id ? 'bg-accent text-white' : 'text-muted hover:text-[#e2e8f0] hover:bg-surface-hover'
-                }`}
+                className={`px-3 py-2 text-base font-bold ${style === s.id ? 'pixel-pill pixel-pill-active-accent' : 'pixel-pill'}`}
               >
                 {s.label}
               </button>
@@ -277,7 +273,7 @@ export function Rules() {
       )}
 
       {!showNationalDexOUSingles && (
-        <div className="rounded-lg bg-surface border border-border p-8 text-center text-muted">
+        <div className="pixel-panel p-8 text-center text-base text-muted">
           Rules for this format and battle style are not added yet. Only National Dex OU Singles is available for now.
         </div>
       )}

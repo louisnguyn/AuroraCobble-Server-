@@ -27,7 +27,7 @@ function MonCard({ mon }: { mon: ParsedMon }) {
   }, [slug])
 
   return (
-    <article className="rounded-xl border border-border bg-surface/80 p-4 space-y-2">
+    <article className="pixel-panel-soft p-4 space-y-2">
       <div className="flex gap-3 items-start">
         {slug ? (
           <img

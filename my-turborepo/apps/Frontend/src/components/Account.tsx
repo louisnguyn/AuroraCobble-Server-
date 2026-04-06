@@ -215,13 +215,13 @@ export function Account() {
 
   if (!isAuthenticated) {
     return (
-      <div className="max-w-lg mx-auto rounded-2xl bg-surface/80 border border-border p-8 text-center">
-        <h1 className="text-2xl font-semibold text-[#e2e8f0] m-0 mb-2">Account</h1>
-        <p className="text-muted text-sm mb-6">Log in to change your password.</p>
+      <div className="max-w-lg mx-auto pixel-panel-soft p-8 text-center">
+        <h1 className="text-3xl font-bold text-[#e2e8f0] m-0 mb-2">Account</h1>
+        <p className="text-muted text-base mb-6">Log in to change your password.</p>
         <button
           type="button"
           onClick={() => setShowAuth(true)}
-          className="py-2.5 px-6 rounded-xl bg-accent text-[#0f0a1a] font-semibold hover:bg-accent/90"
+          className="py-2.5 px-6 pixel-btn-primary"
         >
           Log in
         </button>
@@ -330,9 +330,9 @@ export function Account() {
   }
 
   return (
-    <div className="max-w-lg mx-auto rounded-2xl bg-surface/80 border border-border p-6 sm:p-8">
-      <h1 className="text-2xl font-semibold text-[#e2e8f0] m-0 mb-1">Account</h1>
-      <p className="text-muted text-sm mb-6">
+    <div className="max-w-lg mx-auto pixel-panel-soft p-6 sm:p-8">
+      <h1 className="text-3xl font-bold text-[#e2e8f0] m-0 mb-1">Account</h1>
+      <p className="text-muted text-base mb-6">
         Signed in as <span className="text-[#e2e8f0]">{user?.username}</span>
         <span className="block mt-1">
           PVP rank:{' '}
@@ -378,10 +378,8 @@ export function Account() {
             key={id}
             type="button"
             onClick={() => setActiveTab(id)}
-            className={`rounded-lg px-3 py-2 text-sm font-medium border transition-colors ${
-              activeTab === id
-                ? 'bg-accent/20 text-accent border-accent/50'
-                : 'bg-[#0f0a1a]/60 text-muted border-border hover:text-[#e2e8f0]'
+            className={`px-3 py-2 text-base font-bold ${
+              activeTab === id ? 'pixel-pill pixel-pill-active-accent' : 'pixel-pill'
             }`}
           >
             {label}
@@ -397,7 +395,7 @@ export function Account() {
           {dailyLoading ? (
             <p className="text-sm text-muted mb-6">Loading daily rewards…</p>
           ) : (
-            <div className="mb-6 rounded-xl border border-border bg-[#0f0a1a]/50 p-4">
+            <div className="mb-6 pixel-well p-4">
               <p className="text-sm text-muted m-0">
                 Reset: 00:00 ({daily?.timeZone ?? 'Asia/Ho_Chi_Minh'}) · Date: {daily?.date ?? '—'}
               </p>
@@ -419,7 +417,7 @@ export function Account() {
                   <button
                     type="submit"
                     disabled={dailyBusy || !daily?.eligible}
-                    className="py-2 px-4 rounded-lg bg-accent text-[#0f0a1a] font-semibold hover:bg-accent/90 disabled:opacity-50"
+                    className="py-2 px-4 pixel-btn-primary disabled:opacity-50"
                   >
                     {dailyBusy ? 'Claiming…' : 'Claim daily reward'}
                   </button>
@@ -453,7 +451,7 @@ export function Account() {
               Need at least 3 ranked players on the synced leaderboard before predictions open.
             </p>
           ) : (
-            <div className="mb-6 rounded-xl border border-border bg-[#0f0a1a]/50 p-4 space-y-4">
+            <div className="mb-6 pixel-well p-4 space-y-4">
               <p className="text-xs text-muted m-0">
                 Per line: {pvpPredict.minStake.toLocaleString()}–{pvpPredict.maxStake.toLocaleString()} Cobble$ ·
                 Wallet: <span className="tabular-nums text-[#fbbf24]">{cobbleBalance.toLocaleString()}</span>
@@ -732,7 +730,7 @@ export function Account() {
                   <button
                     type="submit"
                     disabled={predictBusy || !pvpPredict.windowOpen}
-                    className="py-2 px-4 rounded-lg bg-accent text-[#0f0a1a] font-semibold hover:bg-accent/90 disabled:opacity-50"
+                    className="py-2 px-4 pixel-btn-primary disabled:opacity-50"
                   >
                     {predictBusy ? 'Submitting…' : 'Lock predictions'}
                   </button>
@@ -750,7 +748,7 @@ export function Account() {
       {activeTab === 'inventory' && (
         <>
           <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-3">Website inventory</h2>
-          <div className="mb-6 rounded-xl border border-border bg-[#0f0a1a]/50 p-4">
+          <div className="mb-6 pixel-well p-4">
             {inventory.length === 0 ? (
               <p className="text-sm text-muted m-0">No items in inventory yet.</p>
             ) : (
@@ -764,7 +762,7 @@ export function Account() {
                       type="button"
                       onClick={() => handleClaimItem(it.item_key)}
                       disabled={it.quantity < 1 || claimBusyItem === it.item_key}
-                      className="shrink-0 py-1.5 px-3 rounded-lg bg-accent text-[#0f0a1a] font-semibold hover:bg-accent/90 disabled:opacity-50 text-sm"
+                      className="shrink-0 py-2 px-3 pixel-btn-primary disabled:opacity-50 text-base"
                     >
                       {claimBusyItem === it.item_key ? 'Claiming…' : 'Claim'}
                     </button>
@@ -799,7 +797,7 @@ export function Account() {
           </p>
 
           <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-3">Shop</h2>
-          <div className="mb-6 rounded-xl border border-border bg-[#0f0a1a]/50 p-4">
+          <div className="mb-6 pixel-well p-4">
             <div className="space-y-2">
               {shopItems.map((item) => (
                 <div key={item.itemKey} className="flex items-center justify-between gap-3 rounded-lg border border-border/70 px-3 py-2">
@@ -811,7 +809,7 @@ export function Account() {
                     type="button"
                     onClick={() => handleBuyItem(item)}
                     disabled={shopBusyItem === item.itemKey || cobbleBalance < item.cost}
-                    className="shrink-0 py-1.5 px-3 rounded-lg bg-accent text-[#0f0a1a] font-semibold hover:bg-accent/90 disabled:opacity-50 text-sm"
+                    className="shrink-0 py-2 px-3 pixel-btn-primary disabled:opacity-50 text-base"
                   >
                     {shopBusyItem === item.itemKey ? 'Buying…' : 'Buy'}
                   </button>
@@ -823,7 +821,7 @@ export function Account() {
           </div>
 
           <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-3">Pokemon Shop (Shiny)</h2>
-          <div className="mb-6 rounded-xl border border-border bg-[#0f0a1a]/50 p-4">
+          <div className="mb-6 pixel-well p-4">
             <p className="text-sm text-muted m-0 mb-3">Refresh in: {pokemonCountdown}</p>
             <div className="space-y-2">
               {pokemonOffers.map((offer) => (
@@ -838,7 +836,7 @@ export function Account() {
                     type="button"
                     onClick={() => handleBuyPokemon(offer)}
                     disabled={offer.purchased || pokemonBusy === `buy-${offer.slot}` || cobbleBalance < offer.price}
-                    className="shrink-0 py-1.5 px-3 rounded-lg bg-accent text-[#0f0a1a] font-semibold hover:bg-accent/90 disabled:opacity-50 text-sm"
+                    className="shrink-0 py-2 px-3 pixel-btn-primary disabled:opacity-50 text-base"
                   >
                     {offer.purchased ? 'Purchased' : pokemonBusy === `buy-${offer.slot}` ? 'Buying…' : 'Buy'}
                   </button>
@@ -872,7 +870,7 @@ export function Account() {
                         type="button"
                         onClick={() => handleClaimPokemon(p.id)}
                         disabled={pokemonBusy === `claim-${p.id}`}
-                        className="shrink-0 py-1.5 px-3 rounded-lg bg-accent text-[#0f0a1a] font-semibold hover:bg-accent/90 disabled:opacity-50 text-sm"
+                        className="shrink-0 py-2 px-3 pixel-btn-primary disabled:opacity-50 text-base"
                       >
                         {pokemonBusy === `claim-${p.id}` ? 'Claiming…' : 'Claim'}
                       </button>
@@ -948,7 +946,7 @@ export function Account() {
         <button
           type="submit"
           disabled={submitting}
-          className="w-full sm:w-auto py-2.5 px-6 rounded-xl bg-accent text-[#0f0a1a] font-semibold hover:bg-accent/90 disabled:opacity-50"
+          className="w-full sm:w-auto py-2.5 px-6 pixel-btn-primary disabled:opacity-50"
         >
           {submitting ? 'Updating…' : 'Update password'}
         </button>

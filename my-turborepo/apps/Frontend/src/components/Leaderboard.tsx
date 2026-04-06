@@ -81,10 +81,8 @@ function MainTab({
       role="tab"
       aria-selected={active}
       onClick={onClick}
-      className={`py-3 px-5 rounded-xl text-sm font-semibold transition-all duration-200 border ${
-        active
-          ? 'border-accent text-accent bg-surface-hover shadow-[0_0_20px_rgba(167,139,250,0.18)] ring-1 ring-accent/35'
-          : 'border-border/70 text-muted bg-surface/40 hover:text-[#e2e8f0] hover:bg-surface-hover hover:border-border'
+      className={`py-3 px-5 text-base font-bold transition-[filter] duration-150 ${
+        active ? 'pixel-pill pixel-pill-active-gold' : 'pixel-pill'
       }`}
     >
       {children}
@@ -108,10 +106,8 @@ function SubTab({
       role="tab"
       aria-selected={active}
       onClick={onClick}
-      className={`py-2.5 px-4 rounded-xl text-sm font-medium transition-all duration-200 border ${
-        active
-          ? 'border-accent text-accent bg-surface-hover shadow-[0_0_16px_rgba(167,139,250,0.2)] ring-1 ring-accent/30'
-          : 'border-border/80 text-muted bg-surface/50 hover:text-[#e2e8f0] hover:bg-surface-hover hover:border-border'
+      className={`py-2.5 px-4 text-base font-semibold transition-[filter] duration-150 ${
+        active ? 'pixel-pill pixel-pill-active-accent' : 'pixel-pill'
       }`}
     >
       {children}
@@ -168,7 +164,7 @@ function BattleTowerMetricColumn({
 
   return (
     <div className="space-y-3 min-w-0">
-      <h4 className="text-sm font-semibold m-0 text-[#e2e8f0]">{title}</h4>
+      <h4 className="text-base font-bold m-0 text-[#e2e8f0]">{title}</h4>
       {hasParsed ? (
         <ol className="list-none m-0 p-0 space-y-2">
           {rows.map((row) => {
@@ -178,17 +174,15 @@ function BattleTowerMetricColumn({
             <li
               key={rowKey}
               ref={isYou ? youRowRef : undefined}
-              className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 transition-shadow duration-300 scroll-mt-24 ${
-                isYou
-                  ? 'border-accent/55 bg-accent/[0.12] ring-2 ring-accent/35 shadow-[0_0_20px_rgba(167,139,246,0.15)]'
-                  : 'border-border bg-surface/80'
+              className={`flex flex-wrap items-center justify-between gap-3 pixel-panel-soft px-4 py-3 scroll-mt-24 transition-[filter] duration-150 ${
+                isYou ? 'ring-2 ring-amber-400/60 brightness-110' : ''
               }`}
             >
               <span className="flex min-w-0 items-center gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-500/15 text-sm font-bold tabular-nums text-sky-300">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center pixel-well text-base font-bold tabular-nums text-sky-300">
                   {row.rank}
                 </span>
-                <span className="font-mono text-sm text-[#e2e8f0] truncate" title={row.name}>
+                <span className="font-mono text-base text-[#e2e8f0] truncate" title={row.name}>
                   {row.name}
                   {row.legendary ? (
                     <span className="ml-1 text-amber-400 font-semibold" title="Used legendary">
@@ -197,7 +191,7 @@ function BattleTowerMetricColumn({
                   ) : null}
                 </span>
               </span>
-              <span className="shrink-0 text-sm text-muted tabular-nums text-right max-w-[min(100%,16rem)]">
+              <span className="shrink-0 text-base text-muted tabular-nums text-right max-w-[min(100%,16rem)]">
                 {metricLabel(row)}
               </span>
             </li>
@@ -210,18 +204,18 @@ function BattleTowerMetricColumn({
           {fallbackLines.map((line, idx) => (
             <li
               key={`${metric}-fb-${idx}-${line.slice(0, 24)}`}
-              className="flex items-start gap-3 rounded-xl border border-border bg-surface/80 px-4 py-3"
+              className="flex items-start gap-3 pixel-panel-soft px-4 py-3"
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-500/15 text-sm font-bold tabular-nums text-sky-300">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center pixel-well text-base font-bold tabular-nums text-sky-300">
                 {idx + 1}
               </span>
-              <span className="text-sm text-[#e2e8f0]/95 leading-snug break-words min-w-0 pt-0.5">{line}</span>
+              <span className="text-base text-[#e2e8f0]/95 leading-snug break-words min-w-0 pt-0.5">{line}</span>
             </li>
           ))}
         </ol>
       ) : null}
       {!hasParsed && !hasFallback ? (
-        <p className="text-sm text-muted m-0">No entries for this list.</p>
+        <p className="text-base text-muted m-0">No entries for this list.</p>
       ) : null}
     </div>
   )
@@ -275,7 +269,7 @@ export function Leaderboard() {
     loadBattleTower()
   }, [mainSection, loadBattleTower])
 
-  const panelClass = 'p-8 text-center rounded-lg bg-surface border border-border'
+  const panelClass = 'p-8 text-center pixel-panel'
 
   const formats = lbData?.formats ?? {}
   const rankFormat = getFormatById(formats, rankFormatId)
@@ -318,7 +312,7 @@ export function Leaderboard() {
           username matches your in-game name.
         </p>
         {!isAuthenticated ? (
-          <p className="text-xs text-muted/90 m-0 rounded-lg border border-border/60 bg-surface/50 px-3 py-2 max-w-xl">
+          <p className="text-sm text-muted/90 m-0 pixel-panel-soft px-3 py-2 max-w-xl">
             <span className="text-[#e2e8f0]/90">Tip:</span> Sign in via Account to jump to your place on each list
             automatically.
           </p>
@@ -383,7 +377,7 @@ export function Leaderboard() {
                 <>
                   {yourRankPlayer ? (
                     <div
-                      className="rounded-xl border border-accent/40 bg-accent/[0.08] px-4 py-3 shadow-[0_0_24px_rgba(167,139,250,0.12)]"
+                      className="pixel-panel-soft px-4 py-3 ring-2 ring-accent/40"
                       role="status"
                       aria-live="polite"
                     >
@@ -400,12 +394,12 @@ export function Leaderboard() {
                       </p>
                     </div>
                   ) : viewerIgn ? (
-                    <p className="text-xs text-muted m-0 rounded-lg border border-border/50 bg-surface/30 px-3 py-2">
+                    <p className="text-sm text-muted m-0 pixel-well px-3 py-2">
                       No match for <span className="font-mono text-[#e2e8f0]/80">{viewerIgn}</span> in this format — you
                       may be unranked or use a different in-game name.
                     </p>
                   ) : null}
-                <div className="overflow-x-auto rounded-xl border border-border/60 bg-surface/40 shadow-inner shadow-black/20">
+                <div className="overflow-x-auto pixel-well">
                   <table className="w-full border-collapse text-sm min-w-[640px]">
                     <thead>
                       <tr>
@@ -522,7 +516,7 @@ export function Leaderboard() {
               type="button"
               onClick={loadBattleTower}
               disabled={btLoading}
-              className="py-2 px-4 rounded-xl text-sm font-medium border border-border/80 text-muted hover:text-[#e2e8f0] hover:bg-surface-hover disabled:opacity-50"
+              className="pixel-btn py-2 px-4 text-base disabled:opacity-50"
             >
               {btLoading ? 'Refreshing…' : 'Refresh'}
             </button>
@@ -563,7 +557,7 @@ export function Leaderboard() {
               </header>
               {(battleFloorYou || battleStreakYou) && (
                 <div
-                  className="rounded-xl border border-accent/40 bg-accent/[0.08] px-4 py-3 max-w-5xl shadow-[0_0_24px_rgba(167,139,250,0.12)]"
+                  className="pixel-panel-soft px-4 py-3 max-w-5xl ring-2 ring-accent/40"
                   role="status"
                   aria-live="polite"
                 >
@@ -597,7 +591,7 @@ export function Leaderboard() {
                 </div>
               )}
               {viewerIgn && !battleFloorYou && !battleStreakYou && btData.floorRows.length + btData.streakRows.length > 0 ? (
-                <p className="text-xs text-muted m-0 max-w-5xl rounded-lg border border-border/50 bg-surface/30 px-3 py-2">
+                <p className="text-sm text-muted m-0 max-w-5xl pixel-well px-3 py-2">
                   No match for <span className="font-mono text-[#e2e8f0]/80">{viewerIgn}</span> in this mode&apos;s top
                   lists.
                 </p>

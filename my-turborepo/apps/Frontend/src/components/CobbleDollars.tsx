@@ -41,7 +41,7 @@ export function CobbleDollars({ viewerIgn }: { viewerIgn?: string | null }) {
     scrollElementIntoViewCentered(youRowRef.current)
   }, [yourIndex, data?.top10])
 
-  const panelClass = 'p-8 text-center rounded-lg bg-surface border border-border'
+  const panelClass = 'p-8 text-center pixel-panel'
 
   if (loading) {
     return <div className={panelClass}>Loading in-game Cobble$ leaderboard…</div>
@@ -56,22 +56,22 @@ export function CobbleDollars({ viewerIgn }: { viewerIgn?: string | null }) {
   return (
     <div className="w-full max-w-2xl space-y-6">
       {data.disabled ? (
-        <div className="p-8 text-center rounded-xl border border-border bg-surface/80 text-muted">
+        <div className="p-8 text-center pixel-panel-soft text-muted text-base">
           Cobble$ leaderboard is not available on this site right now.
         </div>
       ) : data.error ? (
-        <div className="p-8 text-center rounded-xl border border-border bg-surface/80 text-error text-sm">
+        <div className="p-8 text-center pixel-panel-soft text-error text-base">
           Could not load server balances: {data.error}
         </div>
       ) : data.top10.length === 0 ? (
-        <div className="p-8 text-center rounded-xl border border-border bg-surface/80 text-muted">
+        <div className="p-8 text-center pixel-panel-soft text-muted text-base">
           No Cobble$ balances returned yet. Play on the server to appear on the leaderboard.
         </div>
       ) : (
         <>
           <header>
             <h3 className="text-base font-semibold m-0 mb-1 text-[#e2e8f0]">In-game Cobble$ (top 10)</h3>
-            <p className="text-sm text-muted m-0">
+            <p className="text-base text-muted m-0">
               Richest players on the Minecraft server (CobbleDollars leaderboard via RCON).
             </p>
             {data.updatedAt && (
@@ -83,7 +83,7 @@ export function CobbleDollars({ viewerIgn }: { viewerIgn?: string | null }) {
 
           {yourIndex >= 0 && data.top10[yourIndex] ? (
             <div
-              className="rounded-xl border border-accent/40 bg-accent/[0.08] px-4 py-3 shadow-[0_0_24px_rgba(167,139,250,0.12)]"
+              className="pixel-panel-soft px-4 py-3 ring-2 ring-accent/40"
               role="status"
               aria-live="polite"
             >
@@ -104,21 +104,19 @@ export function CobbleDollars({ viewerIgn }: { viewerIgn?: string | null }) {
               <li
                 key={`${row.name}-${row.balance}-${i}`}
                 ref={i === yourIndex ? youRowRef : undefined}
-                className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 transition-shadow duration-300 scroll-mt-24 ${
-                  i === yourIndex
-                    ? 'border-accent/55 bg-accent/[0.12] ring-2 ring-accent/35 shadow-[0_0_20px_rgba(167,139,246,0.15)]'
-                    : 'border-border bg-surface/80'
+                className={`flex items-center justify-between gap-3 pixel-panel-soft px-4 py-3 scroll-mt-24 transition-[filter] duration-150 ${
+                  i === yourIndex ? 'ring-2 ring-amber-400/60 brightness-110' : ''
                 }`}
               >
                 <span className="flex min-w-0 items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent/15 text-sm font-bold tabular-nums text-accent">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center pixel-well text-base font-bold tabular-nums text-accent">
                     {i + 1}
                   </span>
-                  <span className="font-mono text-sm text-[#e2e8f0] truncate" title={row.name}>
+                  <span className="font-mono text-base text-[#e2e8f0] truncate" title={row.name}>
                     {row.name}
                   </span>
                 </span>
-                <span className="shrink-0 text-sm font-semibold tabular-nums text-[#fbbf24]">
+                <span className="shrink-0 text-base font-bold tabular-nums text-[#fbbf24]">
                   {Number(row.balance).toLocaleString()}
                 </span>
               </li>

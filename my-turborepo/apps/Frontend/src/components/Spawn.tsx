@@ -122,16 +122,14 @@ export function Spawn() {
 
   return (
     <div className="w-full max-w-6xl mx-auto space-y-6">
-      <div className="rounded-2xl bg-surface/80 border border-border p-4 sm:p-6">
-        <h1 className="text-2xl font-semibold m-0 mb-3 text-[#e2e8f0]">Spawn</h1>
+      <div className="pixel-panel-soft p-4 sm:p-6">
+        <h1 className="text-3xl font-bold m-0 mb-4 text-[#e2e8f0]">Spawn</h1>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => setSection('pokemon')}
-            className={`py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
-              section === 'pokemon'
-                ? 'bg-accent/20 text-accent border border-accent/40'
-                : 'bg-[#0f0a1a]/50 text-muted border border-border hover:text-[#e2e8f0] hover:bg-surface-hover'
+            className={`py-2.5 px-5 text-base font-bold transition-[filter] duration-150 ${
+              section === 'pokemon' ? 'pixel-pill pixel-pill-active-gold' : 'pixel-pill'
             }`}
           >
             Pokemon
@@ -139,10 +137,8 @@ export function Spawn() {
           <button
             type="button"
             onClick={() => setSection('boss')}
-            className={`py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
-              section === 'boss'
-                ? 'bg-accent/20 text-accent border border-accent/40'
-                : 'bg-[#0f0a1a]/50 text-muted border border-border hover:text-[#e2e8f0] hover:bg-surface-hover'
+            className={`py-2.5 px-5 text-base font-bold transition-[filter] duration-150 ${
+              section === 'boss' ? 'pixel-pill pixel-pill-active-gold' : 'pixel-pill'
             }`}
           >
             Boss
@@ -151,26 +147,26 @@ export function Spawn() {
       </div>
 
       {section === 'boss' && (
-        <div className="rounded-2xl bg-surface/80 border border-border p-4 sm:p-6">
+        <div className="pixel-panel-soft p-4 sm:p-6">
           <div className="flex flex-wrap gap-3 mb-4">
             <input
               type="text"
               value={bossSearch}
               onChange={(e) => setBossSearch(e.target.value)}
               placeholder="Search Boss..."
-              className="min-w-[220px] flex-1 px-3 py-2 rounded-xl bg-[#0f0a1a] border border-border text-sm text-[#e2e8f0] placeholder:text-muted/70 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent/50"
+              className="min-w-[220px] flex-1 px-3 py-2.5 pixel-field text-base placeholder:text-muted/70"
             />
           </div>
 
           {bossLoading ? (
             <div className="py-10 text-center text-muted">Loading boss spawn data...</div>
           ) : bossError ? (
-            <div className="p-3 rounded-lg bg-error/15 border border-error/30 text-error text-sm">{bossError}</div>
+            <div className="p-3 text-error text-base bg-[#1a0f16] border-2 border-error/45 rounded-sm">{bossError}</div>
           ) : (bossData?.rows.length ?? 0) === 0 ? (
             <div className="py-10 text-center text-muted">No boss spawn data found.</div>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-border/60 max-h-[60vh] overflow-y-auto">
-              <table className="w-full text-sm">
+            <div className="overflow-x-auto pixel-well max-h-[60vh] overflow-y-auto">
+              <table className="w-full text-base">
                 <thead className="sticky top-0 z-10 bg-bg/40">
                   <tr className="bg-bg/40 border-b border-border">
                     <th className="text-left py-2 px-3 font-semibold">N.</th>
@@ -217,14 +213,14 @@ export function Spawn() {
       )}
 
       {section === 'pokemon' && (
-        <div className="rounded-2xl bg-surface/80 border border-border p-4 sm:p-6">
+        <div className="pixel-panel-soft p-4 sm:p-6">
           <div className="flex flex-wrap gap-3 mb-4">
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search Pokemon..."
-              className="min-w-[220px] flex-1 px-3 py-2 rounded-xl bg-[#0f0a1a] border border-border text-sm text-[#e2e8f0] placeholder:text-muted/70 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent/50"
+              className="min-w-[220px] flex-1 px-3 py-2.5 pixel-field text-base placeholder:text-muted/70"
             />
             <Dropdown
               value={generation}
@@ -255,12 +251,12 @@ export function Spawn() {
           {loading ? (
             <div className="py-10 text-center text-muted">Loading spawn data...</div>
           ) : error ? (
-            <div className="p-3 rounded-lg bg-error/15 border border-error/30 text-error text-sm">{error}</div>
+            <div className="p-3 text-error text-base bg-[#1a0f16] border-2 border-error/45 rounded-sm">{error}</div>
           ) : (data?.rows.length ?? 0) === 0 ? (
             <div className="py-10 text-center text-muted">No spawn data found.</div>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-border/60 max-h-[60vh] overflow-y-auto">
-              <table className="w-full text-sm">
+            <div className="overflow-x-auto pixel-well max-h-[60vh] overflow-y-auto">
+              <table className="w-full text-base">
                 <thead>
                   <tr className="bg-bg/40 border-b border-border sticky top-0 z-10">
                     <th className="text-left py-2 px-3 font-semibold">N.</th>

@@ -218,7 +218,7 @@ export function Tournament({
                 setSlugInput(s)
                 onSlugChange?.(s)
               }}
-              className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-[#e2e8f0] w-full"
+              className="pixel-field px-3 py-2.5 text-base w-full"
             >
               <option value="">Choose a tournament…</option>
               {slugInput.trim() &&
@@ -238,7 +238,7 @@ export function Tournament({
             type="button"
             onClick={() => load()}
             disabled={!slugInput.trim() || loading}
-            className="py-2 px-4 rounded-xl text-sm font-medium border border-accent/50 text-accent hover:bg-accent/10 disabled:opacity-50 disabled:pointer-events-none"
+            className="py-2 px-4 pixel-btn disabled:opacity-50 disabled:pointer-events-none text-base"
           >
             Refresh
           </button>

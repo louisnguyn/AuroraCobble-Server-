@@ -52,7 +52,7 @@ function AppContent() {
   return (
     <div className="min-h-screen flex flex-col relative">
       <Analytics />
-      <header className="sticky top-0 z-20 flex items-center justify-between gap-2 px-3 py-3 sm:px-6 sm:py-4 bg-surface/90 backdrop-blur-md border-b border-border">
+      <header className="arcade-header sticky top-0 z-20 flex items-center justify-between gap-2 px-3 py-3 sm:px-6 sm:py-4">
         <button
           type="button"
           onClick={() => goTo('main')}
@@ -68,14 +68,10 @@ function AppContent() {
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           {isAuthenticated && user ? (
             <>
-              <span className="text-sm text-muted truncate max-w-[80px] sm:max-w-[140px]" title={user.email}>
+              <span className="text-base text-muted truncate max-w-[100px] sm:max-w-[160px]" title={user.email}>
                 {user.username}
               </span>
-              <button
-                type="button"
-                onClick={logout}
-                className="text-xs sm:text-sm py-1.5 px-2 sm:px-3 rounded-lg border border-border text-muted hover:bg-surface-hover hover:text-[#e2e8f0] transition-colors touch-manipulation"
-              >
+              <button type="button" onClick={logout} className="pixel-btn text-base py-2 px-3 sm:px-4">
                 Log out
               </button>
             </>
@@ -83,39 +79,39 @@ function AppContent() {
             <button
               type="button"
               onClick={() => setShowAuth(true)}
-              className="text-sm py-1.5 px-2 sm:px-3 rounded-lg border border-accent/50 text-accent hover:bg-accent/15 transition-colors touch-manipulation"
+              className="pixel-btn-primary text-base py-2 px-3 sm:px-4"
             >
               Log in
             </button>
           )}
           <button
             type="button"
-            className={`flex flex-col justify-center gap-[5px] w-11 h-11 p-2.5 rounded-lg bg-transparent text-[#e6edf3] cursor-pointer transition-colors hover:bg-surface-hover touch-manipulation ${menuOpen ? 'burger-open' : ''}`}
+            className={`flex flex-col justify-center gap-1 w-12 h-12 p-2 pixel-btn text-[#e6edf3] ${menuOpen ? 'burger-open' : ''}`}
             aria-label="Open menu"
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen((o) => !o)}
           >
-            <span className="block w-[22px] h-0.5 rounded bg-current transition-all duration-200 origin-center" />
-            <span className="block w-[22px] h-0.5 rounded bg-current transition-opacity duration-200" />
-            <span className="block w-[22px] h-0.5 rounded bg-current transition-all duration-200 origin-center" />
+            <span className="block w-[22px] h-[3px] bg-current transition-all duration-200 origin-center" />
+            <span className="block w-[22px] h-[3px] bg-current transition-opacity duration-200" />
+            <span className="block w-[22px] h-[3px] bg-current transition-all duration-200 origin-center" />
           </button>
         </div>
       </header>
 
       <div
-        className={`fixed inset-0 bg-black/50 z-30 transition-opacity duration-300 ${menuOpen ? 'opacity-100 visible' : 'opacity-0 invisible'}`}
+        className={`fixed inset-0 bg-black/55 z-30 transition-opacity duration-300 ${menuOpen ? 'opacity-100 visible' : 'opacity-0 invisible'}`}
         aria-hidden={!menuOpen}
         onClick={() => setMenuOpen(false)}
       />
       <nav
-        className={`fixed top-0 right-0 w-[min(280px,85vw)] max-w-full h-screen py-16 px-2 pb-6 bg-surface/95 backdrop-blur-md border-l border-border z-40 overflow-y-auto transition-transform duration-300 ease-out md:w-[260px] ${menuOpen ? 'translate-x-0 shadow-[-4px_0_24px_rgba(0,0,0,0.3)]' : 'translate-x-full'}`}
+        className={`fixed top-0 right-0 w-[min(280px,85vw)] max-w-full h-screen py-16 px-2 pb-6 pixel-drawer z-40 overflow-y-auto transition-transform duration-300 ease-out md:w-[260px] ${menuOpen ? 'translate-x-0' : 'translate-x-full'}`}
       >
         <ul className="list-none m-0 p-0">
           {PAGES.map(({ id, label }) => (
-            <li key={id} className="m-0">
+            <li key={id} className="m-0 mb-1.5">
               <button
                 type="button"
-                className={`block w-full py-3 px-4 text-left text-base border-none rounded-lg bg-transparent cursor-pointer transition-colors hover:text-[#e6edf3] hover:bg-surface-hover ${page === id ? 'text-accent bg-surface-hover font-semibold' : 'text-muted'}`}
+                className={`block w-full py-3 px-4 text-left text-base border-none cursor-pointer pixel-pill ${page === id ? 'pixel-pill-active-gold' : 'text-muted'}`}
                 onClick={() => goTo(id)}
               >
                 {label}

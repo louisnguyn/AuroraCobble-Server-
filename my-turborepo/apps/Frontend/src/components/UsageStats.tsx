@@ -269,7 +269,7 @@ function SpeciesCard({
   }, [s.name])
 
   return (
-    <div className="mb-3 rounded-lg bg-surface border border-border hover:border-accent/60 transition-colors">
+    <div className="mb-3 pixel-panel hover:brightness-110 transition-[filter] duration-150">
       <button
         type="button"
         className="w-full flex items-center gap-4 px-4 py-3 sm:px-5 sm:py-4 text-left"
@@ -343,7 +343,7 @@ export function UsageStats() {
       .finally(() => setLoading(false))
   }, [])
 
-  const panelClass = 'p-8 text-center rounded-lg bg-surface border border-border'
+  const panelClass = 'p-8 text-center pixel-panel'
 
   if (loading) return <div className={panelClass}>Loading usage stats…</div>
   if (error) return <div className={`${panelClass} text-error`}>Error: {error}</div>

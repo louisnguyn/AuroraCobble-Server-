@@ -1,20 +1,45 @@
 @import "tailwindcss";
 
 @theme {
-  /* Blue–purple gradient theme */
-  --color-bg: #0f0a1a;
-  --color-surface: #1e1b4b;
-  --color-surface-hover: #312e81;
-  --color-border: #3730a3;
-  --color-muted: #a5b4d4;
-  --color-accent: #a78bfa;
-  --color-error: #f87171;
-  --color-copper: #b87333;
-  --color-silver: #c0c0c0;
-  --color-gold: #e8b923;
-  --color-emerald: #50c878;
-  --color-diamond: #6ee7f0;
-  --color-netherite: #c4b5fd;
+  /* Arcade / vaporwave — deep space base + neon cyan, magenta, amber */
+  --color-bg: #050510;
+  --color-surface: #12122a;
+  --color-surface-hover: #1c1c3d;
+  --color-border: #3d3d6b;
+  --color-muted: #94a3c8;
+  --color-accent: #38bdf8;
+  --color-error: #fb7185;
+  --color-copper: #f97316;
+  --color-silver: #cbd5e1;
+  --color-gold: #fbbf24;
+  --color-emerald: #4ade80;
+  --color-diamond: #22d3ee;
+  --color-netherite: #e879f9;
+  /* Slightly softer corners (arcade pill), still crisp */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 8px;
+  --radius-2xl: 10px;
+  --radius-3xl: 12px;
+  --font-sans: "VT323", ui-monospace, monospace;
+  /* Larger type scale (pixel font reads small at default rem sizes) */
+  --text-xs: 0.9375rem;
+  --text-xs--line-height: calc(1.25 / 0.9375);
+  --text-sm: 1.0625rem;
+  --text-sm--line-height: calc(1.4 / 1.0625);
+  --text-base: 1.25rem;
+  --text-base--line-height: calc(1.45 / 1.25);
+  --text-lg: 1.375rem;
+  --text-lg--line-height: calc(1.5 / 1.375);
+  --text-xl: 1.5625rem;
+  --text-xl--line-height: calc(1.45 / 1.5625);
+  --text-2xl: 1.875rem;
+  --text-2xl--line-height: calc(1.35 / 1.875);
+  --text-3xl: 2.125rem;
+  --text-3xl--line-height: calc(1.3 / 2.125);
+  --text-4xl: 2.5rem;
+  --text-4xl--line-height: calc(1.2 / 2.5);
 }
 
 @layer base {
@@ -25,12 +50,26 @@
     margin: 0;
     min-width: 320px;
     min-height: 100vh;
-    color: #e2e8f0;
+    color: #f1f5f9;
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    line-height: var(--text-base--line-height);
     font-synthesis: none;
-    text-rendering: optimizeLegibility;
-    -webkit-font-smoothing: antialiased;
-    background: linear-gradient(165deg, #0f0a1a 0%, #1e1b4b 35%, #312e81 65%, #1e1b4b 100%);
+    text-rendering: geometricPrecision;
+    -webkit-font-smoothing: none;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: #050510;
+    background-image:
+      radial-gradient(ellipse 130% 90% at 50% -25%, rgba(236, 72, 153, 0.16), transparent 55%),
+      radial-gradient(ellipse 90% 70% at 100% 20%, rgba(56, 189, 248, 0.1), transparent 50%),
+      radial-gradient(ellipse 80% 60% at 0% 85%, rgba(139, 92, 246, 0.14), transparent 55%),
+      linear-gradient(180deg, #04040c 0%, #0a0a1a 35%, #060612 100%);
     background-attachment: fixed;
+  }
+  img,
+  video {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
   }
   #root {
     @apply min-h-screen;
@@ -39,7 +78,7 @@
     @apply text-accent no-underline;
   }
   a:hover {
-    @apply underline;
+    @apply underline text-sky-300;
   }
 }
 
@@ -52,6 +91,237 @@
   }
   .burger-open span:nth-child(3) {
     transform: translateY(-7px) rotate(-45deg);
+  }
+
+  /* Top bar — chunky underline like arcade / STONKS header */
+  .arcade-header {
+    background: linear-gradient(180deg, #16162e 0%, #0d0d1f 100%);
+    border-bottom: 3px solid #030712;
+    box-shadow: 0 5px 0 #38bdf8;
+  }
+
+  /* Panels: neon bevel + hard shadow */
+  .pixel-panel {
+    background: linear-gradient(180deg, #1a1a38 0%, #12122a 55%, #0e0e22 100%);
+    border: 3px solid #030712;
+    border-radius: var(--radius-lg);
+    box-shadow: 6px 6px 0 #030712, 0 0 32px rgba(56, 189, 248, 0.06);
+    border-top-color: #64748b;
+    border-left-color: #64748b;
+  }
+
+  .pixel-panel-soft {
+    background: linear-gradient(180deg, rgba(26, 26, 56, 0.96) 0%, rgba(14, 14, 34, 0.98) 100%);
+    border: 3px solid #030712;
+    border-radius: var(--radius-lg);
+    box-shadow: 5px 5px 0 #030712;
+    border-top-color: #818cf8;
+    border-left-color: #818cf8;
+  }
+
+  .pixel-field {
+    background: #080810;
+    border: 3px solid #030712;
+    border-radius: var(--radius-md);
+    color: #f1f5f9;
+    font: inherit;
+    border-top-color: #1e293b;
+    border-left-color: #1e293b;
+    border-right-color: #334155;
+    border-bottom-color: #334155;
+    box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.35);
+  }
+  .pixel-field::placeholder {
+    color: rgb(148 163 200 / 0.65);
+  }
+  .pixel-field:focus {
+    outline: none;
+    border-color: #030712;
+    border-top-color: #38bdf8;
+    border-left-color: #38bdf8;
+    box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.25), 0 0 0 2px rgba(236, 72, 153, 0.35);
+  }
+
+  .pixel-well {
+    background: #06060e;
+    border: 3px solid #030712;
+    border-radius: var(--radius-md);
+    border-top-color: #0f172a;
+    border-left-color: #0f172a;
+    border-right-color: #475569;
+    border-bottom-color: #475569;
+    box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.4);
+  }
+
+  /* Arcade buttons: two-tone fill, dark outline, hard offset shadow */
+  .pixel-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-sans);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    touch-action: manipulation;
+    color: #fff;
+    text-shadow: 0 1px 0 #030712;
+    background: linear-gradient(180deg, #52525b 0%, #3f3f46 45%, #27272a 100%);
+    border: 3px solid #030712;
+    border-radius: var(--radius-lg);
+    box-shadow: 5px 5px 0 #18181b;
+    transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.12s ease;
+  }
+  .pixel-btn:hover {
+    filter: brightness(1.08);
+    transform: translate(-1px, -1px);
+    box-shadow: 6px 6px 0 #18181b;
+  }
+  .pixel-btn:active {
+    transform: translate(2px, 2px);
+    box-shadow: 3px 3px 0 #18181b;
+    filter: brightness(0.96);
+  }
+  .pixel-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: 4px 4px 0 #334155;
+    filter: grayscale(0.3);
+  }
+
+  /* Sky “BUY NOW” style — dark text */
+  .pixel-btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-sans);
+    font-size: inherit;
+    line-height: 1.35;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    touch-action: manipulation;
+    color: #030712;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+    background: linear-gradient(180deg, #7dd3fc 0%, #38bdf8 42%, #0284c7 100%);
+    border: 3px solid #030712;
+    border-radius: var(--radius-lg);
+    box-shadow: 5px 5px 0 #0369a1;
+    transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.12s ease;
+  }
+  .pixel-btn-primary:hover {
+    filter: brightness(1.06);
+    transform: translate(-1px, -1px);
+    box-shadow: 6px 6px 0 #0369a1;
+  }
+  .pixel-btn-primary:active {
+    transform: translate(2px, 2px);
+    box-shadow: 3px 3px 0 #0369a1;
+  }
+  .pixel-btn-primary:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: 4px 4px 0 #475569;
+    filter: grayscale(0.35);
+    color: #334155;
+    text-shadow: none;
+  }
+
+  /* Orange / gold — white label */
+  .pixel-btn-gold {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-sans);
+    font-size: inherit;
+    line-height: 1.35;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    touch-action: manipulation;
+    color: #fff;
+    text-shadow: 0 2px 0 #030712;
+    background: linear-gradient(180deg, #fdba74 0%, #f97316 45%, #c2410c 100%);
+    border: 3px solid #030712;
+    border-radius: var(--radius-lg);
+    box-shadow: 5px 5px 0 #7c2d12;
+    transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.12s ease;
+  }
+  .pixel-btn-gold:hover {
+    filter: brightness(1.06);
+    transform: translate(-1px, -1px);
+    box-shadow: 6px 6px 0 #7c2d12;
+  }
+  .pixel-btn-gold:active {
+    transform: translate(2px, 2px);
+    box-shadow: 3px 3px 0 #7c2d12;
+  }
+  .pixel-btn-gold:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: 4px 4px 0 #57534e;
+    filter: grayscale(0.25);
+  }
+
+  .pixel-pill {
+    font-family: var(--font-sans);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    touch-action: manipulation;
+    color: #cbd5e1;
+    text-shadow: 0 1px 0 #030712;
+    background: linear-gradient(180deg, #2a2a45 0%, #1a1a32 50%, #12122a 100%);
+    border: 3px solid #030712;
+    border-radius: var(--radius-lg);
+    box-shadow: 4px 4px 0 #030712;
+    transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.12s ease;
+  }
+  .pixel-pill:hover {
+    filter: brightness(1.1);
+    color: #f8fafc;
+    transform: translate(-1px, -1px);
+    box-shadow: 5px 5px 0 #030712;
+  }
+  .pixel-pill:active {
+    transform: translate(1px, 1px);
+    box-shadow: 3px 3px 0 #030712;
+  }
+
+  /* Active tab — arcade green */
+  .pixel-pill.pixel-pill-active-gold {
+    color: #fff;
+    text-shadow: 0 2px 0 #030712;
+    background: linear-gradient(180deg, #4ade80 0%, #22c55e 45%, #15803d 100%);
+    box-shadow: 5px 5px 0 #14532d;
+  }
+  .pixel-pill.pixel-pill-active-gold:hover {
+    filter: brightness(1.05);
+    color: #fff;
+  }
+
+  /* Active sub-tab — magenta / purple */
+  .pixel-pill.pixel-pill-active-accent {
+    color: #fff;
+    text-shadow: 0 2px 0 #030712;
+    background: linear-gradient(180deg, #e879f9 0%, #c026d3 48%, #86198f 100%);
+    box-shadow: 5px 5px 0 #4a044e;
+  }
+  .pixel-pill.pixel-pill-active-accent:hover {
+    filter: brightness(1.05);
+    color: #fff;
+  }
+
+  .pixel-drawer {
+    background: linear-gradient(180deg, #14142e 0%, #0a0a18 100%);
+    border-left: 3px solid #030712;
+    box-shadow: -6px 0 0 #ec4899, -10px 0 0 #030712;
   }
 
   /* Gacha chest – treasure chest effect */
@@ -124,22 +394,28 @@
 
   /* PrimeReact dropdown themed for Spawn filters */
   .spawn-dropdown.p-dropdown {
-    background: #0f0a1a;
-    border: 1px solid #3730a3;
-    border-radius: 0.75rem;
-    min-height: 42px;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    background: #080810;
+    border: 3px solid #030712;
+    border-radius: var(--radius-md);
+    min-height: 44px;
+    border-top-color: #1e293b;
+    border-left-color: #1e293b;
+    border-right-color: #475569;
+    border-bottom-color: #475569;
+    transition: filter 0.15s ease, box-shadow 0.15s ease;
   }
   .spawn-dropdown.p-dropdown:not(.p-disabled):hover {
-    border-color: rgba(167, 139, 250, 0.6);
+    filter: brightness(1.08);
   }
   .spawn-dropdown.p-dropdown.p-focus {
-    border-color: rgba(167, 139, 250, 0.7);
-    box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.3);
+    border-color: #030712;
+    border-top-color: #38bdf8;
+    border-left-color: #38bdf8;
+    box-shadow: 0 0 0 2px rgba(236, 72, 153, 0.35);
   }
   .spawn-dropdown .p-dropdown-label {
     color: #e2e8f0;
-    font-size: 0.875rem;
+    font-size: var(--text-sm);
     padding: 0.55rem 0.75rem;
   }
   .spawn-dropdown .p-dropdown-trigger {
@@ -151,9 +427,12 @@
     height: 0.9rem;
   }
   .spawn-dropdown-panel.p-dropdown-panel {
-    background: #1e1b4b;
-    border: 1px solid #3730a3;
-    border-radius: 0.75rem;
+    background: #12122a;
+    border: 3px solid #030712;
+    border-radius: var(--radius-md);
+    border-top-color: #818cf8;
+    border-left-color: #818cf8;
+    box-shadow: 5px 5px 0 #030712;
     margin-top: 0.35rem;
     overflow: hidden;
   }
@@ -162,16 +441,16 @@
   }
   .spawn-dropdown-panel .p-dropdown-item {
     color: #e2e8f0;
-    border-radius: 0.5rem;
+    border-radius: 2px;
     margin: 0.1rem 0;
     padding: 0.55rem 0.7rem;
   }
   .spawn-dropdown-panel .p-dropdown-item.p-highlight {
-    background: rgba(167, 139, 250, 0.2);
-    color: #c4b5fd;
+    background: rgba(56, 189, 248, 0.2);
+    color: #7dd3fc;
   }
   .spawn-dropdown-panel .p-dropdown-item:not(.p-highlight):not(.p-disabled):hover {
-    background: rgba(49, 46, 129, 0.9);
-    color: #e2e8f0;
+    background: rgba(236, 72, 153, 0.12);
+    color: #f8fafc;
   }
 }

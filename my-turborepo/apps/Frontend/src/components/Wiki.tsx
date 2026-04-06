@@ -132,12 +132,12 @@ export function Wiki() {
           ← Back to Pokédex
         </button>
         {detailLoading && !detail && (
-          <div className="rounded-lg bg-surface border border-border p-8 text-center text-muted">
+          <div className="pixel-panel p-8 text-center text-muted">
             Loading…
           </div>
         )}
         {!detailLoading && detail && (
-          <div className="rounded-lg bg-surface border border-border overflow-hidden">
+          <div className="pixel-panel overflow-hidden">
             <div className="p-4 sm:p-6 space-y-6">
               <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 items-start">
                 <div className="flex-shrink-0 mx-auto sm:mx-0">
@@ -378,12 +378,12 @@ export function Wiki() {
         placeholder="Search by name…"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        className="w-full max-w-sm rounded-lg bg-surface border border-border px-3 py-2 text-sm text-[#e2e8f0] placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent"
+        className="w-full max-w-sm pixel-field px-3 py-2.5 text-base placeholder:text-muted"
         aria-label="Search Pokémon"
       />
 
       {loading && (
-        <div className="rounded-lg bg-surface border border-border p-8 text-center text-muted">
+        <div className="pixel-panel p-8 text-center text-muted">
           Loading Pokédex…
         </div>
       )}
@@ -401,7 +401,7 @@ export function Wiki() {
               key={p.id}
               type="button"
               onClick={() => setSelectedId(p.id)}
-              className="rounded-lg bg-surface border border-border p-3 flex flex-col items-center gap-1 hover:bg-surface-hover hover:border-accent/50 transition-colors text-left"
+              className="pixel-panel p-3 flex flex-col items-center gap-1 hover:bg-surface-hover hover:border-accent/50 transition-colors text-left"
             >
               <img
                 src={pokemonSpriteUrl(p.id)}
@@ -418,7 +418,7 @@ export function Wiki() {
       )}
 
       {!loading && filtered.length === 0 && (
-        <div className="rounded-lg bg-surface border border-border p-6 text-center text-muted">
+        <div className="pixel-panel p-6 text-center text-muted">
           No Pokémon found. Try a different search.
         </div>
       )}

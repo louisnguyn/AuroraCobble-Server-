@@ -96,7 +96,7 @@ export function CobbleWebsiteWallet({ onBalanceUpdated }: { onBalanceUpdated?: (
   if (!isAuthenticated) return null
 
   return (
-    <section className="rounded-xl border border-border bg-[#0f0a1a]/50 p-5 sm:p-6 text-left">
+    <section className="pixel-well p-5 sm:p-6 text-left">
       <h2 className="text-lg font-semibold m-0 mb-1 text-[#e2e8f0]">C$ balance</h2>
       <p className="text-sm text-muted m-0 mb-4">
         Website Cobble$ — earn on the site, then deposit into your in-game balance. Your site username must match
@@ -119,14 +119,14 @@ export function CobbleWebsiteWallet({ onBalanceUpdated }: { onBalanceUpdated?: (
                 value={depositAmount}
                 onChange={(ev) => setDepositAmount(ev.target.value)}
                 placeholder="e.g. 5000"
-                className="w-full rounded-lg border border-border bg-[#0f0a1a]/80 px-3 py-2 text-[#e2e8f0] text-sm"
+                className="w-full pixel-field px-3 py-2.5 text-[#e2e8f0] text-base"
                 disabled={depositBusy}
               />
             </label>
             <button
               type="submit"
               disabled={depositBusy || walletBalance == null || walletBalance < 1}
-              className="shrink-0 rounded-lg px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 border border-white/10 disabled:opacity-50"
+              className="shrink-0 px-4 py-2.5 pixel-btn-primary text-base disabled:opacity-50"
             >
               {depositBusy ? 'Depositing…' : 'Deposit to server'}
             </button>
