@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   fetchPokemonList,
   fetchPokemonDetail,
   pokemonSpriteUrl,
   fetchMoveSummary,
+  showdownHomeSpriteUrl,
   type PokemonListEntry,
   type PokemonDetail,
   type MoveSummary,
@@ -50,6 +51,44 @@ const STAT_COLORS: Record<keyof PokemonDetail['baseStats'], string> = {
 
 function formatName(name: string): string {
   return name.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+/** Showdown animated sprite when available; falls back to official art / id sprite. */
+function WikiSpriteImg({
+  speciesSlug,
+  fallbackSrc,
+  alt,
+  className,
+  loading,
+}: {
+  speciesSlug: string
+  fallbackSrc: string
+  alt: string
+  className?: string
+  loading?: 'lazy' | 'eager'
+}) {
+  const slug = speciesSlug.trim()
+  const [src, setSrc] = useState(() => (slug ? showdownHomeSpriteUrl(slug) : fallbackSrc))
+  const usedFallback = useRef(false)
+
+  useEffect(() => {
+    usedFallback.current = false
+    setSrc(slug ? showdownHomeSpriteUrl(slug) : fallbackSrc)
+  }, [slug, fallbackSrc])
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className={className}
+      loading={loading}
+      onError={() => {
+        if (usedFallback.current) return
+        usedFallback.current = true
+        setSrc(fallbackSrc)
+      }}
+    />
+  )
 }
 
 export function Wiki() {
@@ -141,8 +180,9 @@ export function Wiki() {
             <div className="p-4 sm:p-6 space-y-6">
               <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 items-start">
                 <div className="flex-shrink-0 mx-auto sm:mx-0">
-                  <img
-                    src={detail.image || pokemonSpriteUrl(detail.id)}
+                  <WikiSpriteImg
+                    speciesSlug={detail.name}
+                    fallbackSrc={detail.image || pokemonSpriteUrl(detail.id)}
                     alt={detail.name}
                     className="w-48 h-48 object-contain"
                   />
@@ -217,8 +257,9 @@ export function Wiki() {
                                 defaultForm.id === detail.id ? 'ring-2 ring-accent' : ''
                               }`}
                             >
-                              <img
-                                src={pokemonSpriteUrl(defaultForm.id)}
+                              <WikiSpriteImg
+                                speciesSlug={defaultForm.name}
+                                fallbackSrc={pokemonSpriteUrl(defaultForm.id)}
                                 alt={defaultForm.name}
                                 className="w-20 h-20 object-contain"
                               />
@@ -258,8 +299,9 @@ export function Wiki() {
                                       form.id === detail.id ? 'ring-2 ring-accent' : ''
                                     }`}
                                   >
-                                    <img
-                                      src={pokemonSpriteUrl(form.id)}
+                                    <WikiSpriteImg
+                                      speciesSlug={form.name}
+                                      fallbackSrc={pokemonSpriteUrl(form.id)}
                                       alt={form.name}
                                       className="w-20 h-20 object-contain"
                                     />
@@ -403,10 +445,12 @@ export function Wiki() {
               onClick={() => setSelectedId(p.id)}
               className="pixel-panel p-3 flex flex-col items-center gap-1 hover:bg-surface-hover hover:border-accent/50 transition-colors text-left"
             >
-              <img
-                src={pokemonSpriteUrl(p.id)}
+              <WikiSpriteImg
+                speciesSlug={p.name}
+                fallbackSrc={pokemonSpriteUrl(p.id)}
                 alt={p.name}
                 className="w-16 h-16 sm:w-20 sm:h-20 object-contain"
+                loading="lazy"
               />
               <span className="text-xs font-medium text-muted">#{p.id}</span>
               <span className="text-sm font-medium truncate w-full text-center">

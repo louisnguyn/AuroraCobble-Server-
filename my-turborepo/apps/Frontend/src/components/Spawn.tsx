@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Dropdown, type DropdownChangeEvent } from 'primereact/dropdown'
 import { fetchSpawnBoss, fetchSpawnPokemon } from '../api'
 import type { SpawnBossResponse, SpawnPokemonResponse } from '../types'
 
@@ -222,30 +221,32 @@ export function Spawn() {
               placeholder="Search Pokemon..."
               className="min-w-[220px] flex-1 px-3 py-2.5 pixel-field text-base placeholder:text-muted/70"
             />
-            <Dropdown
+            <select
               value={generation}
-              onChange={(e: DropdownChangeEvent) => setGeneration(String(e.value ?? ''))}
-              options={generationOptions}
-              optionLabel="label"
-              optionValue="value"
-              className="spawn-dropdown min-w-[180px]"
-              panelClassName="spawn-dropdown-panel"
-              placeholder="All generations"
-              showClear={generation !== ''}
-              loading={loadingFilters}
-            />
-            <Dropdown
+              onChange={(e) => setGeneration(e.target.value)}
+              disabled={loadingFilters}
+              aria-label="Filter by generation"
+              className="min-w-[180px] pixel-field px-3 py-2.5 text-base text-[#ebe4d6] cursor-pointer"
+            >
+              {generationOptions.map((o) => (
+                <option key={o.value || '__all-gen'} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+            <select
               value={source}
-              onChange={(e: DropdownChangeEvent) => setSource(String(e.value ?? ''))}
-              options={sourceOptions}
-              optionLabel="label"
-              optionValue="value"
-              className="spawn-dropdown min-w-[180px]"
-              panelClassName="spawn-dropdown-panel"
-              placeholder="All sources"
-              showClear={source !== ''}
-              loading={loadingFilters}
-            />
+              onChange={(e) => setSource(e.target.value)}
+              disabled={loadingFilters}
+              aria-label="Filter by source"
+              className="min-w-[180px] pixel-field px-3 py-2.5 text-base text-[#ebe4d6] cursor-pointer"
+            >
+              {sourceOptions.map((o) => (
+                <option key={o.value || '__all-src'} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           {loading ? (

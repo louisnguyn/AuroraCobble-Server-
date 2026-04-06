@@ -13,6 +13,7 @@ import { Spawn } from './components/Spawn.tsx'
 import { Tournament } from './components/Tournament.tsx'
 import { TournamentTeamCompare } from './components/TournamentTeamCompare.tsx'
 import { TournamentTeamDetail } from './components/TournamentTeamDetail.tsx'
+import { TeamBuilder } from './components/TeamBuilder.tsx'
 type Page =
   | 'main'
   | 'leaderboard'
@@ -23,6 +24,7 @@ type Page =
   | 'spawn'
   | 'account'
   | 'tournament'
+  | 'teambuilder'
 
 const PAGES: { id: Page; label: string }[] = [
   { id: 'main', label: 'Main' },
@@ -30,6 +32,7 @@ const PAGES: { id: Page; label: string }[] = [
   { id: 'usage', label: 'Usage Stats' },
   { id: 'wiki', label: 'Wiki' },
   { id: 'rules', label: 'Rules' },
+  { id: 'teambuilder', label: 'Team Builder' },
   { id: 'gacha', label: 'Gacha' },
   { id: 'spawn', label: 'Spawn' },
   { id: 'account', label: 'Account' },
@@ -132,6 +135,7 @@ function AppContent() {
         {page === 'leaderboard' && <Leaderboard />}
         {page === 'wiki' && <Wiki />}
         {page === 'rules' && <Rules />}
+        {page === 'teambuilder' && <TeamBuilder />}
         {page === 'gacha' && <Gacha />}
         {page === 'spawn' && <Spawn />}
         {page === 'account' && <Account />}

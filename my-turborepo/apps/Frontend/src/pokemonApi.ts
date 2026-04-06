@@ -65,18 +65,75 @@ export function pokemonSpriteUrl(id: number): string {
   return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`
 }
 
+/** Slug for Showdown filenames: kebab-case, PokéAPI-compatible segment. */
+function sanitizeShowdownSpeciesSlug(speciesSlug: string): string {
+  return speciesSlug
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+}
+
 /**
- * Pokémon Showdown HOME sprites (same art as the teambuilder).
- * https://play.pokemonshowdown.com/sprites/home/
+ * Map PokéAPI / common slugs → Play animated basename
+ * (https://play.pokemonshowdown.com/sprites/ani/).
+ */
+const SHOWDOWN_ANI_SLUG_ALIASES: Record<string, string> = {
+  'mr-mime': 'mrmime',
+  'mr-mime-galar': 'mrmime-galar',
+  'mr-rime': 'mrrime',
+  'mime-jr': 'mimejr',
+  'type-null': 'typenull',
+  'ho-oh': 'hooh',
+  'jangmo-o': 'jangmoo',
+  'hakamo-o': 'hakamoo',
+  'kommo-o': 'kommoo',
+  'nidoran-m': 'nidoranm',
+  'nidoran-f': 'nidoranf',
+  'basculin-blue-striped': 'basculin-bluestriped',
+  'basculin-white-striped': 'basculin-whitestriped',
+}
+
+/** Filename slug for /sprites/ani/ and /sprites/ani-shiny/ (not always == PokéAPI name). */
+function showdownAniSpriteSlug(speciesSlug: string): string {
+  let s = sanitizeShowdownSpeciesSlug(speciesSlug)
+  // "galarian-moltres" / display order → Showdown "moltres-galar"
+  if (s.startsWith('galarian-')) {
+    s = `${s.slice('galarian-'.length)}-galar`
+  } else if (s.endsWith('galar') && !s.endsWith('-galar')) {
+    // Cobblemon / rewards: "moltresgalar" → "moltres-galar"
+    s = `${s.slice(0, -'galar'.length)}-galar`
+  }
+  s = s.replace(/-mega-x$/g, '-megax').replace(/-mega-y$/g, '-megay')
+  s = s.replace(/^tapu-([a-z]+)$/g, 'tapu$1')
+  return SHOWDOWN_ANI_SLUG_ALIASES[s] ?? s
+}
+
+/**
+ * Pokémon Showdown animated front sprites (GIF).
+ * https://play.pokemonshowdown.com/sprites/ani/
  */
 export function showdownHomeSpriteUrl(speciesSlug: string): string {
-  const s = speciesSlug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '')
+  const s = showdownAniSpriteSlug(speciesSlug)
+  return `https://play.pokemonshowdown.com/sprites/ani/${encodeURIComponent(s)}.gif`
+}
+
+/** Shiny animated: https://play.pokemonshowdown.com/sprites/ani-shiny/ */
+export function showdownHomeShinySpriteUrl(speciesSlug: string): string {
+  const s = showdownAniSpriteSlug(speciesSlug)
+  return `https://play.pokemonshowdown.com/sprites/ani-shiny/${encodeURIComponent(s)}.gif`
+}
+
+/** Static HOME PNG (fallback when ani GIF is missing). Same basename as ani. */
+export function showdownHomePngSpriteUrl(speciesSlug: string): string {
+  const s = showdownAniSpriteSlug(speciesSlug)
   return `https://play.pokemonshowdown.com/sprites/home/${encodeURIComponent(s)}.png`
 }
 
-/** Shiny variant: https://play.pokemonshowdown.com/sprites/home-shiny/ */
-export function showdownHomeShinySpriteUrl(speciesSlug: string): string {
-  const s = speciesSlug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '')
+export function showdownHomeShinyPngSpriteUrl(speciesSlug: string): string {
+  const s = showdownAniSpriteSlug(speciesSlug)
   return `https://play.pokemonshowdown.com/sprites/home-shiny/${encodeURIComponent(s)}.png`
 }
 
@@ -275,8 +332,8 @@ export async function fetchPokemonInfo(name: string): Promise<PokemonInfo | null
 const moveSummaryCache = new Map<string, MoveSummary | null>()
 const itemCache = new Map<string, string | null>() // item name -> image URL or null
 
-/** Slugify a generic name for PokéAPI (moves/items). */
-function toApiSlug(name: string): string {
+/** Slug for resource names (items, moves) — matches PokéAPI `/item/{slug}` paths. */
+export function pokeApiResourceSlug(name: string): string {
   return name
     .toLowerCase()
     .replace(/['.]/g, '')
@@ -284,9 +341,228 @@ function toApiSlug(name: string): string {
     .replace(/-+/g, '-')
 }
 
+const POKEAPI_ITEMS_RAW_BASE =
+  'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items'
+
+/**
+ * Raw GitHub URLs for an item icon: root `items/` first, then [`items/gen9/`](https://github.com/PokeAPI/sprites/tree/master/sprites/items/gen9)
+ * when Gen 9 assets are only in the subfolder.
+ */
+export function pokeApiItemSpriteCandidates(itemName: string): string[] {
+  const slug = pokeApiResourceSlug(itemName.trim())
+  if (!slug) return []
+  const enc = encodeURIComponent(slug)
+  return [`${POKEAPI_ITEMS_RAW_BASE}/${enc}.png`, `${POKEAPI_ITEMS_RAW_BASE}/gen9/${enc}.png`]
+}
+
+/**
+ * First candidate URL (`sprites/items/{slug}.png`). Prefer {@link pokeApiItemSpriteCandidates} when you need Gen 9 fallback paths.
+ */
+export function pokeApiItemSpriteUrl(itemName: string): string {
+  return pokeApiItemSpriteCandidates(itemName)[0] ?? ''
+}
+
+/** PokéAPI item index entry (`name` is API slug, e.g. `leftovers`). */
+export interface ItemListEntry {
+  name: string
+}
+
+/**
+ * Slugs that appear under [`sprites/items/gen9/`](https://github.com/PokeAPI/sprites/tree/master/sprites/items/gen9).
+ * Merged into the picker if missing from the PokéAPI index so Gen 9–heavy names still appear in the list.
+ */
+const ITEM_GEN9_SPRITE_FOLDER_SLUGS: readonly string[] = [
+  'ability-shield',
+  'absolite-z',
+  'barbaracite',
+  'baxcalibrite',
+  'booster-energy',
+  'chandelurite',
+  'chesnaughtite',
+  'chimechite',
+  'clear-amulet',
+  'clefablite',
+  'cornerstone-mask',
+  'covert-cloak',
+  'crabominite',
+  'darkranite',
+  'delphoxite',
+  'dragalgite',
+  'dragoninite',
+  'drampanite',
+  'eelektrossite',
+  'emboarite',
+  'excadrite',
+  'fairy-feather',
+  'falinksite',
+  'feraligite',
+  'floettite',
+  'froslassite',
+  'garchompite-z',
+  'glimmoranite',
+  'golisopite',
+  'golurkite',
+  'greninjite',
+  'hawluchanite',
+  'hearthflame-mask',
+  'heatranite',
+  'loaded-dice',
+  'lucarionite-z',
+  'magearnite',
+  'malamarite',
+  'meganiumite',
+  'meowsticite',
+  'mirror-herb',
+  'punching-glove',
+  'pyroarite',
+  'raichunite-x',
+  'raichunite-y',
+  'scolipite',
+  'scovillainite',
+  'scraftinite',
+  'skarmorite',
+  'staraptite',
+  'starminite',
+  'tatsugirinite',
+  'victreebelite',
+  'wellspring-mask',
+  'zeraorite',
+  'zygardite',
+]
+
+let itemListCache: ItemListEntry[] | null = null
+
+/** PokéAPI ability index entry (`name` is slug, e.g. `intimidate`). */
+export interface AbilityListEntry {
+  name: string
+}
+
+/** PokéAPI move index entry (`name` is slug, e.g. `earthquake`). */
+export interface MoveListEntry {
+  name: string
+}
+
+let abilityListCache: AbilityListEntry[] | null = null
+let moveListCache: MoveListEntry[] | null = null
+
+/**
+ * All ability slugs from PokéAPI (paginated). Cached for the session.
+ */
+export async function fetchAbilityList(): Promise<AbilityListEntry[]> {
+  if (abilityListCache) return abilityListCache
+  const out: AbilityListEntry[] = []
+  try {
+    let url: string | null = 'https://pokeapi.co/api/v2/ability?limit=500'
+    while (url) {
+      const res = await fetch(url)
+      if (!res.ok) break
+      const data = (await res.json()) as {
+        next?: string | null
+        results?: Array<{ name: string }>
+      }
+      for (const r of data.results ?? []) {
+        if (r?.name) out.push({ name: r.name })
+      }
+      url = typeof data.next === 'string' ? data.next : null
+    }
+    out.sort((a, b) => a.name.localeCompare(b.name))
+    abilityListCache = out
+    return out
+  } catch {
+    return []
+  }
+}
+
+/**
+ * All move slugs from PokéAPI (paginated). Cached for the session.
+ */
+export async function fetchMoveList(): Promise<MoveListEntry[]> {
+  if (moveListCache) return moveListCache
+  const out: MoveListEntry[] = []
+  try {
+    let url: string | null = 'https://pokeapi.co/api/v2/move?limit=500'
+    while (url) {
+      const res = await fetch(url)
+      if (!res.ok) break
+      const data = (await res.json()) as {
+        next?: string | null
+        results?: Array<{ name: string }>
+      }
+      for (const r of data.results ?? []) {
+        if (r?.name) out.push({ name: r.name })
+      }
+      url = typeof data.next === 'string' ? data.next : null
+    }
+    out.sort((a, b) => a.name.localeCompare(b.name))
+    moveListCache = out
+    return out
+  } catch {
+    return []
+  }
+}
+
+/** Tera types in Poképaste-style Title Case (incl. Stellar for Gen 9). */
+export const TERA_TYPE_OPTIONS: readonly string[] = [
+  'Normal',
+  'Fire',
+  'Water',
+  'Electric',
+  'Grass',
+  'Ice',
+  'Fighting',
+  'Poison',
+  'Ground',
+  'Flying',
+  'Psychic',
+  'Bug',
+  'Rock',
+  'Ghost',
+  'Dragon',
+  'Dark',
+  'Steel',
+  'Fairy',
+  'Stellar',
+]
+
+/**
+ * All item slugs from PokéAPI (paginated), plus any Gen 9 sprite-folder slugs not returned by the index.
+ * Cached in memory for the session.
+ */
+export async function fetchItemList(): Promise<ItemListEntry[]> {
+  if (itemListCache) return itemListCache
+  const out: ItemListEntry[] = []
+  try {
+    let url: string | null = 'https://pokeapi.co/api/v2/item?limit=500'
+    while (url) {
+      const res = await fetch(url)
+      if (!res.ok) break
+      const data = (await res.json()) as {
+        next?: string | null
+        results?: Array<{ name: string }>
+      }
+      for (const r of data.results ?? []) {
+        if (r?.name) out.push({ name: r.name })
+      }
+      url = typeof data.next === 'string' ? data.next : null
+    }
+    const seen = new Set(out.map((x) => x.name))
+    for (const name of ITEM_GEN9_SPRITE_FOLDER_SLUGS) {
+      if (!seen.has(name)) {
+        seen.add(name)
+        out.push({ name })
+      }
+    }
+    out.sort((a, b) => a.name.localeCompare(b.name))
+    itemListCache = out
+    return out
+  } catch {
+    return []
+  }
+}
+
 /** Fetch move summary (type, power, accuracy, damage class) from PokéAPI. Cached. */
 export async function fetchMoveSummary(moveName: string): Promise<MoveSummary | null> {
-  const key = toApiSlug(moveName)
+  const key = pokeApiResourceSlug(moveName)
   if (moveSummaryCache.has(key)) return moveSummaryCache.get(key) ?? null
 
   try {
@@ -323,7 +599,7 @@ export async function fetchMoveType(moveName: string): Promise<string | null> {
 
 /** Fetch item sprite URL from PokéAPI; returns null on 404 or error. Cached. */
 export async function fetchItemImage(itemName: string): Promise<string | null> {
-  const key = toApiSlug(itemName)
+  const key = pokeApiResourceSlug(itemName)
   if (itemCache.has(key)) return itemCache.get(key) ?? null
 
   try {

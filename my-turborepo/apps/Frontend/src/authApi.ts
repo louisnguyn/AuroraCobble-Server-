@@ -1,3 +1,5 @@
+import type { TeamBuildSlot } from './pokepasteParse'
+
 const API_BASE = import.meta.env.VITE_API_URL ?? '/api'
 
 export interface AuthUser {
@@ -73,6 +75,43 @@ export async function changePassword(currentPassword: string, newPassword: strin
   return fetchApi<{ ok: boolean }>('/auth/change-password', {
     method: 'POST',
     body: JSON.stringify({ currentPassword, newPassword }),
+  })
+}
+
+export interface SavedTeamRow {
+  id: number
+  name: string
+  team_json: TeamBuildSlot[]
+  updated_at: string
+}
+
+export async function fetchSavedTeams(): Promise<{ teams: SavedTeamRow[] }> {
+  return fetchApi<{ teams: SavedTeamRow[] }>('/user/saved-teams')
+}
+
+export async function createSavedTeam(body: {
+  name: string
+  team: TeamBuildSlot[]
+}): Promise<{ team: SavedTeamRow }> {
+  return fetchApi<{ team: SavedTeamRow }>('/user/saved-teams', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function updateSavedTeam(
+  id: number,
+  body: { name?: string; team?: TeamBuildSlot[] }
+): Promise<{ team: SavedTeamRow }> {
+  return fetchApi<{ team: SavedTeamRow }>(`/user/saved-teams/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function deleteSavedTeam(id: number): Promise<{ ok: boolean }> {
+  return fetchApi<{ ok: boolean }>(`/user/saved-teams/${id}`, {
+    method: 'DELETE',
   })
 }
 

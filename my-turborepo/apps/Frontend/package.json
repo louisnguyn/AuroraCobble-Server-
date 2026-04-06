@@ -12,8 +12,6 @@
   },
   "dependencies": {
     "@vercel/analytics": "^1.6.1",
-    "primeicons": "^7.0.0",
-    "primereact": "^10.9.7",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },

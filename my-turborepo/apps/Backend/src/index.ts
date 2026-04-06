@@ -771,6 +771,184 @@ app.post("/auth/change-password", requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
+type SavedTeamSlotJson = {
+  species: string;
+  speciesSlug: string;
+  item: string;
+  ability: string | null;
+  teraType: string | null;
+  moves: string[];
+};
+
+function emptySavedTeamSlot(): SavedTeamSlotJson {
+  return { species: "", speciesSlug: "", item: "", ability: null, teraType: null, moves: [] };
+}
+
+function normalizeSavedTeamSlots(raw: unknown): SavedTeamSlotJson[] | null {
+  if (!Array.isArray(raw)) return null;
+  const out: SavedTeamSlotJson[] = [];
+  for (let i = 0; i < 6; i++) {
+    const el = raw[i];
+    if (!el || typeof el !== "object") {
+      out.push(emptySavedTeamSlot());
+      continue;
+    }
+    const o = el as Record<string, unknown>;
+    const species = typeof o.species === "string" ? o.species.slice(0, 120) : "";
+    const speciesSlug = typeof o.speciesSlug === "string" ? o.speciesSlug.slice(0, 120) : "";
+    const item = typeof o.item === "string" ? o.item.slice(0, 120) : "";
+    const ability =
+      typeof o.ability === "string" && o.ability.trim() ? o.ability.trim().slice(0, 80) : null;
+    const teraType =
+      typeof o.teraType === "string" && o.teraType.trim()
+        ? o.teraType.trim().slice(0, 40)
+        : null;
+    let moves: string[] = [];
+    if (Array.isArray(o.moves)) {
+      moves = o.moves
+        .filter((m): m is string => typeof m === "string")
+        .map((m) => m.trim().slice(0, 80))
+        .filter(Boolean)
+        .slice(0, 24);
+    }
+    out.push({ species, speciesSlug, item, ability, teraType, moves });
+  }
+  return out;
+}
+
+// --- Saved teams (Team Builder, requires login) ---
+app.get("/user/saved-teams", requireAuth, async (_req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const userId = res.locals.user!.userId;
+  const { data, error } = await supabase
+    .from("user_saved_teams")
+    .select("id, name, team_json, updated_at")
+    .eq("user_id", userId)
+    .order("updated_at", { ascending: false });
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+  res.json({ teams: data ?? [] });
+});
+
+app.post("/user/saved-teams", requireAuth, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const userId = res.locals.user!.userId;
+  const name =
+    typeof req.body?.name === "string" ? req.body.name.trim().slice(0, 120) : "";
+  if (!name) {
+    res.status(400).json({ error: "Name is required" });
+    return;
+  }
+  const normalized = normalizeSavedTeamSlots(req.body?.team);
+  if (!normalized) {
+    res.status(400).json({ error: "team must be an array" });
+    return;
+  }
+  const { data, error } = await supabase
+    .from("user_saved_teams")
+    .insert({ user_id: userId, name, team_json: normalized })
+    .select("id, name, team_json, updated_at")
+    .single();
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+  res.status(201).json({ team: data });
+});
+
+app.patch("/user/saved-teams/:id", requireAuth, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const userId = res.locals.user!.userId;
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id) || id < 1) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+  const { data: existing, error: findErr } = await supabase
+    .from("user_saved_teams")
+    .select("id")
+    .eq("id", id)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (findErr) {
+    res.status(500).json({ error: findErr.message });
+    return;
+  }
+  if (!existing) {
+    res.status(404).json({ error: "Team not found" });
+    return;
+  }
+  const hasName = typeof req.body?.name === "string";
+  const hasTeam = req.body?.team !== undefined;
+  if (!hasName && !hasTeam) {
+    res.status(400).json({ error: "Provide name and/or team" });
+    return;
+  }
+  const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (hasName) {
+    const n = (req.body as { name: string }).name.trim().slice(0, 120);
+    if (!n) {
+      res.status(400).json({ error: "Name cannot be empty" });
+      return;
+    }
+    updates.name = n;
+  }
+  if (hasTeam) {
+    const normalized = normalizeSavedTeamSlots(req.body.team);
+    if (!normalized) {
+      res.status(400).json({ error: "team must be an array" });
+      return;
+    }
+    updates.team_json = normalized;
+  }
+  const { data, error } = await supabase
+    .from("user_saved_teams")
+    .update(updates)
+    .eq("id", id)
+    .eq("user_id", userId)
+    .select("id, name, team_json, updated_at")
+    .single();
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+  res.json({ team: data });
+});
+
+app.delete("/user/saved-teams/:id", requireAuth, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const userId = res.locals.user!.userId;
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id) || id < 1) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+  const { error } = await supabase
+    .from("user_saved_teams")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", userId);
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+  res.json({ ok: true });
+});
+
 // --- Gacha (requires login) ---
 app.get("/gacha/pools", requireAuth, async (_req, res) => {
   if (!supabase) {

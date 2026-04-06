@@ -17,7 +17,15 @@ import {
   type ExchangeRate,
 } from '../authApi'
 import { AuthModal } from './AuthModal'
-import { showdownHomeShinySpriteUrl, showdownHomeSpriteUrl } from '../pokemonApi'
+import {
+  fetchPokemonInfo,
+  showdownHomePngSpriteUrl,
+  showdownHomeShinyPngSpriteUrl,
+  showdownHomeShinySpriteUrl,
+  showdownHomeSpriteUrl,
+} from '../pokemonApi'
+
+type GachaSpeciesSpriteUrls = { gif: string; png: string; slug: string }
 
 /** Min time on “rolling” before the strip appears (feels fair even on fast API). */
 const MIN_LOOT_MS = 2200
@@ -32,43 +40,90 @@ function stripMinecraftFormatting(value: string): string {
 }
 
 /**
- * Pokémon Showdown HOME art — no PokéAPI.
- * Uses home-shiny when the label contains the word "shiny" (case-insensitive).
+ * Showdown ani GIF + HOME PNG fallback + slug for PokéAPI (third fallback).
+ * Shiny when the label contains the word "shiny" (case-insensitive).
  */
-function gachaShowdownSpriteUrl(rawLabel: string): string | null {
+function gachaShowdownSpriteUrls(rawLabel: string): GachaSpeciesSpriteUrls | null {
   const label = stripMinecraftFormatting(rawLabel).trim()
   if (!label) return null
   const shiny = /\bshiny\b/i.test(label)
   const base = label.replace(/\bshiny\b/gi, ' ').replace(/\s+/g, ' ').trim()
   if (!base) return null
-  const slug = base.toLowerCase().replace(/[^a-z0-9-]/g, '')
+  const slug = base
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
   if (!slug) return null
-  return shiny ? showdownHomeShinySpriteUrl(base) : showdownHomeSpriteUrl(base)
+  if (shiny) {
+    return {
+      gif: showdownHomeShinySpriteUrl(slug),
+      png: showdownHomeShinyPngSpriteUrl(slug),
+      slug,
+    }
+  }
+  return {
+    gif: showdownHomeSpriteUrl(slug),
+    png: showdownHomePngSpriteUrl(slug),
+    slug,
+  }
 }
 
 function GachaStripSprite({
   label,
-  src,
+  urls,
   imgClassName,
 }: {
   label: string
-  src: string | null
+  urls: GachaSpeciesSpriteUrls | null
   imgClassName?: string
 }) {
-  const [broken, setBroken] = useState(false)
   const display = stripMinecraftFormatting(label)
+  const [src, setSrc] = useState<string | null>(() => urls?.gif ?? null)
+  /** 0 gif → 1 png → 2 fetching PokéAPI (ignore duplicate errors) → 3 official art */
+  const stepRef = useRef(0)
+  const [showText, setShowText] = useState(!urls)
 
-  if (!src || broken) {
+  useEffect(() => {
+    stepRef.current = 0
+    setSrc(urls?.gif ?? null)
+    setShowText(!urls)
+  }, [urls])
+
+  if (!urls || showText) {
     return <span className="gacha-strip-fallback">{display}</span>
   }
 
   return (
     <img
-      src={src}
+      src={src ?? urls.gif}
       alt={display}
       className={imgClassName}
       draggable={false}
-      onError={() => setBroken(true)}
+      onError={() => {
+        if (stepRef.current === 0) {
+          stepRef.current = 1
+          setSrc(urls.png)
+          return
+        }
+        if (stepRef.current === 1) {
+          stepRef.current = 2
+          void fetchPokemonInfo(urls.slug).then((info) => {
+            if (info?.image) {
+              stepRef.current = 3
+              setSrc(info.image)
+            } else {
+              setShowText(true)
+            }
+          })
+          return
+        }
+        if (stepRef.current === 2) return
+        if (stepRef.current === 3) {
+          setShowText(true)
+        }
+      }}
     />
   )
 }
@@ -117,7 +172,9 @@ export function Gacha() {
   const [winIndex, setWinIndex] = useState(-1)
   const [stripTranslate, setStripTranslate] = useState(0)
   const [stripTransition, setStripTransition] = useState('none')
-  const [stripSpriteUrls, setStripSpriteUrls] = useState<Record<string, string | null>>({})
+  const [stripSpriteUrls, setStripSpriteUrls] = useState<
+    Record<string, GachaSpeciesSpriteUrls | null>
+  >({})
   const [poolRewards, setPoolRewards] = useState<PoolReward[]>([])
   const [history, setHistory] = useState<GachaHistoryEntry[]>([])
   const [exchangeRates, setExchangeRates] = useState<ExchangeRate[]>([])
@@ -287,7 +344,9 @@ export function Gacha() {
 
       const { items, winIndex: wIdx } = buildLootStrip(result.reward.reward_type, poolRewards)
       const unique = [...new Set(items)]
-      setStripSpriteUrls(Object.fromEntries(unique.map((label) => [label, gachaShowdownSpriteUrl(label)])))
+      setStripSpriteUrls(
+        Object.fromEntries(unique.map((label) => [label, gachaShowdownSpriteUrls(label)])),
+      )
       setStripItems(items)
       setWinIndex(wIdx)
       setLootPhase('spinning')
@@ -482,7 +541,7 @@ export function Gacha() {
                         <div className="w-[120px] h-[120px] flex items-center justify-center pixel-well rounded-sm overflow-hidden">
                           <GachaStripSprite
                             label={lastReward.reward.reward_type}
-                            src={gachaShowdownSpriteUrl(lastReward.reward.reward_type)}
+                            urls={gachaShowdownSpriteUrls(lastReward.reward.reward_type)}
                             imgClassName="max-h-[112px] max-w-[112px] w-auto h-auto object-contain"
                           />
                         </div>
@@ -557,7 +616,7 @@ export function Gacha() {
                                 >
                                   <GachaStripSprite
                                     label={label}
-                                    src={sprite}
+                                    urls={sprite}
                                     imgClassName="gacha-strip-sprite"
                                   />
                                 </div>

@@ -4,6 +4,7 @@ type Page =
   | 'usage'
   | 'wiki'
   | 'rules'
+  | 'teambuilder'
   | 'gacha'
   | 'spawn'
   | 'tournament'
@@ -18,6 +19,11 @@ const QUICK_LINKS: { id: Exclude<Page, 'main'>; label: string; description: stri
   { id: 'usage', label: 'Usage Stats', description: 'Pokémon usage by tier and format' },
   { id: 'wiki', label: 'Wiki', description: 'Pokédex, moves, evolution & forms' },
   { id: 'rules', label: 'Rules', description: 'Format rules & restrictions' },
+  {
+    id: 'teambuilder',
+    label: 'Team Builder',
+    description: 'Paste a Showdown team — sprites & item icons',
+  },
   { id: 'gacha', label: 'Gacha', description: 'Open loot & collect rewards (login required)' },
   { id: 'spawn', label: 'Spawn', description: 'Pokemon spawn locations and conditions' },
   {
@@ -85,7 +91,8 @@ export function Home({ onNavigate }: HomeProps) {
 
       {!onNavigate && (
         <p className="text-center text-base text-muted/80 mt-8">
-          Use the menu to switch sections — Leaderboard, Usage, Wiki, Rules, Gacha, Spawn, Tournament, and Account.
+          Use the menu to switch sections — Leaderboard, Usage, Wiki, Rules, Team Builder, Gacha, Spawn,
+          Tournament, and Account.
         </p>
       )}
     </div>
