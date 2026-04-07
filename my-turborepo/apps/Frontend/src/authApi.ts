@@ -82,6 +82,8 @@ export interface SavedTeamRow {
   id: number
   name: string
   team_json: TeamBuildSlot[]
+  /** Saved Team Builder AI markdown analysis, if any */
+  ai_analysis?: string | null
   updated_at: string
 }
 
@@ -92,6 +94,7 @@ export async function fetchSavedTeams(): Promise<{ teams: SavedTeamRow[] }> {
 export async function createSavedTeam(body: {
   name: string
   team: TeamBuildSlot[]
+  ai_analysis?: string | null
 }): Promise<{ team: SavedTeamRow }> {
   return fetchApi<{ team: SavedTeamRow }>('/user/saved-teams', {
     method: 'POST',
@@ -101,7 +104,7 @@ export async function createSavedTeam(body: {
 
 export async function updateSavedTeam(
   id: number,
-  body: { name?: string; team?: TeamBuildSlot[] }
+  body: { name?: string; team?: TeamBuildSlot[]; ai_analysis?: string | null }
 ): Promise<{ team: SavedTeamRow }> {
   return fetchApi<{ team: SavedTeamRow }>(`/user/saved-teams/${id}`, {
     method: 'PATCH',

@@ -33,6 +33,7 @@ import {
   parseRewardForGivePokemon,
 } from "./gachaRewardClaim.js";
 import { registerTournamentRoutes } from "./tournamentRoutes.js";
+import { analyzeTeamPokepaste } from "./teamAnalyzeAi.js";
 import {
   buildCobbledollarsDepositCommand,
   isCobbledollarsDepositEnabled,
@@ -408,7 +409,10 @@ async function notifyDiscordCobbleLedger(
 app.use((_req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", CORS_ORIGIN);
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, X-Client-Locale",
+  );
   next();
 });
 app.options("*", (_, res) => res.sendStatus(204));
@@ -473,6 +477,86 @@ function requireAdmin(
 app.use(express.json());
 
 registerTournamentRoutes(app, { requireAuth, requireAdmin });
+
+const TEAM_AI_COOLDOWN_MS = 48 * 60 * 60 * 1000;
+
+app.post("/team/analyze-ai", requireAuth, async (req, res) => {
+  const paste = typeof (req.body as { pokepaste?: unknown } | undefined)?.pokepaste === "string"
+    ? (req.body as { pokepaste: string }).pokepaste
+    : "";
+  if (!paste.trim()) {
+    res.status(400).json({ error: "pokepaste required" });
+    return;
+  }
+  if (paste.length > 12_000) {
+    res.status(400).json({ error: "pokepaste too long" });
+    return;
+  }
+  if (!process.env.OPENAI_API_KEY?.trim()) {
+    res.status(503).json({ error: "AI analysis is not configured on this server." });
+    return;
+  }
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+
+  const userId = res.locals.user!.userId;
+  const { data: urow, error: userErr } = await supabase
+    .from("users")
+    .select("is_admin, last_team_ai_at")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (userErr) {
+    res.status(500).json({ error: userErr.message });
+    return;
+  }
+  if (!urow) {
+    res.status(403).json({ error: "User not found" });
+    return;
+  }
+
+  const isAdminUser = !!(urow as { is_admin?: boolean }).is_admin;
+  const lastAtRaw = (urow as { last_team_ai_at?: string | null }).last_team_ai_at;
+  if (!isAdminUser && lastAtRaw) {
+    const lastMs = new Date(lastAtRaw).getTime();
+    if (Number.isFinite(lastMs)) {
+      const elapsed = Date.now() - lastMs;
+      if (elapsed >= 0 && elapsed < TEAM_AI_COOLDOWN_MS) {
+        const nextAllowed = new Date(lastMs + TEAM_AI_COOLDOWN_MS).toISOString();
+        const wantVi = String(req.headers["x-client-locale"] ?? "").toLowerCase() === "vi";
+        res.status(429).json({
+          code: "team_ai_cooldown",
+          next_allowed_at: nextAllowed,
+          error: wantVi
+            ? "Bạn chỉ có thể phân tích đội bằng AI một lần mỗi 48 giờ. Quản trị viên không bị giới hạn."
+            : "You can only use Team AI analysis once every 48 hours. Administrators are not limited.",
+        });
+        return;
+      }
+    }
+  }
+
+  const body = (req.body ?? {}) as { language?: unknown };
+  const language = body.language === "vi" ? "vi" : "en";
+  try {
+    const { text } = await analyzeTeamPokepaste(paste, { language });
+    if (!isAdminUser) {
+      const { error: upErr } = await supabase
+        .from("users")
+        .update({ last_team_ai_at: new Date().toISOString() })
+        .eq("id", userId);
+      if (upErr) {
+        console.error("[team/analyze-ai] last_team_ai_at update failed", upErr);
+      }
+    }
+    res.json({ analysis: text });
+  } catch (e) {
+    console.error("[team/analyze-ai]", e);
+    res.status(502).json({ error: "AI request failed. Try again later." });
+  }
+});
 
 app.get("/", (_req, res) => {
   res.json({ message: "Backend running" });
@@ -816,6 +900,16 @@ function normalizeSavedTeamSlots(raw: unknown): SavedTeamSlotJson[] | null {
   return out;
 }
 
+const MAX_SAVED_AI_ANALYSIS_CHARS = 100_000;
+
+function normalizeSavedAiAnalysis(raw: unknown): string | null {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw !== "string") return null;
+  const t = raw.trim();
+  if (!t) return null;
+  return t.length > MAX_SAVED_AI_ANALYSIS_CHARS ? t.slice(0, MAX_SAVED_AI_ANALYSIS_CHARS) : t;
+}
+
 // --- Saved teams (Team Builder, requires login) ---
 app.get("/user/saved-teams", requireAuth, async (_req, res) => {
   if (!supabase) {
@@ -825,7 +919,7 @@ app.get("/user/saved-teams", requireAuth, async (_req, res) => {
   const userId = res.locals.user!.userId;
   const { data, error } = await supabase
     .from("user_saved_teams")
-    .select("id, name, team_json, updated_at")
+    .select("id, name, team_json, ai_analysis, updated_at")
     .eq("user_id", userId)
     .order("updated_at", { ascending: false });
   if (error) {
@@ -852,10 +946,13 @@ app.post("/user/saved-teams", requireAuth, async (req, res) => {
     res.status(400).json({ error: "team must be an array" });
     return;
   }
+  const body = (req.body ?? {}) as { ai_analysis?: unknown };
+  const ai_analysis =
+    "ai_analysis" in body ? normalizeSavedAiAnalysis(body.ai_analysis) : null;
   const { data, error } = await supabase
     .from("user_saved_teams")
-    .insert({ user_id: userId, name, team_json: normalized })
-    .select("id, name, team_json, updated_at")
+    .insert({ user_id: userId, name, team_json: normalized, ai_analysis })
+    .select("id, name, team_json, ai_analysis, updated_at")
     .single();
   if (error) {
     res.status(500).json({ error: error.message });
@@ -889,15 +986,17 @@ app.patch("/user/saved-teams/:id", requireAuth, async (req, res) => {
     res.status(404).json({ error: "Team not found" });
     return;
   }
-  const hasName = typeof req.body?.name === "string";
-  const hasTeam = req.body?.team !== undefined;
-  if (!hasName && !hasTeam) {
-    res.status(400).json({ error: "Provide name and/or team" });
+  const patchBody = (req.body ?? {}) as { name?: unknown; team?: unknown; ai_analysis?: unknown };
+  const hasName = typeof patchBody.name === "string";
+  const hasTeam = patchBody.team !== undefined;
+  const hasAiAnalysis = patchBody !== null && typeof patchBody === "object" && "ai_analysis" in patchBody;
+  if (!hasName && !hasTeam && !hasAiAnalysis) {
+    res.status(400).json({ error: "Provide name, team, and/or ai_analysis" });
     return;
   }
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (hasName) {
-    const n = (req.body as { name: string }).name.trim().slice(0, 120);
+    const n = (patchBody.name as string).trim().slice(0, 120);
     if (!n) {
       res.status(400).json({ error: "Name cannot be empty" });
       return;
@@ -905,19 +1004,22 @@ app.patch("/user/saved-teams/:id", requireAuth, async (req, res) => {
     updates.name = n;
   }
   if (hasTeam) {
-    const normalized = normalizeSavedTeamSlots(req.body.team);
+    const normalized = normalizeSavedTeamSlots(patchBody.team);
     if (!normalized) {
       res.status(400).json({ error: "team must be an array" });
       return;
     }
     updates.team_json = normalized;
   }
+  if (hasAiAnalysis) {
+    updates.ai_analysis = normalizeSavedAiAnalysis(patchBody.ai_analysis);
+  }
   const { data, error } = await supabase
     .from("user_saved_teams")
     .update(updates)
     .eq("id", id)
     .eq("user_id", userId)
-    .select("id, name, team_json, updated_at")
+    .select("id, name, team_json, ai_analysis, updated_at")
     .single();
   if (error) {
     res.status(500).json({ error: error.message });

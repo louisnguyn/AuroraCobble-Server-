@@ -1,7 +1,11 @@
+import { getStoredToken } from './authApi'
+
 const API_BASE = import.meta.env.VITE_API_URL ?? '/api'
 
+const apiOrigin = API_BASE.replace(/\/$/, '')
+
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE.replace(/\/$/, '')}${path}`)
+  const res = await fetch(`${apiOrigin}${path}`)
   if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`)
   return res.json() as Promise<T>
 }
@@ -44,4 +48,48 @@ export async function fetchSpawnBoss(params?: { q?: string; limit?: number }) {
   if (params?.limit) sp.set('limit', String(params.limit))
   const q = sp.toString()
   return get<import('./types').SpawnBossResponse>(`/spawn/boss${q ? `?${q}` : ''}`)
+}
+
+export type TeamAnalysisLanguage = 'en' | 'vi'
+
+export async function analyzeTeamWithAI(
+  pokepaste: string,
+  opts?: { language?: TeamAnalysisLanguage }
+): Promise<{ analysis: string }> {
+  const token = getStoredToken()
+  if (!token) {
+    throw new Error('LOGIN_REQUIRED')
+  }
+  const language = opts?.language === 'vi' ? 'vi' : 'en'
+  const res = await fetch(`${apiOrigin}/team/analyze-ai`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      ...(language === 'vi' ? { 'X-Client-Locale': 'vi' } : {}),
+    },
+    body: JSON.stringify({ pokepaste, language }),
+  })
+  const data = (await res.json().catch(() => null)) as
+    | { analysis?: string; error?: string; code?: string; next_allowed_at?: string }
+    | null
+
+  if (res.status === 429 && data?.code === 'team_ai_cooldown') {
+    const err = new Error('TEAM_AI_COOLDOWN') as Error & { nextAllowedAt?: string }
+    err.nextAllowedAt =
+      typeof data.next_allowed_at === 'string' ? data.next_allowed_at : undefined
+    throw err
+  }
+
+  if (!res.ok) {
+    const msg =
+      data && typeof data.error === 'string' ? data.error : `API ${res.status}: ${res.statusText}`
+    throw new Error(msg)
+  }
+
+  const analysis = data && typeof data.analysis === 'string' ? data.analysis : ''
+  if (!analysis) {
+    throw new Error('Empty analysis response')
+  }
+  return { analysis }
 }

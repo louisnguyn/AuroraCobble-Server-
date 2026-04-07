@@ -7,6 +7,7 @@ import {
   type Dispatch,
   type SetStateAction,
 } from 'react'
+import ReactMarkdown, { type Components } from 'react-markdown'
 import {
   createSavedTeam,
   deleteSavedTeam,
@@ -25,6 +26,7 @@ import {
   teamSlotsToPaste,
   type TeamBuildSlot,
 } from '../pokepasteParse'
+import { analyzeTeamWithAI, type TeamAnalysisLanguage } from '../api'
 import {
   fetchAbilityList,
   fetchItemImage,
@@ -277,6 +279,40 @@ function SlotFormFields({
   )
 }
 
+const aiAnalysisMarkdownComponents: Components = {
+  h1: ({ children }) => (
+    <h3 className="text-lg font-semibold text-[#f5efe6] mt-4 mb-2 first:mt-0">{children}</h3>
+  ),
+  h2: ({ children }) => (
+    <h3 className="text-base font-semibold text-[#f5efe6] mt-4 mb-2 first:mt-0 border-b border-border/35 pb-1">
+      {children}
+    </h3>
+  ),
+  h3: ({ children }) => (
+    <h4 className="text-sm font-semibold text-[#f5efe6] mt-3 mb-1.5">{children}</h4>
+  ),
+  p: ({ children }) => <p className="my-2 text-[#ede8df]/92 leading-relaxed first:mt-0 last:mb-0">{children}</p>,
+  ul: ({ children }) => (
+    <ul className="my-2 ml-4 list-disc space-y-1.5 text-[#ede8df]/92 marker:text-amber-200/70">{children}</ul>
+  ),
+  ol: ({ children }) => (
+    <ol className="my-2 ml-4 list-decimal space-y-1.5 text-[#ede8df]/92 marker:text-amber-200/70">{children}</ol>
+  ),
+  li: ({ children }) => <li className="[&>p]:my-1 [&>p:first-child]:mt-0 [&>p:last-child]:mb-0">{children}</li>,
+  strong: ({ children }) => <strong className="font-semibold text-[#f5efe6]">{children}</strong>,
+  em: ({ children }) => <em className="italic text-[#f8f4ec]">{children}</em>,
+}
+
+const TEAM_AI_LANG_STORAGE_KEY = 'aurora_team_ai_lang'
+
+function readStoredTeamAiLang(): TeamAnalysisLanguage {
+  try {
+    return localStorage.getItem(TEAM_AI_LANG_STORAGE_KEY) === 'vi' ? 'vi' : 'en'
+  } catch {
+    return 'en'
+  }
+}
+
 const EXAMPLE_PASTE = `Great Tusk @ Booster Energy
 Ability: Protosynthesis
 Tera Type: Ground
@@ -308,8 +344,36 @@ function slotsFromSavedJson(raw: unknown): TeamBuildSlot[] {
   return base
 }
 
+function formatTeamAiCooldownMessage(lang: TeamAnalysisLanguage, nextIso?: string): string {
+  if (lang === 'vi') {
+    if (nextIso) {
+      try {
+        const d = new Date(nextIso)
+        if (!Number.isNaN(d.getTime())) {
+          return `Bạn chỉ dùng phân tích AI tối đa 1 lần / 48 giờ. Lần tiếp theo: ${d.toLocaleString('vi-VN')}.`
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    return 'Bạn chỉ dùng phân tích AI tối đa 1 lần mỗi 48 giờ.'
+  }
+  if (nextIso) {
+    try {
+      const d = new Date(nextIso)
+      if (!Number.isNaN(d.getTime())) {
+        return `You can use Team AI analysis at most once every 48 hours. Next available: ${d.toLocaleString()}.`
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  return 'You can use Team AI analysis at most once every 48 hours.'
+}
+
 export function TeamBuilder() {
-  const { isAuthenticated, loading: authLoading } = useAuth()
+  const { isAuthenticated, user, loading: authLoading } = useAuth()
+  const isAdminUser = Boolean(user?.is_admin)
   const [slots, setSlots] = useState<TeamBuildSlot[]>(() => emptyTeamSlots())
   const [pasteImport, setPasteImport] = useState('')
   const [teamName, setTeamName] = useState('')
@@ -318,6 +382,19 @@ export function TeamBuilder() {
   const [savedLoading, setSavedLoading] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saveOk, setSaveOk] = useState<string | null>(null)
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
+  const [aiAnalysis, setAiAnalysis] = useState<string | null>(null)
+  const [aiLang, setAiLang] = useState<TeamAnalysisLanguage>(() => readStoredTeamAiLang())
+
+  const persistAiLang = (lang: TeamAnalysisLanguage) => {
+    setAiLang(lang)
+    try {
+      localStorage.setItem(TEAM_AI_LANG_STORAGE_KEY, lang)
+    } catch {
+      /* ignore quota / private mode */
+    }
+  }
   const [formError, setFormError] = useState<string | null>(null)
   const [showAuth, setShowAuth] = useState(false)
   const [speciesOptions, setSpeciesOptions] = useState<PokemonListEntry[]>([])
@@ -429,6 +506,8 @@ export function TeamBuilder() {
     setSlots(next)
     closeForm()
     setSavedTeamRowId(null)
+    setAiAnalysis(null)
+    setAiError(null)
     setSaveOk(parsed.length ? `Imported ${Math.min(parsed.length, 6)} Pokémon into slots.` : null)
     setTimeout(() => setSaveOk(null), 3000)
   }, [pasteImport, closeForm])
@@ -444,6 +523,52 @@ export function TeamBuilder() {
     setTimeout(() => setSaveOk(null), 2500)
   }, [slots])
 
+  const runTeamAnalyseByAi = useCallback(async () => {
+    if (!isAuthenticated) {
+      setAiError(
+        aiLang === 'vi'
+          ? 'Đăng nhập để dùng phân tích AI (tài khoản thường: 1 lần / 48 giờ).'
+          : 'Log in to use AI team analysis (standard accounts: once per 48 hours).',
+      )
+      setAiAnalysis(null)
+      setShowAuth(true)
+      return
+    }
+    const paste = teamSlotsToPaste(slots)
+    if (!paste.trim()) {
+      setAiError(
+        aiLang === 'vi'
+          ? 'Thêm ít nhất một Pokémon trước khi chạy phân tích AI.'
+          : 'Add at least one Pokémon before running AI analysis.',
+      )
+      setAiAnalysis(null)
+      return
+    }
+    setAiLoading(true)
+    setAiError(null)
+    setAiAnalysis(null)
+    try {
+      const { analysis } = await analyzeTeamWithAI(paste, { language: aiLang })
+      setAiAnalysis(analysis)
+    } catch (e) {
+      if (e instanceof Error && e.message === 'TEAM_AI_COOLDOWN') {
+        const next = (e as Error & { nextAllowedAt?: string }).nextAllowedAt
+        setAiError(formatTeamAiCooldownMessage(aiLang, next))
+      } else if (e instanceof Error && e.message === 'LOGIN_REQUIRED') {
+        setAiError(
+          aiLang === 'vi' ? 'Phiên đăng nhập hết hạn. Đăng nhập lại.' : 'Session expired. Please log in again.',
+        )
+        setShowAuth(true)
+      } else {
+        setAiError(
+          e instanceof Error ? e.message : aiLang === 'vi' ? 'Phân tích thất bại.' : 'Analysis failed.',
+        )
+      }
+    } finally {
+      setAiLoading(false)
+    }
+  }, [slots, aiLang, isAuthenticated])
+
   const handleSave = async () => {
     setSaveError(null)
     setSaveOk(null)
@@ -457,13 +582,24 @@ export function TeamBuilder() {
       return
     }
     try {
+      const aiPayload = aiAnalysis?.trim() ? aiAnalysis : null
       if (savedTeamRowId != null) {
-        const { team } = await updateSavedTeam(savedTeamRowId, { name, team: slots })
+        const { team } = await updateSavedTeam(savedTeamRowId, {
+          name,
+          team: slots,
+          ai_analysis: aiPayload,
+        })
         setSavedTeamRowId(team.id)
+        setAiAnalysis(team.ai_analysis?.trim() ? team.ai_analysis : null)
         setSaveOk('Team updated.')
       } else {
-        const { team } = await createSavedTeam({ name, team: slots })
+        const { team } = await createSavedTeam({
+          name,
+          team: slots,
+          ai_analysis: aiPayload,
+        })
         setSavedTeamRowId(team.id)
+        setAiAnalysis(team.ai_analysis?.trim() ? team.ai_analysis : null)
         setSaveOk('Team saved.')
       }
       await refreshSaved()
@@ -479,6 +615,8 @@ export function TeamBuilder() {
     closeForm()
     setSaveOk(null)
     setSaveError(null)
+    setAiError(null)
+    setAiAnalysis(row.ai_analysis?.trim() ? row.ai_analysis : null)
   }
 
   const copySavedTeamPokepaste = useCallback(async (row: SavedTeamRow) => {
@@ -500,6 +638,8 @@ export function TeamBuilder() {
         setSavedTeamRowId(null)
         setTeamName('')
         setSlots(emptyTeamSlots())
+        setAiAnalysis(null)
+        setAiError(null)
       }
       await refreshSaved()
       closeForm()
@@ -517,6 +657,8 @@ export function TeamBuilder() {
     setPasteImport('')
     setSaveError(null)
     setSaveOk(null)
+    setAiAnalysis(null)
+    setAiError(null)
     closeForm()
   }
 
@@ -531,14 +673,79 @@ export function TeamBuilder() {
         </p>
       </header>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <button type="button" onClick={newTeam} className="pixel-btn text-sm py-2 px-3">
           New team
         </button>
         <button type="button" onClick={exportPaste} className="pixel-btn text-sm py-2 px-3">
           Copy current team
         </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <label htmlFor="tb-ai-lang" className="text-xs text-muted whitespace-nowrap m-0">
+            AI language / Ngôn ngữ
+          </label>
+          <select
+            id="tb-ai-lang"
+            value={aiLang}
+            onChange={(e) => persistAiLang(e.target.value === 'vi' ? 'vi' : 'en')}
+            disabled={aiLoading}
+            className="pixel-field text-sm py-1.5 px-2 min-w-[9rem] disabled:opacity-60"
+          >
+            <option value="en">English</option>
+            <option value="vi">Tiếng Việt</option>
+          </select>
+        </div>
+        <button
+          type="button"
+          onClick={() => void runTeamAnalyseByAi()}
+          disabled={aiLoading}
+          className="pixel-btn-primary text-sm py-2 px-3 disabled:opacity-60"
+        >
+          {aiLoading
+            ? aiLang === 'vi'
+              ? 'Đang phân tích…'
+              : 'Analysing…'
+            : aiLang === 'vi'
+              ? 'Phân tích đội (AI)'
+              : 'Team analyse by AI'}
+        </button>
       </div>
+
+      {!authLoading ? (
+        <p className="text-[11px] text-muted m-0 max-w-2xl">
+          {!isAuthenticated ? (
+            aiLang === 'vi' ? (
+              <>
+                Phân tích AI cần <span className="text-[#f5efe6]/90">đăng nhập</span>. Tài khoản thường: tối đa{' '}
+                <span className="text-[#f5efe6]/90">1 lần / 48 giờ</span>.
+              </>
+            ) : (
+              <>
+                AI analysis requires <span className="text-[#f5efe6]/90">logging in</span>. Standard accounts:{' '}
+                <span className="text-[#f5efe6]/90">once per 48 hours</span>.
+              </>
+            )
+          ) : isAdminUser ? (
+            aiLang === 'vi' ? (
+              <>
+                Tài khoản quản trị: <span className="text-[#f5efe6]/90">không giới hạn</span> số lần phân tích AI.
+              </>
+            ) : (
+              <>
+                Admin account: <span className="text-[#f5efe6]/90">no limit</span> on AI analyses.
+              </>
+            )
+          ) : aiLang === 'vi' ? (
+            <>
+              Tài khoản thường: tối đa <span className="text-[#f5efe6]/90">1 lần phân tích AI mỗi 48 giờ</span>.
+            </>
+          ) : (
+            <>
+              Standard account: <span className="text-[#f5efe6]/90">one AI analysis every 48 hours</span>.
+            </>
+          )}
+        </p>
+      ) : null}
 
       {isAuthenticated && (
         <div className="pixel-panel-soft p-4 space-y-3">
@@ -587,6 +794,43 @@ export function TeamBuilder() {
           )}
         </div>
       )}
+
+      {(aiError || aiAnalysis) && (
+        <div className="pixel-panel-soft p-4 space-y-2 border-2 border-accent/25">
+          <h2 className="text-base font-semibold text-[#f5efe6] m-0">
+            {aiLang === 'vi' ? 'Phân tích đội (AI)' : 'AI team analysis'}
+          </h2>
+          <p className="text-[11px] text-muted m-0">
+            {aiLang === 'vi'
+              ? 'Nội dung do AI tạo, có thể sai. Đội hình chỉ được gửi lên server cho một lần phân tích này.'
+              : 'Suggestions are AI-generated and may be wrong. Your team is sent to the server for this request only.'}
+          </p>
+          {aiError ? <p className="text-sm text-red-400 m-0">{aiError}</p> : null}
+          {aiAnalysis ? (
+            <div className="mt-2 rounded-lg bg-surface-hover/40 border border-border/40 p-3 text-sm max-h-[min(28rem,55vh)] overflow-y-auto font-sans leading-relaxed [&>*:first-child]:mt-0">
+              <ReactMarkdown components={aiAnalysisMarkdownComponents}>{aiAnalysis}</ReactMarkdown>
+            </div>
+          ) : null}
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <label htmlFor="paste-import" className="text-sm font-medium text-[#f5efe6]">
+          Import paste (optional)
+        </label>
+        <textarea
+          id="paste-import"
+          value={pasteImport}
+          onChange={(e) => setPasteImport(e.target.value)}
+          placeholder={EXAMPLE_PASTE}
+          rows={8}
+          className="w-full pixel-field px-3 py-3 text-sm font-mono text-[#f5efe6] placeholder:text-muted/50 resize-y min-h-[120px]"
+          spellCheck={false}
+        />
+        <button type="button" onClick={importPaste} className="pixel-btn-primary text-sm py-2 px-4">
+          Apply paste to slots
+        </button>
+      </div>
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-[#f5efe6] m-0">Team preview</h2>
@@ -692,24 +936,6 @@ export function TeamBuilder() {
         </section>
       ) : null}
 
-      <div className="space-y-2">
-        <label htmlFor="paste-import" className="text-sm font-medium text-[#f5efe6]">
-          Import paste (optional)
-        </label>
-        <textarea
-          id="paste-import"
-          value={pasteImport}
-          onChange={(e) => setPasteImport(e.target.value)}
-          placeholder={EXAMPLE_PASTE}
-          rows={8}
-          className="w-full pixel-field px-3 py-3 text-sm font-mono text-[#f5efe6] placeholder:text-muted/50 resize-y min-h-[120px]"
-          spellCheck={false}
-        />
-        <button type="button" onClick={importPaste} className="pixel-btn-primary text-sm py-2 px-4">
-          Apply paste to slots
-        </button>
-      </div>
-
       <div className="pixel-panel-soft p-4 space-y-3">
         <h2 className="text-base font-semibold text-[#f5efe6] m-0">
           {savedTeamRowId != null ? 'Update saved team' : 'Save team'}
@@ -733,6 +959,13 @@ export function TeamBuilder() {
             {savedTeamRowId != null ? 'Save changes' : 'Save to account'}
           </button>
         </div>
+        {isAuthenticated ? (
+          <p className="text-xs text-muted m-0">
+            {aiLang === 'vi'
+              ? 'Bản phân tích AI mới nhất được lưu khi bạn bấm Lưu (và hiện lại khi tải đội này).'
+              : 'The latest AI analysis text is stored when you save (and shown again when you load this team).'}
+          </p>
+        ) : null}
         {!isAuthenticated && (
           <p className="text-xs text-muted m-0">
             Log in to store teams on your account. You can still build and copy paste without logging in.

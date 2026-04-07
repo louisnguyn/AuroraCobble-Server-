@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS user_saved_teams (
   user_id bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   name text NOT NULL,
   team_json jsonb NOT NULL DEFAULT '[]'::jsonb,
+  ai_analysis text,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT user_saved_teams_name_len CHECK (char_length(name) >= 1 AND char_length(name) <= 120)
