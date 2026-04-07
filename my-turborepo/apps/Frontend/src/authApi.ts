@@ -7,6 +7,8 @@ export interface AuthUser {
   email: string
   username: string
   is_admin?: boolean
+  /** Staff confirmed this user was online on Minecraft (website username = IGN). Required for Team AI (non-admin). */
+  minecraft_verified_at?: string | null
 }
 
 export interface AuthResponse {
@@ -51,6 +53,14 @@ async function fetchApi<T>(
   return data as T
 }
 
+/** Backend may return Vietnamese `error` text for 403 when this is set. */
+function clientLocaleViHeaders(): HeadersInit {
+  if (typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('vi')) {
+    return { 'x-client-locale': 'vi' }
+  }
+  return {}
+}
+
 export async function signup(email: string, password: string, username: string): Promise<AuthResponse> {
   return fetchApi<AuthResponse>('/auth/signup', {
     method: 'POST',
@@ -75,6 +85,32 @@ export async function changePassword(currentPassword: string, newPassword: strin
   return fetchApi<{ ok: boolean }>('/auth/change-password', {
     method: 'POST',
     body: JSON.stringify({ currentPassword, newPassword }),
+  })
+}
+
+export type VerificationRequestRow = {
+  id: number
+  message: string | null
+  status: string
+  created_at: string
+  resolved_at: string | null
+  admin_note: string | null
+}
+
+export type VerificationStatusResponse = {
+  verified: boolean
+  pending: VerificationRequestRow | null
+  lastResolved: VerificationRequestRow | null
+}
+
+export async function fetchVerificationStatus(): Promise<VerificationStatusResponse> {
+  return fetchApi<VerificationStatusResponse>('/user/verification-request')
+}
+
+export async function submitVerificationRequest(message?: string): Promise<{ request: VerificationRequestRow }> {
+  return fetchApi<{ request: VerificationRequestRow }>('/user/verification-request', {
+    method: 'POST',
+    body: JSON.stringify({ ...(message?.trim() ? { message: message.trim() } : {}) }),
   })
 }
 
@@ -174,6 +210,7 @@ export async function gachaPull(poolId: number): Promise<GachaRewardResult> {
   return fetchApi<GachaRewardResult>('/gacha/pull', {
     method: 'POST',
     body: JSON.stringify({ poolId }),
+    headers: clientLocaleViHeaders(),
   })
 }
 
@@ -181,6 +218,7 @@ export async function claimGachaPull(pullId: number): Promise<{ ok: boolean; mes
   return fetchApi<{ ok: boolean; message?: string }>(`/gacha/pulls/${pullId}/claim`, {
     method: 'POST',
     body: JSON.stringify({}),
+    headers: clientLocaleViHeaders(),
   })
 }
 
@@ -389,6 +427,7 @@ export async function buyShopItem(itemKey: string, quantity = 1): Promise<{
   }>('/shop/buy', {
     method: 'POST',
     body: JSON.stringify({ itemKey, quantity }),
+    headers: clientLocaleViHeaders(),
   })
 }
 
@@ -443,6 +482,7 @@ export async function buyPokemonShopOffer(slot: number): Promise<{
   }>('/pokemon-shop/buy', {
     method: 'POST',
     body: JSON.stringify({ slot }),
+    headers: clientLocaleViHeaders(),
   })
 }
 
@@ -476,6 +516,7 @@ export async function exchangeTickets(toCurrency: string): Promise<{
   return fetchApi<{ to_currency: string; cost_tickets: number; new_tickets_balance: number }>('/user/exchange', {
     method: 'POST',
     body: JSON.stringify({ to_currency: toCurrency }),
+    headers: clientLocaleViHeaders(),
   })
 }
 

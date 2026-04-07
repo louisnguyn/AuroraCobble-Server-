@@ -16,6 +16,9 @@ import {
   submitPvpTopPrediction,
   fetchUserCurrencies,
   fetchUserInventory,
+  fetchVerificationStatus,
+  submitVerificationRequest,
+  type VerificationStatusResponse,
   type DailyLoginStatus,
   type PokemonShopOffer,
   type PokemonShopPurchase,
@@ -25,10 +28,12 @@ import {
 } from '../authApi'
 import { AuthModal } from './AuthModal'
 import { CobbleWebsiteWallet } from './CobbleWebsiteWallet.tsx'
+import { isAccountVerified, VerifiedAccountBadge } from './VerifiedAccountBadge.tsx'
 
 export function Account() {
   type AccountTab = 'account' | 'daily' | 'predict' | 'shop' | 'inventory' | 'cobble'
-  const { isAuthenticated, user } = useAuth()
+  const { isAuthenticated, user, refreshUser } = useAuth()
+  const canUseWebsiteShop = Boolean(user?.is_admin) || isAccountVerified(user)
   const [showAuth, setShowAuth] = useState(false)
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -75,6 +80,11 @@ export function Account() {
   const [predictBusy, setPredictBusy] = useState(false)
   const [predictError, setPredictError] = useState<string | null>(null)
   const [predictSuccess, setPredictSuccess] = useState<string | null>(null)
+  const [vStatus, setVStatus] = useState<VerificationStatusResponse | null>(null)
+  const [vLoading, setVLoading] = useState(false)
+  const [vError, setVError] = useState<string | null>(null)
+  const [vRequestNote, setVRequestNote] = useState('')
+  const [vSubmitting, setVSubmitting] = useState(false)
   const refreshWebsiteCobbleBalance = useCallback(() => {
     fetchUserCurrencies().then(({ currencies }) => {
       setCobbleBalance(currencies.find((c) => c.currency_type === 'cobbledollars')?.balance ?? 0)
@@ -107,6 +117,47 @@ export function Account() {
       .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
       .join(' ')
   }
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setVStatus(null)
+      return
+    }
+    let cancelled = false
+    setVLoading(true)
+    fetchVerificationStatus()
+      .then((s) => {
+        if (!cancelled) {
+          setVError(null)
+          setVStatus(s)
+          if (s.verified) void refreshUser()
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setVStatus(null)
+          setVError(err instanceof Error ? err.message : 'Không tải được trạng thái xác minh.')
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setVLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isAuthenticated, refreshUser])
+
+  const pendingRequestId = vStatus?.pending?.id
+  useEffect(() => {
+    if (!isAuthenticated || pendingRequestId == null) return
+    const t = window.setInterval(() => {
+      void fetchVerificationStatus().then((s) => {
+        setVStatus(s)
+        if (s.verified) void refreshUser()
+      })
+    }, 16_000)
+    return () => window.clearInterval(t)
+  }, [isAuthenticated, pendingRequestId, refreshUser])
 
   useEffect(() => {
     if (!isAuthenticated) return
@@ -187,6 +238,23 @@ export function Account() {
     return () => clearInterval(id)
   }, [daily?.timeZone])
 
+  const handleVerificationSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setVError(null)
+    setVSubmitting(true)
+    try {
+      await submitVerificationRequest(vRequestNote.trim() || undefined)
+      setVRequestNote('')
+      const s = await fetchVerificationStatus()
+      setVStatus(s)
+      if (s.verified) void refreshUser()
+    } catch (err) {
+      setVError(err instanceof Error ? err.message : 'Không gửi được yêu cầu.')
+    } finally {
+      setVSubmitting(false)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
@@ -254,6 +322,10 @@ export function Account() {
   }
 
   const handleBuyItem = async (item: ShopItem) => {
+    if (!canUseWebsiteShop) {
+      setShopError('Cần xác minh tài khoản trên web để mua ở shop (admin được miễn).')
+      return
+    }
     setShopError(null)
     setShopSuccess(null)
     setShopBusyItem(item.itemKey)
@@ -278,6 +350,10 @@ export function Account() {
   }
 
   const handleBuyPokemon = async (offer: PokemonShopOffer) => {
+    if (!canUseWebsiteShop) {
+      setPokemonError('Cần xác minh tài khoản trên web để mua ở shop (admin được miễn).')
+      return
+    }
     setPokemonError(null)
     setPokemonSuccess(null)
     setPokemonBusy(`buy-${offer.slot}`)
@@ -333,7 +409,11 @@ export function Account() {
     <div className="max-w-lg mx-auto pixel-panel-soft p-6 sm:p-8">
       <h1 className="text-3xl font-bold text-[#e2e8f0] m-0 mb-1">Account</h1>
       <p className="text-muted text-base mb-6">
-        Signed in as <span className="text-[#e2e8f0]">{user?.username}</span>
+        Signed in as{' '}
+        <span className="inline-flex items-center gap-1.5 align-middle">
+          <span className="text-[#e2e8f0]">{user?.username}</span>
+          {user && isAccountVerified(user) ? <VerifiedAccountBadge className="w-5 h-5" /> : null}
+        </span>
         <span className="block mt-1">
           PVP rank:{' '}
           <span className="text-[#e2e8f0]">
@@ -795,6 +875,21 @@ export function Account() {
             Cobble$ balance:{' '}
             <span className="text-[#fbbf24] font-semibold tabular-nums">{cobbleBalance.toLocaleString()}</span>
           </p>
+          {!canUseWebsiteShop ? (
+            <div
+              className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100"
+              role="status"
+            >
+              <p className="m-0 font-medium">Shop chỉ dùng sau khi xác minh tài khoản</p>
+              <p className="m-0 mt-1 text-xs text-amber-100/90">
+                Chưa verified thì không mua được trên website (Shop / Pokémon Shop). Hãy gửi yêu cầu xác minh ở tab
+                Account. Trừ admin.
+              </p>
+              <p className="m-0 mt-1 text-xs text-amber-100/75">
+                Verified accounts only can purchase on the web shop; browse prices as usual.
+              </p>
+            </div>
+          ) : null}
 
           <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-3">Shop</h2>
           <div className="mb-6 pixel-well p-4">
@@ -808,7 +903,7 @@ export function Account() {
                   <button
                     type="button"
                     onClick={() => handleBuyItem(item)}
-                    disabled={shopBusyItem === item.itemKey || cobbleBalance < item.cost}
+                    disabled={!canUseWebsiteShop || shopBusyItem === item.itemKey || cobbleBalance < item.cost}
                     className="shrink-0 py-2 px-3 pixel-btn-primary disabled:opacity-50 text-base"
                   >
                     {shopBusyItem === item.itemKey ? 'Buying…' : 'Buy'}
@@ -835,7 +930,12 @@ export function Account() {
                   <button
                     type="button"
                     onClick={() => handleBuyPokemon(offer)}
-                    disabled={offer.purchased || pokemonBusy === `buy-${offer.slot}` || cobbleBalance < offer.price}
+                    disabled={
+                      !canUseWebsiteShop ||
+                      offer.purchased ||
+                      pokemonBusy === `buy-${offer.slot}` ||
+                      cobbleBalance < offer.price
+                    }
                     className="shrink-0 py-2 px-3 pixel-btn-primary disabled:opacity-50 text-base"
                   >
                     {offer.purchased ? 'Purchased' : pokemonBusy === `buy-${offer.slot}` ? 'Buying…' : 'Buy'}
@@ -888,6 +988,82 @@ export function Account() {
 
       {activeTab === 'account' && (
         <>
+          {isAuthenticated && (
+            <div className="mb-8 pixel-well p-4 space-y-3">
+              <h2 className="text-lg font-medium text-[#e2e8f0] m-0">Xác minh tài khoản (verified)</h2>
+              <p className="text-xs text-muted m-0">
+                Sau khi được duyệt, bạn có huy hiệu verified và có thể dùng phân tích AI trong Team Builder, mua item, pokemon trên website, gacha và tham gia giải đấu tournament mỗi tháng.
+              </p>
+              {vError && !vLoading && (
+                <p className="text-sm text-red-400 m-0">
+                  {vError}
+                  {/verification|user_verification|does not exist|relation/i.test(vError)
+                    ? ' — Nếu mới triển khai, chạy file SQL `user_verification_requests.sql` trên Supabase.'
+                    : null}
+                </p>
+              )}
+              {user?.is_admin ? (
+                <p className="text-sm text-emerald-200/90 m-0">Tài khoản quản trị không cần gửi yêu cầu.</p>
+              ) : vLoading ? (
+                <p className="text-sm text-muted m-0">Đang tải trạng thái…</p>
+              ) : vStatus?.verified || isAccountVerified(user) ? (
+                <p className="text-sm text-emerald-200/90 m-0 flex flex-wrap items-center gap-2">
+                  Tài khoản đã được xác minh.
+                  <VerifiedAccountBadge className="w-5 h-5" />
+                </p>
+              ) : (
+                <>
+                  {vStatus?.pending ? (
+                    <p className="text-sm text-amber-200/90 m-0">
+                      Đã gửi yêu cầu · đang chờ quản trị viên ·{' '}
+                      {new Date(vStatus.pending.created_at).toLocaleString('vi-VN')}
+                      {vStatus.pending.message ? (
+                        <span className="block mt-2 text-muted">Nội dung: {vStatus.pending.message}</span>
+                      ) : null}
+                    </p>
+                  ) : null}
+                  {vStatus?.lastResolved?.status === 'rejected' ? (
+                    <div className="rounded-lg border border-red-500/30 bg-red-950/20 p-3 text-sm">
+                      <p className="text-red-200/95 m-0 font-medium">Yêu cầu trước bị từ chối</p>
+                      {vStatus.lastResolved.admin_note ? (
+                        <p className="text-red-100/90 m-0 mt-2 text-xs">
+                          Ghi chú: {vStatus.lastResolved.admin_note}
+                        </p>
+                      ) : null}
+                      <p className="text-muted m-0 mt-2 text-xs">Bạn có thể gửi yêu cầu mới bên dưới.</p>
+                    </div>
+                  ) : null}
+                  {!vStatus?.pending ? (
+                    <form onSubmit={handleVerificationSubmit} className="space-y-2">
+                      {vError ? (
+                        <p className="text-sm text-red-400 m-0">{vError}</p>
+                      ) : null}
+                      <label htmlFor="verify-req-msg" className="block text-xs text-muted mb-1">
+                        Lời nhắn (không bắt buộc)
+                      </label>
+                      <textarea
+                        id="verify-req-msg"
+                        value={vRequestNote}
+                        onChange={(e) => setVRequestNote(e.target.value)}
+                        rows={3}
+                        maxLength={2000}
+                        placeholder="Ví dụ: IGN trong game, Discord, minh chứng…"
+                        className="w-full px-3 py-2 rounded-lg bg-[#0f0a1a] border border-border text-[#e2e8f0] text-sm"
+                      />
+                      <button
+                        type="submit"
+                        disabled={vSubmitting}
+                        className="py-2 px-4 pixel-btn-primary disabled:opacity-50 text-base"
+                      >
+                        {vSubmitting ? 'Đang gửi…' : 'Gửi yêu cầu xác minh'}
+                      </button>
+                    </form>
+                  ) : null}
+                </>
+              )}
+            </div>
+          )}
+
           <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-4">Change password</h2>
           <form onSubmit={handleSubmit} className="space-y-4">
         {error && (

@@ -17,6 +17,7 @@ import {
   type ExchangeRate,
 } from '../authApi'
 import { AuthModal } from './AuthModal'
+import { isAccountVerified, VerifiedAccountBadge } from './VerifiedAccountBadge.tsx'
 import {
   fetchPokemonInfo,
   showdownHomePngSpriteUrl,
@@ -159,6 +160,7 @@ function getRarity(weight: number, totalWeight: number): { label: string; classN
 
 export function Gacha() {
   const { isAuthenticated, user } = useAuth()
+  const canUseGacha = Boolean(user?.is_admin) || isAccountVerified(user)
   const [showAuth, setShowAuth] = useState(false)
   const [pools, setPools] = useState<GachaPool[]>([])
   const [loading, setLoading] = useState(true)
@@ -253,6 +255,11 @@ export function Gacha() {
 
   const executeClaim = async () => {
     if (!claimPending) return
+    if (!canUseGacha) {
+      setClaimPending(null)
+      setError('Cần xác minh tài khoản trên web để nhận thưởng gacha (admin được miễn).')
+      return
+    }
     const { pullId } = claimPending
     setClaimPending(null)
     setClaimingId(pullId)
@@ -270,6 +277,10 @@ export function Gacha() {
 
   const handleExchange = async (toCurrency: string) => {
     if (exchanging) return
+    if (!canUseGacha) {
+      setError('Cần xác minh tài khoản trên web để đổi vé (admin được miễn).')
+      return
+    }
     setExchanging(toCurrency)
     setError(null)
     try {
@@ -322,6 +333,10 @@ export function Gacha() {
 
   const handlePull = async () => {
     if (!selectedPool || pulling || lootPhase !== 'idle') return
+    if (!canUseGacha) {
+      setError('Cần xác minh tài khoản trên web để quay gacha (admin được miễn).')
+      return
+    }
     setError(null)
     setLastReward(null)
     setPulling(true)
@@ -394,6 +409,21 @@ export function Gacha() {
   return (
     <div className="w-full max-w-2xl mx-auto py-6 sm:py-10 px-4">
       <h1 className="text-2xl font-bold text-[#f5efe6] mb-6">Gacha</h1>
+      {!canUseGacha ? (
+        <div
+          className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100"
+          role="status"
+        >
+          <p className="m-0 font-medium">Gacha chỉ dùng sau khi xác minh tài khoản</p>
+          <p className="m-0 mt-1 text-xs text-amber-100/90">
+            Chưa verified thì không quay gacha, không đổi vé, và không Claim thưởng trong game. Tab Account → xác minh.
+            Admins được miễn.
+          </p>
+          <p className="m-0 mt-1 text-xs text-amber-100/75">
+            Verified-only: gacha pulls, ticket exchange, and in-game claim. You can still browse pools and history.
+          </p>
+        </div>
+      ) : null}
 
       {loading && (
         <p className="text-muted text-center py-8">Loading pools…</p>
@@ -446,7 +476,7 @@ export function Gacha() {
                       <button
                         type="button"
                         onClick={() => handleExchange(rate.to_currency)}
-                        disabled={!canAfford || !!exchanging}
+                        disabled={!canUseGacha || !canAfford || !!exchanging}
                         className="px-3 py-2 pixel-btn-primary text-base disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {busy ? '…' : 'Exchange'}
@@ -486,7 +516,12 @@ export function Gacha() {
               <button
                 type="button"
                 onClick={handlePull}
-                disabled={pulling || lootPhase !== 'idle' || (balance !== null && balance < cost)}
+                disabled={
+                  !canUseGacha ||
+                  pulling ||
+                  lootPhase !== 'idle' ||
+                  (balance !== null && balance < cost)
+                }
                 className="w-full sm:w-auto min-w-[180px] py-3 px-6 pixel-btn-primary disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#1f1c18] touch-manipulation"
               >
                 {pulling ? (lootPhase === 'spinning' ? 'Spinning…' : 'Opening…') : 'Open loot'}
@@ -682,7 +717,7 @@ export function Gacha() {
                           <button
                             type="button"
                             onClick={() => setClaimPending({ pullId: entry.id, rewardLabel: entry.rewardType })}
-                            disabled={claimingId !== null}
+                            disabled={!canUseGacha || claimingId !== null}
                             className="px-3 py-2 pixel-btn-gold disabled:opacity-50 touch-manipulation text-sm"
                           >
                             {claimingId === entry.id ? '…' : 'Claim'}
@@ -722,7 +757,13 @@ export function Gacha() {
                 <p className="text-sm text-amber-100/90 m-0 leading-relaxed">
                   You must be <strong className="text-amber-50">online</strong> on the server. Your in-game name must
                   match your site account:{' '}
-                  <strong className="font-mono text-amber-50">{user?.username ?? '—'}</strong>. If you are offline or
+                  <span className="inline-flex items-center gap-1">
+                    <strong className="font-mono text-amber-50">{user?.username ?? '—'}</strong>
+                    {user && isAccountVerified(user) ? (
+                      <VerifiedAccountBadge className="w-4 h-4 sm:w-5 sm:h-5" title="Verified account" />
+                    ) : null}
+                  </span>
+                  . If you are offline or
                   your IGN differs, delivery will fail.
                 </p>
               </div>
@@ -737,7 +778,8 @@ export function Gacha() {
                 <button
                   type="button"
                   onClick={() => void executeClaim()}
-                  className="w-full sm:w-auto px-4 py-2.5 pixel-btn-gold text-base touch-manipulation"
+                  disabled={!canUseGacha}
+                  className="w-full sm:w-auto px-4 py-2.5 pixel-btn-gold text-base touch-manipulation disabled:opacity-50"
                 >
                   Claim now
                 </button>

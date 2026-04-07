@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   fetchAdminUsers,
   fetchAdminUserCurrency,
@@ -6,12 +6,20 @@ import {
   grantCurrency,
   setPullFulfilled,
   deleteAdminPull,
+  patchAdminUser,
+  adminResetUserPassword,
+  deleteAdminUser,
+  bulkGrantCobbledollars,
+  verifyUserIngame,
+  revokeUserIngameVerification,
   type AdminUser,
   type UserCurrencyRow,
   type AdminHistoryEntry,
 } from '../authApi'
 
-export function UsersAdmin() {
+type UsersTab = 'account' | 'rewards' | 'bulkCobble'
+
+export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
   const [users, setUsers] = useState<AdminUser[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -24,6 +32,38 @@ export function UsersAdmin() {
   const [granting, setGranting] = useState(false)
   const [deleteConfirmEntry, setDeleteConfirmEntry] = useState<AdminHistoryEntry | null>(null)
   const [deleteConfirmBusy, setDeleteConfirmBusy] = useState(false)
+
+  const [tab, setTab] = useState<UsersTab>('account')
+  const [editEmail, setEditEmail] = useState('')
+  const [editUsername, setEditUsername] = useState('')
+  const [editIsAdmin, setEditIsAdmin] = useState(false)
+  const [savingAccount, setSavingAccount] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [resettingPassword, setResettingPassword] = useState(false)
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false)
+  const [deleteAccountBusy, setDeleteAccountBusy] = useState(false)
+  const [userSearchQuery, setUserSearchQuery] = useState('')
+  const [bulkIds, setBulkIds] = useState<number[]>([])
+  const [bulkAmount, setBulkAmount] = useState('')
+  const [bulkNote, setBulkNote] = useState('')
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [ingameVerifyBusy, setIngameVerifyBusy] = useState(false)
+
+  const filteredUsers = useMemo(() => {
+    const q = userSearchQuery.trim().toLowerCase()
+    if (!q) return users
+    return users.filter((u) => {
+      const idStr = String(u.id)
+      return (
+        u.username.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q) ||
+        idStr.includes(q)
+      )
+    })
+  }, [users, userSearchQuery])
 
   useEffect(() => {
     fetchAdminUsers()
@@ -51,6 +91,185 @@ export function UsersAdmin() {
         setHistoryError(e instanceof Error ? e.message : 'Failed to load history')
       })
   }, [selectedUser])
+
+  useEffect(() => {
+    if (!selectedUser) {
+      setEditEmail('')
+      setEditUsername('')
+      setEditIsAdmin(false)
+      return
+    }
+    setEditEmail(selectedUser.email)
+    setEditUsername(selectedUser.username)
+    setEditIsAdmin(selectedUser.is_admin)
+    setNewPassword('')
+    setConfirmPassword('')
+  }, [selectedUser])
+
+  const mergeUserIntoList = (u: AdminUser) => {
+    setUsers((prev) => prev.map((x) => (x.id === u.id ? u : x)))
+    setSelectedUser((s) => (s?.id === u.id ? u : s))
+  }
+
+  const toggleBulkId = (id: number) => {
+    setBulkIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+  }
+
+  const selectBulkFiltered = () => {
+    setBulkIds((prev) => [...new Set([...prev, ...filteredUsers.map((u) => u.id)])])
+  }
+
+  const clearBulkSelection = () => setBulkIds([])
+
+  const openBulkConfirm = () => {
+    setError(null)
+    setSuccessMessage(null)
+    const n = Number(bulkAmount)
+    if (bulkIds.length === 0) {
+      setError('Select at least one user in the list (use the checkboxes).')
+      return
+    }
+    if (bulkIds.length > 500) {
+      setError('At most 500 users per request. Clear some selections or run multiple batches.')
+      return
+    }
+    if (!Number.isFinite(n) || n <= 0 || !Number.isInteger(n)) {
+      setError('Enter a positive whole number for Cobble$.')
+      return
+    }
+    setBulkConfirmOpen(true)
+  }
+
+  const confirmBulkGrant = async () => {
+    const amount = Number(bulkAmount)
+    if (!Number.isFinite(amount) || amount <= 0) return
+    setBulkBusy(true)
+    setError(null)
+    setSuccessMessage(null)
+    try {
+      const res = await bulkGrantCobbledollars({
+        user_ids: [...new Set(bulkIds)],
+        amount,
+        ...(bulkNote.trim() ? { note: bulkNote.trim() } : {}),
+      })
+      setBulkConfirmOpen(false)
+      const failMsg =
+        res.failures.length > 0
+          ? ` ${res.failures.length} failed (${res.failures.slice(0, 3).map((f) => `#${f.user_id}`).join(', ')}${res.failures.length > 3 ? '…' : ''}).`
+          : ''
+      setSuccessMessage(
+        `Added ${res.amount_per_user.toLocaleString()} Cobble$ to ${res.granted} of ${res.requested} accounts.${failMsg}`
+      )
+      if (selectedUser && bulkIds.includes(selectedUser.id)) {
+        const { currencies: c } = await fetchAdminUserCurrency(selectedUser.id)
+        setCurrencies(c)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Bulk grant failed')
+      setBulkConfirmOpen(false)
+    } finally {
+      setBulkBusy(false)
+    }
+  }
+
+  const handleSaveAccount = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedUser || savingAccount) return
+    setSavingAccount(true)
+    setError(null)
+    try {
+      const { user } = await patchAdminUser(selectedUser.id, {
+        email: editEmail.trim().toLowerCase(),
+        username: editUsername.trim(),
+        is_admin: editIsAdmin,
+      })
+      mergeUserIntoList(user)
+      setEditEmail(user.email)
+      setEditUsername(user.username)
+      setEditIsAdmin(user.is_admin)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save account')
+    } finally {
+      setSavingAccount(false)
+    }
+  }
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedUser || resettingPassword) return
+    if (newPassword.length < 8) {
+      setError('New password must be at least 8 characters')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match')
+      return
+    }
+    setResettingPassword(true)
+    setError(null)
+    try {
+      await adminResetUserPassword(selectedUser.id, newPassword)
+      setNewPassword('')
+      setConfirmPassword('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Password reset failed')
+    } finally {
+      setResettingPassword(false)
+    }
+  }
+
+  const closeDeleteAccount = () => {
+    if (!deleteAccountBusy) setDeleteAccountOpen(false)
+  }
+
+  const confirmDeleteAccount = async () => {
+    if (!selectedUser) return
+    setDeleteAccountBusy(true)
+    setError(null)
+    try {
+      await deleteAdminUser(selectedUser.id)
+      const id = selectedUser.id
+      setUsers((prev) => prev.filter((u) => u.id !== id))
+      setSelectedUser(null)
+      setDeleteAccountOpen(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Delete failed')
+    } finally {
+      setDeleteAccountBusy(false)
+    }
+  }
+
+  const handleVerifyIngame = async () => {
+    if (!selectedUser || ingameVerifyBusy) return
+    setIngameVerifyBusy(true)
+    setError(null)
+    setSuccessMessage(null)
+    try {
+      const { user } = await verifyUserIngame(selectedUser.id)
+      mergeUserIntoList(user)
+      setSuccessMessage(`Marked ${user.username} as verified. Team AI is now allowed for this account.`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'In-game verification failed')
+    } finally {
+      setIngameVerifyBusy(false)
+    }
+  }
+
+  const handleRevokeIngame = async () => {
+    if (!selectedUser?.minecraft_verified_at || ingameVerifyBusy) return
+    setIngameVerifyBusy(true)
+    setError(null)
+    setSuccessMessage(null)
+    try {
+      const { user } = await revokeUserIngameVerification(selectedUser.id)
+      mergeUserIntoList(user)
+      setSuccessMessage(`Cleared verification for ${user.username}.`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not revoke verification')
+    } finally {
+      setIngameVerifyBusy(false)
+    }
+  }
 
   const handleGrant = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -125,52 +344,392 @@ export function UsersAdmin() {
     )
   }
 
+  const isSelf = selectedUser?.id === currentAdminId
+  const lastAdminWarning =
+    selectedUser?.is_admin && users.filter((u) => u.is_admin).length === 1
+
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-bold text-[#f5efe6]">Ticket Management</h1>
+      <h1 className="text-xl font-bold text-[#f5efe6]">Website users</h1>
+      <p className="text-sm text-muted m-0 -mt-2">
+        Manage sign-in details, roles, and tickets or gacha rewards per account.
+      </p>
       {error && (
         <div className="p-3 rounded-lg bg-error/15 border border-error/30 text-error text-sm">
           {error}
         </div>
       )}
+      {successMessage && (
+        <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 text-sm">
+          {successMessage}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        <div className="lg:col-span-1 rounded-lg bg-surface border border-border overflow-hidden">
-          <div className="p-3 border-b border-border">
-            <h2 className="text-sm font-semibold text-muted uppercase tracking-wider">All users</h2>
-          </div>
-          <ul>
-            {users.map((u) => (
-              <li key={u.id}>
+        <div className="lg:col-span-1 rounded-lg bg-surface border border-border overflow-hidden flex flex-col max-h-[min(70vh,32rem)] lg:max-h-[min(80vh,40rem)]">
+          <div className="p-3 border-b border-border shrink-0 space-y-2">
+            <h2 className="text-sm font-semibold text-muted uppercase tracking-wider m-0">All users</h2>
+            <label htmlFor="user-search" className="sr-only">
+              Search users by name, email, or ID
+            </label>
+            <input
+              id="user-search"
+              type="search"
+              placeholder="Search name, email, ID…"
+              value={userSearchQuery}
+              onChange={(e) => setUserSearchQuery(e.target.value)}
+              className="w-full px-2.5 py-2 rounded-md bg-[#0f0d0b] border border-border text-sm text-[#f5efe6] placeholder:text-muted/70 focus:outline-none focus:ring-1 focus:ring-accent/50 focus:border-accent/40"
+              autoComplete="off"
+            />
+            {tab === 'bulkCobble' && filteredUsers.length > 0 && (
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={() => setSelectedUser(u)}
-                  className={`block w-full text-left px-4 py-3 border-b border-border/50 text-sm transition-colors ${
-                    selectedUser?.id === u.id
-                      ? 'bg-accent/20 text-accent font-medium'
-                      : 'hover:bg-surface-hover text-[#f5efe6]'
-                  }`}
+                  onClick={selectBulkFiltered}
+                  className="px-2 py-1 rounded-md text-xs font-medium bg-accent/15 text-accent border border-accent/35 hover:bg-accent/25"
                 >
-                  <span className="font-medium">{u.username}</span>
-                  <span className="block text-xs text-muted truncate">{u.email}</span>
-                  {u.is_admin && (
-                    <span className="inline-block mt-1 text-xs px-1.5 py-0.5 rounded bg-accent/30 text-accent">
-                      Admin
-                    </span>
-                  )}
+                  Select visible ({filteredUsers.length})
                 </button>
-              </li>
-            ))}
+                <button
+                  type="button"
+                  onClick={clearBulkSelection}
+                  disabled={bulkIds.length === 0}
+                  className="px-2 py-1 rounded-md text-xs font-medium border border-border text-muted hover:text-[#f5efe6] hover:bg-surface-hover disabled:opacity-40"
+                >
+                  Clear selection
+                </button>
+              </div>
+            )}
+            <p className="text-[11px] text-muted m-0">
+              {tab === 'bulkCobble' ? (
+                <>
+                  <span className="text-accent font-semibold">{bulkIds.length}</span> selected ·{' '}
+                  {filteredUsers.length === users.length
+                    ? `${users.length} user${users.length === 1 ? '' : 's'}`
+                    : `${filteredUsers.length} of ${users.length} shown`}
+                </>
+              ) : filteredUsers.length === users.length ? (
+                `${users.length} user${users.length === 1 ? '' : 's'}`
+              ) : (
+                `${filteredUsers.length} of ${users.length}`
+              )}
+            </p>
+          </div>
+          <ul className="overflow-y-auto min-h-0 flex-1">
+            {filteredUsers.length === 0 ? (
+              <li className="px-4 py-6 text-center text-sm text-muted">No users match your search.</li>
+            ) : (
+              filteredUsers.map((u) => (
+                <li key={u.id} className="flex items-stretch border-b border-border/50">
+                  {tab === 'bulkCobble' && (
+                    <div className="flex items-center pl-3 pr-0 shrink-0">
+                      <input
+                        type="checkbox"
+                        checked={bulkIds.includes(u.id)}
+                        onChange={() => toggleBulkId(u.id)}
+                        className="rounded border-border"
+                        aria-label={`Include ${u.username} in bulk Cobble$ grant`}
+                      />
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedUser(u)}
+                    className={`flex-1 min-w-0 text-left py-3 pr-4 text-sm transition-colors border-l border-transparent ${
+                      tab === 'bulkCobble' ? 'pl-2' : 'pl-4'
+                    } ${
+                      selectedUser?.id === u.id
+                        ? 'bg-accent/20 text-accent font-medium'
+                        : 'hover:bg-surface-hover text-[#f5efe6]'
+                    }`}
+                  >
+                    <span className="font-medium">{u.username}</span>
+                    <span className="block text-xs text-muted truncate">{u.email}</span>
+                    {u.is_admin && (
+                      <span className="inline-block mt-1 text-xs px-1.5 py-0.5 rounded bg-accent/30 text-accent">
+                        Admin
+                      </span>
+                    )}
+                    {u.minecraft_verified_at != null && u.minecraft_verified_at !== '' && (
+                      <span className="inline-block mt-1 ml-1 text-xs px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-200">
+                        MC ✓
+                      </span>
+                    )}
+                  </button>
+                </li>
+              ))
+            )}
           </ul>
         </div>
 
         <div className="lg:col-span-2 space-y-4">
-          {!selectedUser ? (
-            <div className="rounded-lg bg-surface border border-border p-8 text-center text-muted">
-              Select a user to view currency, grant rewards, and gacha history.
+          <div className="flex flex-wrap gap-1 p-1 rounded-lg bg-[#0f0d0b]/80 border border-border">
+            <button
+              type="button"
+              onClick={() => {
+                setTab('account')
+                setSuccessMessage(null)
+              }}
+              className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                tab === 'account'
+                  ? 'bg-accent/25 text-accent border border-accent/40'
+                  : 'text-muted hover:text-[#f5efe6] border border-transparent'
+              }`}
+            >
+              Account
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setTab('rewards')
+                setSuccessMessage(null)
+              }}
+              className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                tab === 'rewards'
+                  ? 'bg-accent/25 text-accent border border-accent/40'
+                  : 'text-muted hover:text-[#f5efe6] border border-transparent'
+              }`}
+            >
+              Tickets &amp; gacha
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setTab('bulkCobble')
+                setSuccessMessage(null)
+              }}
+              className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                tab === 'bulkCobble'
+                  ? 'bg-accent/25 text-accent border border-accent/40'
+                  : 'text-muted hover:text-[#f5efe6] border border-transparent'
+              }`}
+            >
+              Bulk Cobble$
+            </button>
+          </div>
+
+          {tab === 'bulkCobble' && (
+            <div className="rounded-lg bg-surface border border-border p-4 space-y-4">
+              <div>
+                <h2 className="text-sm font-semibold text-[#f5efe6] m-0 mb-1">Bulk Cobble$ (website wallet)</h2>
+                <p className="text-xs text-muted m-0">
+                  Choose users with the checkboxes in the list, enter an amount, and confirm. Each selected account
+                  receives the same balance increase. Entries appear in the Cobble$ ledger like single-user grants.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label htmlFor="bulk-cobble-amt" className="block text-xs text-muted mb-1">
+                    Amount per user (whole number)
+                  </label>
+                  <input
+                    id="bulk-cobble-amt"
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={bulkAmount}
+                    onChange={(e) => setBulkAmount(e.target.value)}
+                    className="w-36 px-2 py-1.5 rounded bg-[#0f0d0b] border border-border text-sm text-[#f5efe6]"
+                  />
+                </div>
+                <div className="flex-1 min-w-[200px]">
+                  <label htmlFor="bulk-cobble-note" className="block text-xs text-muted mb-1">
+                    Note (optional, for ledger)
+                  </label>
+                  <input
+                    id="bulk-cobble-note"
+                    type="text"
+                    maxLength={500}
+                    value={bulkNote}
+                    onChange={(e) => setBulkNote(e.target.value)}
+                    placeholder="e.g. tournament prize, event compensation"
+                    className="w-full px-2 py-1.5 rounded bg-[#0f0d0b] border border-border text-sm text-[#f5efe6]"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={openBulkConfirm}
+                  className="px-3 py-1.5 rounded-lg bg-accent text-[#1a1510] text-sm font-medium hover:bg-accent/90"
+                >
+                  Review &amp; grant…
+                </button>
+              </div>
+              <p className="text-xs text-muted m-0">
+                Selected: <span className="text-[#f5efe6] font-medium">{bulkIds.length}</span> users · max 500 per
+                request.
+              </p>
             </div>
-          ) : (
+          )}
+
+          {tab !== 'bulkCobble' && !selectedUser && (
+            <div className="rounded-lg bg-surface border border-border p-8 text-center text-muted">
+              Select a user to manage their account or tickets and gacha history.
+            </div>
+          )}
+
+          {tab !== 'bulkCobble' && selectedUser && (
             <>
+              {tab === 'account' && (
+                <div className="space-y-4">
+                  <div className="rounded-lg bg-surface border border-border p-4">
+                    <h2 className="text-sm font-semibold text-[#f5efe6] m-0 mb-3">
+                      Profile · {selectedUser.username}
+                    </h2>
+                    <p className="text-xs text-muted m-0 mb-3">
+                      User ID {selectedUser.id} · joined{' '}
+                      {new Date(selectedUser.created_at).toLocaleDateString(undefined, {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                      })}
+                    </p>
+                    {lastAdminWarning && (
+                      <p className="text-xs text-amber-200/90 m-0 mb-3 p-2 rounded-lg bg-amber-500/10 border border-amber-500/25">
+                        This is the only admin account. You cannot remove admin or delete this user until another
+                        admin exists.
+                      </p>
+                    )}
+                    <form onSubmit={handleSaveAccount} className="space-y-3 max-w-md">
+                      <div>
+                        <label htmlFor="acct-email" className="block text-xs text-muted mb-1">
+                          Email
+                        </label>
+                        <input
+                          id="acct-email"
+                          type="email"
+                          autoComplete="off"
+                          value={editEmail}
+                          onChange={(e) => setEditEmail(e.target.value)}
+                          className="w-full px-2 py-1.5 rounded bg-[#0f0d0b] border border-border text-sm text-[#f5efe6]"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="acct-username" className="block text-xs text-muted mb-1">
+                          Username (often matches Minecraft IGN)
+                        </label>
+                        <input
+                          id="acct-username"
+                          type="text"
+                          autoComplete="off"
+                          value={editUsername}
+                          onChange={(e) => setEditUsername(e.target.value)}
+                          className="w-full px-2 py-1.5 rounded bg-[#0f0d0b] border border-border text-sm text-[#f5efe6]"
+                        />
+                      </div>
+                      <label className="flex items-center gap-2 cursor-pointer text-sm text-[#f5efe6]">
+                        <input
+                          type="checkbox"
+                          checked={editIsAdmin}
+                          onChange={(e) => setEditIsAdmin(e.target.checked)}
+                          disabled={lastAdminWarning && selectedUser.is_admin}
+                          className="rounded border-border"
+                        />
+                        Administrator (full admin site access)
+                      </label>
+                      <button
+                        type="submit"
+                        disabled={savingAccount}
+                        className="px-3 py-1.5 rounded-lg bg-accent text-[#1a1510] text-sm font-medium hover:bg-accent/90 disabled:opacity-50"
+                      >
+                        {savingAccount ? 'Saving…' : 'Save profile'}
+                      </button>
+                    </form>
+                  </div>
+
+                  <div className="rounded-lg bg-surface border border-border p-4">
+                    <h2 className="text-sm font-semibold text-[#f5efe6] m-0 mb-2">Verification (Team AI)</h2>
+                    <p className="text-xs text-muted m-0 mb-3">
+                      Verified accounts may use Team Builder AI on the website (non-admins). Use the button below when
+                      you have confirmed the player yourself — no server check is performed.
+                    </p>
+                    {selectedUser.minecraft_verified_at ? (
+                      <p className="text-xs text-emerald-200/90 m-0 mb-3">
+                        Verified{' '}
+                        {new Date(selectedUser.minecraft_verified_at).toLocaleString(undefined, {
+                          dateStyle: 'medium',
+                          timeStyle: 'short',
+                        })}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-muted m-0 mb-3">Not verified yet.</p>
+                    )}
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void handleVerifyIngame()}
+                        disabled={ingameVerifyBusy}
+                        className="px-3 py-1.5 rounded-lg bg-accent text-[#1a1510] text-sm font-medium hover:bg-accent/90 disabled:opacity-50"
+                      >
+                        {ingameVerifyBusy ? 'Saving…' : 'Mark as verified'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleRevokeIngame()}
+                        disabled={
+                          ingameVerifyBusy || selectedUser.minecraft_verified_at == null || selectedUser.minecraft_verified_at === ''
+                        }
+                        className="px-3 py-1.5 rounded-lg text-sm border border-border text-muted hover:bg-surface-hover hover:text-[#f5efe6] disabled:opacity-40"
+                      >
+                        Clear verification
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg bg-surface border border-border p-4">
+                    <h2 className="text-sm font-semibold text-[#f5efe6] m-0 mb-2">Reset password</h2>
+                    <p className="text-xs text-muted m-0 mb-3">
+                      Sets a new password for this user. They can change it again after logging in.
+                    </p>
+                    <form onSubmit={handleResetPassword} className="flex flex-col gap-3 max-w-md">
+                      <input
+                        type="password"
+                        autoComplete="new-password"
+                        placeholder="New password (min 8 characters)"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        className="w-full px-2 py-1.5 rounded bg-[#0f0d0b] border border-border text-sm text-[#f5efe6]"
+                      />
+                      <input
+                        type="password"
+                        autoComplete="new-password"
+                        placeholder="Confirm new password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className="w-full px-2 py-1.5 rounded bg-[#0f0d0b] border border-border text-sm text-[#f5efe6]"
+                      />
+                      <button
+                        type="submit"
+                        disabled={resettingPassword}
+                        className="self-start px-3 py-1.5 rounded-lg bg-surface-hover border border-border text-sm text-[#f5efe6] hover:border-accent/50 disabled:opacity-50"
+                      >
+                        {resettingPassword ? 'Updating…' : 'Set password'}
+                      </button>
+                    </form>
+                  </div>
+
+                  <div className="rounded-lg bg-surface border border-error/25 p-4">
+                    <h2 className="text-sm font-semibold text-error m-0 mb-2">Delete account</h2>
+                    <p className="text-xs text-muted m-0 mb-3">
+                      Permanently removes this website user and related data (teams, inventory, currency, etc.).
+                      Cannot be undone.
+                    </p>
+                    <button
+                      type="button"
+                      disabled={isSelf || (lastAdminWarning && selectedUser.is_admin)}
+                      onClick={() => setDeleteAccountOpen(true)}
+                      className="px-3 py-1.5 rounded-lg text-sm bg-error/15 border border-error/40 text-error hover:bg-error/25 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Delete this user…
+                    </button>
+                    {isSelf && (
+                      <p className="text-xs text-muted m-0 mt-2">You cannot delete your own account from here.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {tab === 'rewards' && (
+                <div className="space-y-4">
               <div className="rounded-lg bg-surface border border-border p-4">
                 <h2 className="text-sm font-semibold text-[#f5efe6] mb-3">
                   Currency · {selectedUser.username}
@@ -288,10 +847,107 @@ export function UsersAdmin() {
                   </ul>
                 )}
               </div>
+                </div>
+              )}
             </>
           )}
         </div>
       </div>
+
+      {bulkConfirmOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="bulk-cobble-title"
+          onClick={() => !bulkBusy && setBulkConfirmOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-xl bg-surface border border-border shadow-xl p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="bulk-cobble-title" className="text-lg font-semibold text-[#f5efe6] m-0 mb-2">
+              Grant Cobble$ to {bulkIds.length} accounts?
+            </h3>
+            <p className="text-sm text-muted m-0 mb-4">
+              Each account will receive{' '}
+              <span className="text-[#f5efe6] font-medium">
+                {Number(bulkAmount).toLocaleString()} Cobble$
+              </span>
+              . Total credits:{' '}
+              <span className="text-[#f5efe6] font-medium">
+                {(Number(bulkAmount) * bulkIds.length).toLocaleString()} Cobble$
+              </span>
+              .
+              {bulkNote.trim() ? (
+                <>
+                  {' '}
+                  Note: <span className="text-[#f5efe6]">{bulkNote.trim()}</span>
+                </>
+              ) : null}
+            </p>
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => !bulkBusy && setBulkConfirmOpen(false)}
+                disabled={bulkBusy}
+                className="px-4 py-2 rounded-lg text-sm border border-border text-muted hover:bg-surface-hover hover:text-[#f5efe6] disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmBulkGrant}
+                disabled={bulkBusy}
+                className="px-4 py-2 rounded-lg text-sm bg-accent text-[#1a1510] font-medium hover:bg-accent/90 disabled:opacity-50"
+              >
+                {bulkBusy ? 'Granting…' : 'Confirm grant'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteAccountOpen && selectedUser && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-account-title"
+          onClick={() => closeDeleteAccount()}
+        >
+          <div
+            className="w-full max-w-md rounded-xl bg-surface border border-border shadow-xl p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="delete-account-title" className="text-lg font-semibold text-[#f5efe6] m-0 mb-2">
+              Delete user permanently?
+            </h3>
+            <p className="text-sm text-muted m-0 mb-4">
+              This will remove <strong className="text-[#f5efe6]">{selectedUser.username}</strong> (
+              {selectedUser.email}) and all linked website data.
+            </p>
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeDeleteAccount}
+                disabled={deleteAccountBusy}
+                className="px-4 py-2 rounded-lg text-sm border border-border text-muted hover:bg-surface-hover hover:text-[#f5efe6] disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteAccount}
+                disabled={deleteAccountBusy}
+                className="px-4 py-2 rounded-lg text-sm bg-error/20 border border-error/40 text-error hover:bg-error/30 disabled:opacity-50"
+              >
+                {deleteAccountBusy ? 'Deleting…' : 'Delete user'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {deleteConfirmEntry && (
         <div

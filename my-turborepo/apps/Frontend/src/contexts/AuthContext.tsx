@@ -13,6 +13,8 @@ interface AuthContextValue extends AuthState {
   login: (token: string, user: AuthUser) => void
   logout: () => void
   setError: (err: string | null) => void
+  /** Re-fetch `/auth/me` (e.g. after staff approves verification). No-op if not logged in. */
+  refreshUser: () => Promise<void>
   isAuthenticated: boolean
 }
 
@@ -40,6 +42,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setState((s) => ({ ...s, error }))
   }, [])
 
+  const refreshUser = useCallback(async () => {
+    const token = getStoredToken()
+    if (!token) return
+    try {
+      const { user } = await fetchMe()
+      setState((s) => ({ ...s, user, token }))
+    } catch {
+      clearToken()
+      setState((s) => ({ ...s, token: null, user: null }))
+    }
+  }, [])
+
   useEffect(() => {
     const token = getStoredToken()
     if (!token) {
@@ -60,9 +74,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       login,
       logout,
       setError,
+      refreshUser,
       isAuthenticated: !!state.token && !!state.user,
     }),
-    [state, login, logout, setError]
+    [state, login, logout, setError, refreshUser]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

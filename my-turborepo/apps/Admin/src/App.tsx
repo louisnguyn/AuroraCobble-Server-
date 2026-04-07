@@ -6,14 +6,16 @@ import { UsageStatsAdmin } from './components/UsageStatsAdmin.tsx'
 import { UsersAdmin } from './components/UsersAdmin.tsx'
 import { MinecraftDashboard } from './components/MinecraftDashboard.tsx'
 import { TournamentAdmin } from './components/TournamentAdmin.tsx'
+import { VerificationRequestsAdmin } from './components/VerificationRequestsAdmin.tsx'
 
-type Section = 'usage' | 'users' | 'minecraft' | 'tournament' | 'settings' | 'bans'
+type Section = 'usage' | 'users' | 'verifications' | 'minecraft' | 'tournament' | 'settings' | 'bans'
 
 const SECTIONS: { id: Section; label: string }[] = [
   { id: 'minecraft', label: 'Server Dashboard' },
   { id: 'tournament', label: 'Tournaments' },
   { id: 'usage', label: 'Usage stats' },
-  { id: 'users', label: 'Ticket Management' },
+  { id: 'users', label: 'Website users' },
+  { id: 'verifications', label: 'Verification requests' },
   { id: 'settings', label: 'Settings' },
   { id: 'bans', label: 'Bans' },
 ]
@@ -170,7 +172,8 @@ export default function App() {
           }
         >
           {section === 'usage' && <UsageStatsAdmin />}
-          {section === 'users' && <UsersAdmin />}
+          {section === 'users' && <UsersAdmin currentAdminId={user.id} />}
+          {section === 'verifications' && <VerificationRequestsAdmin />}
           {section === 'minecraft' && <MinecraftDashboard viewerUsername={user.username} />}
           {section === 'tournament' && <TournamentAdmin />}
           {section === 'settings' && <Placeholder title="Settings" />}

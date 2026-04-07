@@ -98,3 +98,22 @@ export async function updatePasswordForUser(
   if (error) return { error: error.message };
   return { ok: true };
 }
+
+/** Staff-only password reset (no current password). */
+export async function adminResetPassword(
+  userId: number,
+  newPassword: string
+): Promise<{ ok: true } | { error: string }> {
+  if (!supabase) return { error: "Database not configured" };
+  if (newPassword.length < 8) return { error: "Password must be at least 8 characters" };
+  const user = await findUserById(userId);
+  if (!user) return { error: "User not found" };
+  const password_hash = await hashPassword(newPassword);
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from("users")
+    .update({ password_hash, updated_at: now })
+    .eq("id", userId);
+  if (error) return { error: error.message };
+  return { ok: true };
+}

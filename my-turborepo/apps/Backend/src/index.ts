@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import {
+  adminResetPassword,
   createUser,
   findUserByEmail,
   verifyPassword,
@@ -478,7 +479,7 @@ app.use(express.json());
 
 registerTournamentRoutes(app, { requireAuth, requireAdmin });
 
-const TEAM_AI_COOLDOWN_MS = 48 * 60 * 60 * 1000;
+const TEAM_AI_COOLDOWN_MS = 12 * 60 * 60 * 1000;
 
 app.post("/team/analyze-ai", requireAuth, async (req, res) => {
   const paste = typeof (req.body as { pokepaste?: unknown } | undefined)?.pokepaste === "string"
@@ -504,7 +505,7 @@ app.post("/team/analyze-ai", requireAuth, async (req, res) => {
   const userId = res.locals.user!.userId;
   const { data: urow, error: userErr } = await supabase
     .from("users")
-    .select("is_admin, last_team_ai_at")
+    .select("is_admin, last_team_ai_at, minecraft_verified_at")
     .eq("id", userId)
     .maybeSingle();
 
@@ -518,6 +519,18 @@ app.post("/team/analyze-ai", requireAuth, async (req, res) => {
   }
 
   const isAdminUser = !!(urow as { is_admin?: boolean }).is_admin;
+  const minecraftVerifiedAt = (urow as { minecraft_verified_at?: string | null }).minecraft_verified_at;
+  if (!isAdminUser && !minecraftVerifiedAt) {
+    const wantVi = String(req.headers["x-client-locale"] ?? "").toLowerCase() === "vi";
+    res.status(403).json({
+      code: "team_ai_verification_required",
+      error: wantVi
+        ? "Phân tích AI chỉ dành cho tài khoản đã được quản trị viên xác minh trên trang Admin."
+        : "Team AI analysis is only available after staff mark your account as verified in the admin panel.",
+    });
+    return;
+  }
+
   const lastAtRaw = (urow as { last_team_ai_at?: string | null }).last_team_ai_at;
   if (!isAdminUser && lastAtRaw) {
     const lastMs = new Date(lastAtRaw).getTime();
@@ -530,8 +543,8 @@ app.post("/team/analyze-ai", requireAuth, async (req, res) => {
           code: "team_ai_cooldown",
           next_allowed_at: nextAllowed,
           error: wantVi
-            ? "Bạn chỉ có thể phân tích đội bằng AI một lần mỗi 48 giờ. Quản trị viên không bị giới hạn."
-            : "You can only use Team AI analysis once every 48 hours. Administrators are not limited.",
+            ? "Bạn chỉ có thể phân tích đội bằng AI một lần mỗi 12 giờ. Quản trị viên không bị giới hạn."
+            : "You can only use Team AI analysis once every 12 hours. Administrators are not limited.",
         });
         return;
       }
@@ -792,9 +805,17 @@ app.post("/auth/signup", async (req, res) => {
     username: result.username,
     isAdmin,
   });
+  const mcVerified =
+    (result as { minecraft_verified_at?: string | null }).minecraft_verified_at ?? null;
   res.json({
     token,
-    user: { id: result.id, email: result.email, username: result.username, is_admin: isAdmin },
+    user: {
+      id: result.id,
+      email: result.email,
+      username: result.username,
+      is_admin: isAdmin,
+      minecraft_verified_at: mcVerified,
+    },
   });
 });
 
@@ -822,20 +843,54 @@ app.post("/auth/login", async (req, res) => {
     username: user.username,
     isAdmin,
   });
+  const mcVerified = (user as { minecraft_verified_at?: string | null }).minecraft_verified_at ?? null;
   res.json({
     token,
-    user: { id: user.id, email: user.email, username: user.username, is_admin: isAdmin },
+    user: {
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      is_admin: isAdmin,
+      minecraft_verified_at: mcVerified,
+    },
   });
 });
 
-app.get("/auth/me", requireAuth, (_req, res) => {
-  const user = res.locals.user!;
+app.get("/auth/me", requireAuth, async (_req, res) => {
+  const tokenUser = res.locals.user!;
+  if (supabase) {
+    const { data: row, error } = await supabase
+      .from("users")
+      .select("id, email, username, is_admin, minecraft_verified_at")
+      .eq("id", tokenUser.userId)
+      .maybeSingle();
+    if (!error && row) {
+      const r = row as {
+        id: number;
+        email: string;
+        username: string;
+        is_admin: boolean;
+        minecraft_verified_at: string | null;
+      };
+      res.json({
+        user: {
+          id: r.id,
+          email: r.email,
+          username: r.username,
+          is_admin: !!r.is_admin,
+          minecraft_verified_at: r.minecraft_verified_at ?? null,
+        },
+      });
+      return;
+    }
+  }
   res.json({
     user: {
-      id: user.userId,
-      email: user.email,
-      username: user.username,
-      is_admin: user.isAdmin ?? false,
+      id: tokenUser.userId,
+      email: tokenUser.email,
+      username: tokenUser.username,
+      is_admin: tokenUser.isAdmin ?? false,
+      minecraft_verified_at: null as string | null,
     },
   });
 });
@@ -910,6 +965,18 @@ function normalizeSavedAiAnalysis(raw: unknown): string | null {
   return t.length > MAX_SAVED_AI_ANALYSIS_CHARS ? t.slice(0, MAX_SAVED_AI_ANALYSIS_CHARS) : t;
 }
 
+async function userMayUseTeamAiFeatures(userId: number): Promise<boolean> {
+  if (!supabase) return false;
+  const { data, error } = await supabase
+    .from("users")
+    .select("is_admin, minecraft_verified_at")
+    .eq("id", userId)
+    .maybeSingle();
+  if (error || !data) return false;
+  const r = data as { is_admin?: boolean; minecraft_verified_at?: string | null };
+  return !!r.is_admin || !!r.minecraft_verified_at;
+}
+
 // --- Saved teams (Team Builder, requires login) ---
 app.get("/user/saved-teams", requireAuth, async (_req, res) => {
   if (!supabase) {
@@ -926,7 +993,12 @@ app.get("/user/saved-teams", requireAuth, async (_req, res) => {
     res.status(500).json({ error: error.message });
     return;
   }
-  res.json({ teams: data ?? [] });
+  const allowAi = await userMayUseTeamAiFeatures(userId);
+  const teams = (data ?? []).map((row) => ({
+    ...row,
+    ai_analysis: allowAi ? row.ai_analysis : null,
+  }));
+  res.json({ teams });
 });
 
 app.post("/user/saved-teams", requireAuth, async (req, res) => {
@@ -949,6 +1021,13 @@ app.post("/user/saved-teams", requireAuth, async (req, res) => {
   const body = (req.body ?? {}) as { ai_analysis?: unknown };
   const ai_analysis =
     "ai_analysis" in body ? normalizeSavedAiAnalysis(body.ai_analysis) : null;
+  if (ai_analysis && !(await userMayUseTeamAiFeatures(userId))) {
+    res.status(403).json({
+      error:
+        "Saving AI analysis requires an in-game verified account or admin. Remove ai_analysis or verify your account.",
+    });
+    return;
+  }
   const { data, error } = await supabase
     .from("user_saved_teams")
     .insert({ user_id: userId, name, team_json: normalized, ai_analysis })
@@ -1012,7 +1091,18 @@ app.patch("/user/saved-teams/:id", requireAuth, async (req, res) => {
     updates.team_json = normalized;
   }
   if (hasAiAnalysis) {
-    updates.ai_analysis = normalizeSavedAiAnalysis(patchBody.ai_analysis);
+    const normalizedAi = normalizeSavedAiAnalysis(patchBody.ai_analysis);
+    if (normalizedAi && !(await userMayUseTeamAiFeatures(userId))) {
+      /**
+       * Allow clearing analysis (null / empty) even when unverified; block setting new analysis text.
+       */
+      res.status(403).json({
+        error:
+          "Saving AI analysis requires an in-game verified account or admin. Send ai_analysis: null to clear, or verify your account.",
+      });
+      return;
+    }
+    updates.ai_analysis = normalizedAi;
   }
   const { data, error } = await supabase
     .from("user_saved_teams")
@@ -1049,6 +1139,314 @@ app.delete("/user/saved-teams/:id", requireAuth, async (req, res) => {
     return;
   }
   res.json({ ok: true });
+});
+
+const MAX_VERIFICATION_REQUEST_MESSAGE = 2000;
+const MAX_VERIFICATION_ADMIN_NOTE = 500;
+
+function normalizeVerificationMessage(raw: unknown): string | null {
+  if (raw == null) return null;
+  if (typeof raw !== "string") return null;
+  const t = raw.trim();
+  if (!t) return null;
+  return t.slice(0, MAX_VERIFICATION_REQUEST_MESSAGE);
+}
+
+// --- User verification requests (queue for staff) ---
+app.get("/user/verification-request", requireAuth, async (_req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const userId = res.locals.user!.userId;
+  const { data: urow, error: uerr } = await supabase
+    .from("users")
+    .select("minecraft_verified_at")
+    .eq("id", userId)
+    .maybeSingle();
+  if (uerr) {
+    res.status(500).json({ error: uerr.message });
+    return;
+  }
+  const verified = !!(urow as { minecraft_verified_at?: string | null } | null)?.minecraft_verified_at;
+
+  const { data: pending, error: perr } = await supabase
+    .from("user_verification_requests")
+    .select("id, message, status, created_at, resolved_at, admin_note")
+    .eq("user_id", userId)
+    .eq("status", "pending")
+    .maybeSingle();
+  if (perr) {
+    res.status(500).json({ error: perr.message });
+    return;
+  }
+
+  const { data: lastRows, error: lerr } = await supabase
+    .from("user_verification_requests")
+    .select("id, message, status, created_at, resolved_at, admin_note")
+    .eq("user_id", userId)
+    .in("status", ["approved", "rejected"])
+    .order("resolved_at", { ascending: false })
+    .limit(1);
+  if (lerr) {
+    res.status(500).json({ error: lerr.message });
+    return;
+  }
+  const lastResolved = (lastRows ?? [])[0] ?? null;
+
+  res.json({
+    verified,
+    pending: pending ?? null,
+    lastResolved,
+  });
+});
+
+app.post("/user/verification-request", requireAuth, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const userId = res.locals.user!.userId;
+  const { data: urow, error: uerr } = await supabase
+    .from("users")
+    .select("minecraft_verified_at, is_admin")
+    .eq("id", userId)
+    .maybeSingle();
+  if (uerr || !urow) {
+    res.status(uerr ? 500 : 404).json({ error: uerr?.message ?? "User not found" });
+    return;
+  }
+  const u = urow as { minecraft_verified_at?: string | null; is_admin?: boolean };
+  if (u.is_admin) {
+    res.status(400).json({ error: "Admin accounts do not need verification requests." });
+    return;
+  }
+  if (u.minecraft_verified_at) {
+    res.status(400).json({ error: "Your account is already verified." });
+    return;
+  }
+  const message = normalizeVerificationMessage((req.body as { message?: unknown })?.message);
+
+  const { data: existingPending } = await supabase
+    .from("user_verification_requests")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("status", "pending")
+    .maybeSingle();
+  if (existingPending) {
+    res.status(409).json({ error: "You already have a pending verification request." });
+    return;
+  }
+
+  const { data: inserted, error: insErr } = await supabase
+    .from("user_verification_requests")
+    .insert({ user_id: userId, message, status: "pending" })
+    .select("id, message, status, created_at, resolved_at, admin_note")
+    .single();
+
+  if (insErr) {
+    if (/duplicate|unique|one_pending/i.test(insErr.message)) {
+      res.status(409).json({ error: "You already have a pending verification request." });
+      return;
+    }
+    res.status(500).json({ error: insErr.message });
+    return;
+  }
+  res.status(201).json({ request: inserted });
+});
+
+app.get("/admin/verification-requests", requireAuth, requireAdmin, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const statusQ = String(req.query.status ?? "pending").toLowerCase();
+  const status = statusQ === "all" ? null : statusQ === "rejected" || statusQ === "approved" ? statusQ : "pending";
+
+  let q = supabase
+    .from("user_verification_requests")
+    .select("id, user_id, message, status, created_at, resolved_at, resolved_by_user_id, admin_note")
+    .order("created_at", { ascending: true });
+
+  if (status) q = q.eq("status", status);
+
+  const { data: reqs, error } = await q;
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+  const list = reqs ?? [];
+  const userIds = [...new Set(list.map((r) => (r as { user_id: number }).user_id))];
+  const byUser = new Map<number, { email: string; username: string; minecraft_verified_at: string | null }>();
+  if (userIds.length > 0) {
+    const { data: users, error: uerr } = await supabase
+      .from("users")
+      .select("id, email, username, minecraft_verified_at")
+      .in("id", userIds);
+    if (uerr) {
+      res.status(500).json({ error: uerr.message });
+      return;
+    }
+    for (const u of users ?? []) {
+      const row = u as {
+        id: number;
+        email: string;
+        username: string;
+        minecraft_verified_at: string | null;
+      };
+      byUser.set(row.id, {
+        email: row.email,
+        username: row.username,
+        minecraft_verified_at: row.minecraft_verified_at ?? null,
+      });
+    }
+  }
+
+  const rows = list.map((row) => {
+    const r = row as {
+      id: number;
+      user_id: number;
+      message: string | null;
+      status: string;
+      created_at: string;
+      resolved_at: string | null;
+      resolved_by_user_id: number | null;
+      admin_note: string | null;
+    };
+    const u = byUser.get(r.user_id);
+    return {
+      id: r.id,
+      user_id: r.user_id,
+      message: r.message,
+      status: r.status,
+      created_at: r.created_at,
+      resolved_at: r.resolved_at,
+      resolved_by_user_id: r.resolved_by_user_id,
+      admin_note: r.admin_note,
+      user_email: u?.email ?? null,
+      user_username: u?.username ?? null,
+      user_minecraft_verified_at: u?.minecraft_verified_at ?? null,
+    };
+  });
+
+  res.json({ requests: rows });
+});
+
+app.post("/admin/verification-requests/:id/approve", requireAuth, requireAdmin, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const staff = res.locals.user!;
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: "Invalid request id" });
+    return;
+  }
+  const { data: reqRow, error: findErr } = await supabase
+    .from("user_verification_requests")
+    .select("id, user_id, status")
+    .eq("id", id)
+    .maybeSingle();
+  if (findErr) {
+    res.status(500).json({ error: findErr.message });
+    return;
+  }
+  if (!reqRow) {
+    res.status(404).json({ error: "Request not found" });
+    return;
+  }
+  const r = reqRow as { user_id: number; status: string };
+  if (r.status !== "pending") {
+    res.status(400).json({ error: "This request is no longer pending." });
+    return;
+  }
+  const now = new Date().toISOString();
+  const { error: userErr } = await supabase
+    .from("users")
+    .update({ minecraft_verified_at: now, updated_at: now })
+    .eq("id", r.user_id);
+  if (userErr) {
+    res.status(500).json({ error: userErr.message });
+    return;
+  }
+  const { data: updatedReq, error: upReqErr } = await supabase
+    .from("user_verification_requests")
+    .update({
+      status: "approved",
+      resolved_at: now,
+      resolved_by_user_id: staff.userId,
+      admin_note: null,
+    })
+    .eq("id", id)
+    .eq("status", "pending")
+    .select()
+    .maybeSingle();
+  if (upReqErr) {
+    res.status(500).json({ error: upReqErr.message });
+    return;
+  }
+  if (!updatedReq) {
+    res.status(409).json({ error: "Request was updated by another action." });
+    return;
+  }
+  res.json({ ok: true, request: updatedReq });
+});
+
+app.post("/admin/verification-requests/:id/reject", requireAuth, requireAdmin, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const staff = res.locals.user!;
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: "Invalid request id" });
+    return;
+  }
+  const noteRaw = (req.body as { admin_note?: unknown })?.admin_note;
+  const admin_note =
+    typeof noteRaw === "string" ? noteRaw.trim().slice(0, MAX_VERIFICATION_ADMIN_NOTE) || null : null;
+
+  const { data: reqRow, error: findErr } = await supabase
+    .from("user_verification_requests")
+    .select("id, status")
+    .eq("id", id)
+    .maybeSingle();
+  if (findErr) {
+    res.status(500).json({ error: findErr.message });
+    return;
+  }
+  if (!reqRow) {
+    res.status(404).json({ error: "Request not found" });
+    return;
+  }
+  if ((reqRow as { status: string }).status !== "pending") {
+    res.status(400).json({ error: "This request is no longer pending." });
+    return;
+  }
+  const now = new Date().toISOString();
+  const { data: updatedReq, error: upErr } = await supabase
+    .from("user_verification_requests")
+    .update({
+      status: "rejected",
+      resolved_at: now,
+      resolved_by_user_id: staff.userId,
+      admin_note,
+    })
+    .eq("id", id)
+    .eq("status", "pending")
+    .select()
+    .maybeSingle();
+  if (upErr) {
+    res.status(500).json({ error: upErr.message });
+    return;
+  }
+  if (!updatedReq) {
+    res.status(409).json({ error: "Request was updated by another action." });
+    return;
+  }
+  res.json({ ok: true, request: updatedReq });
 });
 
 // --- Gacha (requires login) ---
@@ -1120,6 +1518,16 @@ app.post("/gacha/pull", requireAuth, async (req, res) => {
   const { poolId } = req.body ?? {};
   if (!supabase) {
     res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  if (!(await userMayUseTeamAiFeatures(user.userId))) {
+    const wantVi = String(req.headers["x-client-locale"] ?? "").toLowerCase() === "vi";
+    res.status(403).json({
+      code: "verification_required",
+      error: wantVi
+        ? "Cần xác minh tài khoản mới quay gacha trên website."
+        : "A verified account is required to pull gacha on the website.",
+    });
     return;
   }
   const id = Number(poolId);
@@ -1212,6 +1620,16 @@ app.post("/gacha/pull", requireAuth, async (req, res) => {
 /** Claim a gacha pull in-game via RCON (Cobblemon givepokemonother). User must be online. */
 app.post("/gacha/pulls/:pullId/claim", requireAuth, async (req, res) => {
   const user = res.locals.user!;
+  if (!(await userMayUseTeamAiFeatures(user.userId))) {
+    const wantVi = String(req.headers["x-client-locale"] ?? "").toLowerCase() === "vi";
+    res.status(403).json({
+      code: "verification_required",
+      error: wantVi
+        ? "Cần xác minh tài khoản mới nhận thưởng gacha trong game."
+        : "A verified account is required to claim gacha rewards in-game.",
+    });
+    return;
+  }
   if (!isGachaClaimEnabled()) {
     res.status(503).json({ error: "In-game claim is not configured (RCON or MC_GACHA_CLAIM_DISABLE)" });
     return;
@@ -2349,6 +2767,16 @@ app.post("/shop/buy", requireAuth, async (req, res) => {
     res.status(503).json({ error: "Database not configured" });
     return;
   }
+  if (!(await userMayUseTeamAiFeatures(user.userId))) {
+    const wantVi = String(req.headers["x-client-locale"] ?? "").toLowerCase() === "vi";
+    res.status(403).json({
+      code: "shop_verification_required",
+      error: wantVi
+        ? "Cần tài khoản đã xác minh mới mua được trên shop website."
+        : "A verified account is required to purchase from the website shop.",
+    });
+    return;
+  }
   const itemKey = typeof req.body?.itemKey === "string" ? req.body.itemKey.trim() : "";
   const qtyRaw = req.body?.quantity;
   const quantity = Number.isFinite(Number(qtyRaw)) ? Math.floor(Number(qtyRaw)) : 1;
@@ -2476,6 +2904,16 @@ app.post("/pokemon-shop/buy", requireAuth, async (req, res) => {
   const user = res.locals.user!;
   if (!supabase) {
     res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  if (!(await userMayUseTeamAiFeatures(user.userId))) {
+    const wantVi = String(req.headers["x-client-locale"] ?? "").toLowerCase() === "vi";
+    res.status(403).json({
+      code: "shop_verification_required",
+      error: wantVi
+        ? "Cần tài khoản đã xác minh mới mua được trên shop website."
+        : "A verified account is required to purchase from the website shop.",
+    });
     return;
   }
   const slot = Number(req.body?.slot);
@@ -2854,6 +3292,16 @@ app.post("/user/exchange", requireAuth, async (req, res) => {
     res.status(503).json({ error: "Database not configured" });
     return;
   }
+  if (!(await userMayUseTeamAiFeatures(userId))) {
+    const wantVi = String(req.headers["x-client-locale"] ?? "").toLowerCase() === "vi";
+    res.status(403).json({
+      code: "verification_required",
+      error: wantVi
+        ? "Cần xác minh tài khoản mới đổi vé trên website."
+        : "A verified account is required to exchange tickets on the website.",
+    });
+    return;
+  }
   const cost = rate.cost_tickets;
 
   const { data: ticketsRow } = await supabase
@@ -2973,13 +3421,265 @@ app.get("/admin/users", requireAuth, requireAdmin, async (_req, res) => {
   }
   const { data, error } = await supabase
     .from("users")
-    .select("id, email, username, is_admin, created_at")
+    .select("id, email, username, is_admin, created_at, minecraft_verified_at")
     .order("created_at", { ascending: false });
   if (error) {
     res.status(500).json({ error: error.message });
     return;
   }
   res.json({ users: data ?? [] });
+});
+
+async function countAdminUsers(): Promise<number> {
+  if (!supabase) return 0;
+  const { count, error } = await supabase
+    .from("users")
+    .select("id", { count: "exact", head: true })
+    .eq("is_admin", true);
+  if (error) return 0;
+  return count ?? 0;
+}
+
+function isValidAdminEmail(s: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
+}
+
+app.patch("/admin/users/:userId", requireAuth, requireAdmin, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const userId = Number(req.params.userId);
+  if (!Number.isFinite(userId)) {
+    res.status(400).json({ error: "Invalid user id" });
+    return;
+  }
+  const body = req.body ?? {};
+  const hasEmail = Object.prototype.hasOwnProperty.call(body, "email");
+  const hasUsername = Object.prototype.hasOwnProperty.call(body, "username");
+  const hasIsAdmin = Object.prototype.hasOwnProperty.call(body, "is_admin");
+  if (!hasEmail && !hasUsername && !hasIsAdmin) {
+    res.status(400).json({ error: "No changes: provide email, username, and/or is_admin" });
+    return;
+  }
+
+  const { data: target, error: fetchErr } = await supabase
+    .from("users")
+    .select("id, email, username, is_admin")
+    .eq("id", userId)
+    .maybeSingle();
+  if (fetchErr) {
+    res.status(500).json({ error: fetchErr.message });
+    return;
+  }
+  if (!target) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  const row = target as { id: number; email: string; username: string; is_admin: boolean };
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+
+  if (hasEmail) {
+    const email = String((body as { email?: unknown }).email ?? "").trim().toLowerCase();
+    if (!isValidAdminEmail(email)) {
+      res.status(400).json({ error: "Invalid email" });
+      return;
+    }
+    if (email !== row.email) {
+      const existing = await findUserByEmail(email);
+      if (existing && existing.id !== userId) {
+        res.status(400).json({ error: "An account with this email already exists" });
+        return;
+      }
+    }
+    patch.email = email;
+  }
+
+  if (hasUsername) {
+    const username = String((body as { username?: unknown }).username ?? "").trim();
+    if (!username || username.length > 64) {
+      res.status(400).json({ error: "Username is required (max 64 characters)" });
+      return;
+    }
+    if (username !== row.username) {
+      const { data: nameDupe } = await supabase
+        .from("users")
+        .select("id")
+        .eq("username", username)
+        .maybeSingle();
+      const dupeId = (nameDupe as { id?: number } | null)?.id;
+      if (dupeId != null && dupeId !== userId) {
+        res.status(400).json({ error: "Username already taken" });
+        return;
+      }
+      patch.minecraft_verified_at = null;
+    }
+    patch.username = username;
+  }
+
+  if (hasIsAdmin) {
+    const nextAdmin = !!(body as { is_admin?: unknown }).is_admin;
+    if (row.is_admin && !nextAdmin) {
+      const admins = await countAdminUsers();
+      if (admins <= 1) {
+        res.status(400).json({ error: "Cannot remove the last admin account" });
+        return;
+      }
+    }
+    patch.is_admin = nextAdmin;
+  }
+
+  const { data: updated, error: updErr } = await supabase
+    .from("users")
+    .update(patch)
+    .eq("id", userId)
+    .select("id, email, username, is_admin, created_at, minecraft_verified_at")
+    .single();
+  if (updErr) {
+    res.status(500).json({ error: updErr.message });
+    return;
+  }
+  res.json({ user: updated });
+});
+
+app.post("/admin/users/:userId/verify-ingame", requireAuth, requireAdmin, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const staff = res.locals.user!;
+  const userId = Number(req.params.userId);
+  if (!Number.isFinite(userId)) {
+    res.status(400).json({ error: "Invalid user id" });
+    return;
+  }
+  const { data: target, error: fetchErr } = await supabase
+    .from("users")
+    .select("id")
+    .eq("id", userId)
+    .maybeSingle();
+  if (fetchErr) {
+    res.status(500).json({ error: fetchErr.message });
+    return;
+  }
+  if (!target) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+  const verifiedAt = new Date().toISOString();
+  const { data: updated, error: updErr } = await supabase
+    .from("users")
+    .update({ minecraft_verified_at: verifiedAt, updated_at: verifiedAt })
+    .eq("id", userId)
+    .select("id, email, username, is_admin, created_at, minecraft_verified_at")
+    .single();
+  if (updErr) {
+    res.status(500).json({ error: updErr.message });
+    return;
+  }
+  await supabase
+    .from("user_verification_requests")
+    .update({
+      status: "approved",
+      resolved_at: verifiedAt,
+      resolved_by_user_id: staff.userId,
+      admin_note: null,
+    })
+    .eq("user_id", userId)
+    .eq("status", "pending");
+  res.json({ user: updated });
+});
+
+app.post("/admin/users/:userId/revoke-ingame-verification", requireAuth, requireAdmin, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const userId = Number(req.params.userId);
+  if (!Number.isFinite(userId)) {
+    res.status(400).json({ error: "Invalid user id" });
+    return;
+  }
+  const now = new Date().toISOString();
+  const { data: updated, error: updErr } = await supabase
+    .from("users")
+    .update({ minecraft_verified_at: null, updated_at: now })
+    .eq("id", userId)
+    .select("id, email, username, is_admin, created_at, minecraft_verified_at")
+    .maybeSingle();
+  if (updErr) {
+    res.status(500).json({ error: updErr.message });
+    return;
+  }
+  if (!updated) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+  res.json({ user: updated });
+});
+
+app.post("/admin/users/:userId/password", requireAuth, requireAdmin, async (req, res) => {
+  const userId = Number(req.params.userId);
+  if (!Number.isFinite(userId)) {
+    res.status(400).json({ error: "Invalid user id" });
+    return;
+  }
+  const newPassword =
+    typeof (req.body as { new_password?: unknown })?.new_password === "string"
+      ? (req.body as { new_password: string }).new_password
+      : "";
+  const result = await adminResetPassword(userId, newPassword);
+  if ("error" in result) {
+    const status = result.error === "User not found" ? 404 : 400;
+    res.status(status).json({ error: result.error });
+    return;
+  }
+  res.json({ ok: true });
+});
+
+app.delete("/admin/users/:userId", requireAuth, requireAdmin, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const staff = res.locals.user!;
+  const userId = Number(req.params.userId);
+  if (!Number.isFinite(userId)) {
+    res.status(400).json({ error: "Invalid user id" });
+    return;
+  }
+  if (staff.userId === userId) {
+    res.status(400).json({ error: "You cannot delete your own account" });
+    return;
+  }
+  const { data: target, error: fetchErr } = await supabase
+    .from("users")
+    .select("id, is_admin")
+    .eq("id", userId)
+    .maybeSingle();
+  if (fetchErr) {
+    res.status(500).json({ error: fetchErr.message });
+    return;
+  }
+  if (!target) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+  const t = target as { is_admin: boolean };
+  if (t.is_admin) {
+    const admins = await countAdminUsers();
+    if (admins <= 1) {
+      res.status(400).json({ error: "Cannot delete the last admin account" });
+      return;
+    }
+  }
+  const { error: delErr } = await supabase.from("users").delete().eq("id", userId);
+  if (delErr) {
+    res.status(500).json({ error: delErr.message });
+    return;
+  }
+  res.json({ ok: true, id: userId });
 });
 
 async function runDailyPvpRankPayout(): Promise<{
@@ -3182,6 +3882,76 @@ app.post("/admin/users/:userId/currency", requireAuth, requireAdmin, async (req,
     }
     res.json(data);
   }
+});
+
+/** Grant website Cobble$ (cobbledollars) to many users in one request; ledger uses same kind as single admin grant. */
+app.post("/admin/cobbledollars/bulk-grant", requireAuth, requireAdmin, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const staff = res.locals.user!;
+  const body = req.body ?? {};
+  const rawIds = body.user_ids;
+  const amount = body.amount;
+  const note =
+    typeof body.note === "string" ? body.note.trim().slice(0, 500) : "";
+
+  if (!Array.isArray(rawIds) || rawIds.length === 0) {
+    res.status(400).json({ error: "user_ids must be a non-empty array" });
+    return;
+  }
+  if (typeof amount !== "number" || !Number.isFinite(amount) || amount <= 0 || !Number.isInteger(amount)) {
+    res.status(400).json({ error: "amount must be a positive whole number" });
+    return;
+  }
+  const userIds = [
+    ...new Set(
+      rawIds
+        .map((x: unknown) => Number(x))
+        .filter((n): n is number => Number.isFinite(n) && Number.isInteger(n) && n > 0)
+    ),
+  ];
+  if (userIds.length === 0) {
+    res.status(400).json({ error: "No valid user ids" });
+    return;
+  }
+  const maxBulk = 500;
+  if (userIds.length > maxBulk) {
+    res.status(400).json({ error: `At most ${maxBulk} users per request` });
+    return;
+  }
+
+  const detail =
+    note.length > 0
+      ? `Staff: ${staff.username} (bulk: ${note})`
+      : `Staff: ${staff.username} (bulk)`;
+
+  const failures: Array<{ user_id: number; error: string }> = [];
+  let granted = 0;
+  for (const userId of userIds) {
+    try {
+      await incrementUserCurrency(userId, COBBLEDOLLARS_CURRENCY, amount, {
+        kind: "admin_grant",
+        detail,
+      });
+      granted += 1;
+    } catch (e) {
+      failures.push({
+        user_id: userId,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+
+  res.json({
+    ok: true,
+    currency: COBBLEDOLLARS_CURRENCY,
+    amount_per_user: amount,
+    granted,
+    requested: userIds.length,
+    failures,
+  });
 });
 
 app.get("/admin/users/:userId/history", requireAuth, requireAdmin, async (req, res) => {

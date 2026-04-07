@@ -14,6 +14,7 @@ import { Tournament } from './components/Tournament.tsx'
 import { TournamentTeamCompare } from './components/TournamentTeamCompare.tsx'
 import { TournamentTeamDetail } from './components/TournamentTeamDetail.tsx'
 import { TeamBuilder } from './components/TeamBuilder.tsx'
+import { isAccountVerified, VerifiedAccountBadge } from './components/VerifiedAccountBadge.tsx'
 type Page =
   | 'main'
   | 'leaderboard'
@@ -75,8 +76,14 @@ function AppContent() {
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           {isAuthenticated && user ? (
             <>
-              <span className="text-base text-muted truncate max-w-[100px] sm:max-w-[160px]" title={user.email}>
-                {user.username}
+              <span
+                className="flex items-center gap-1 min-w-0 text-base text-muted max-w-[100px] sm:max-w-[180px]"
+                title={user.email}
+              >
+                <span className="truncate">{user.username}</span>
+                {isAccountVerified(user) ? (
+                  <VerifiedAccountBadge className="w-[18px] h-[18px] sm:w-5 sm:h-5 flex-shrink-0" />
+                ) : null}
               </span>
               <button type="button" onClick={logout} className="pixel-btn text-base py-2 px-3 sm:px-4">
                 Log out

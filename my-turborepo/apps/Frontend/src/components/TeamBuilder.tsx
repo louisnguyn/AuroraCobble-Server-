@@ -350,30 +350,37 @@ function formatTeamAiCooldownMessage(lang: TeamAnalysisLanguage, nextIso?: strin
       try {
         const d = new Date(nextIso)
         if (!Number.isNaN(d.getTime())) {
-          return `Bạn chỉ dùng phân tích AI tối đa 1 lần / 48 giờ. Lần tiếp theo: ${d.toLocaleString('vi-VN')}.`
+          return `Bạn chỉ dùng phân tích AI tối đa 1 lần / 12 giờ. Lần tiếp theo: ${d.toLocaleString('vi-VN')}.`
         }
       } catch {
         /* ignore */
       }
     }
-    return 'Bạn chỉ dùng phân tích AI tối đa 1 lần mỗi 48 giờ.'
+    return 'Bạn chỉ dùng phân tích AI tối đa 1 lần mỗi 12 giờ.'
   }
   if (nextIso) {
     try {
       const d = new Date(nextIso)
       if (!Number.isNaN(d.getTime())) {
-        return `You can use Team AI analysis at most once every 48 hours. Next available: ${d.toLocaleString()}.`
+        return `You can use Team AI analysis at most once every 12 hours. Next available: ${d.toLocaleString()}.`
       }
     } catch {
       /* ignore */
     }
   }
-  return 'You can use Team AI analysis at most once every 48 hours.'
+  return 'You can use Team AI analysis at most once every 12 hours.'
+}
+
+function formatTeamAiVerificationMessage(lang: TeamAnalysisLanguage): string {
+  return lang === 'vi'
+    ? 'Phân tích AI chỉ bật sau khi quản trị viên xác minh tài khoản của bạn trên trang Admin.'
+    : 'Team AI unlocks after staff mark your account as verified in the admin panel.'
 }
 
 export function TeamBuilder() {
   const { isAuthenticated, user, loading: authLoading } = useAuth()
   const isAdminUser = Boolean(user?.is_admin)
+  const canUseTeamAi = isAdminUser || Boolean(user?.minecraft_verified_at)
   const [slots, setSlots] = useState<TeamBuildSlot[]>(() => emptyTeamSlots())
   const [pasteImport, setPasteImport] = useState('')
   const [teamName, setTeamName] = useState('')
@@ -473,6 +480,13 @@ export function TeamBuilder() {
     void refreshSaved()
   }, [authLoading, refreshSaved])
 
+  useEffect(() => {
+    if (isAuthenticated && !canUseTeamAi) {
+      setAiAnalysis(null)
+      setAiError(null)
+    }
+  }, [isAuthenticated, canUseTeamAi])
+
   const clearSlotAt = useCallback((i: number) => {
     setSlots((prev) => {
       const next = [...prev]
@@ -527,11 +541,16 @@ export function TeamBuilder() {
     if (!isAuthenticated) {
       setAiError(
         aiLang === 'vi'
-          ? 'Đăng nhập để dùng phân tích AI (tài khoản thường: 1 lần / 48 giờ).'
-          : 'Log in to use AI team analysis (standard accounts: once per 48 hours).',
+          ? 'Đăng nhập để dùng phân tích AI (tài khoản thường: 1 lần / 12 giờ).'
+          : 'Log in to use AI team analysis (standard accounts: once per 12 hours).',
       )
       setAiAnalysis(null)
       setShowAuth(true)
+      return
+    }
+    if (!isAdminUser && !user?.minecraft_verified_at) {
+      setAiError(formatTeamAiVerificationMessage(aiLang))
+      setAiAnalysis(null)
       return
     }
     const paste = teamSlotsToPaste(slots)
@@ -554,6 +573,8 @@ export function TeamBuilder() {
       if (e instanceof Error && e.message === 'TEAM_AI_COOLDOWN') {
         const next = (e as Error & { nextAllowedAt?: string }).nextAllowedAt
         setAiError(formatTeamAiCooldownMessage(aiLang, next))
+      } else if (e instanceof Error && e.message === 'TEAM_AI_VERIFICATION_REQUIRED') {
+        setAiError(formatTeamAiVerificationMessage(aiLang))
       } else if (e instanceof Error && e.message === 'LOGIN_REQUIRED') {
         setAiError(
           aiLang === 'vi' ? 'Phiên đăng nhập hết hạn. Đăng nhập lại.' : 'Session expired. Please log in again.',
@@ -567,7 +588,7 @@ export function TeamBuilder() {
     } finally {
       setAiLoading(false)
     }
-  }, [slots, aiLang, isAuthenticated])
+  }, [slots, aiLang, isAuthenticated, isAdminUser, user?.minecraft_verified_at])
 
   const handleSave = async () => {
     setSaveError(null)
@@ -582,7 +603,8 @@ export function TeamBuilder() {
       return
     }
     try {
-      const aiPayload = aiAnalysis?.trim() ? aiAnalysis : null
+      const aiPayload =
+        canUseTeamAi && aiAnalysis?.trim() ? aiAnalysis : null
       if (savedTeamRowId != null) {
         const { team } = await updateSavedTeam(savedTeamRowId, {
           name,
@@ -616,7 +638,10 @@ export function TeamBuilder() {
     setSaveOk(null)
     setSaveError(null)
     setAiError(null)
-    setAiAnalysis(row.ai_analysis?.trim() ? row.ai_analysis : null)
+    const allowAi = isAdminUser || Boolean(user?.minecraft_verified_at)
+    setAiAnalysis(
+      allowAi && row.ai_analysis?.trim() ? row.ai_analysis : null,
+    )
   }
 
   const copySavedTeamPokepaste = useCallback(async (row: SavedTeamRow) => {
@@ -680,35 +705,39 @@ export function TeamBuilder() {
         <button type="button" onClick={exportPaste} className="pixel-btn text-sm py-2 px-3">
           Copy current team
         </button>
-        <div className="flex flex-wrap items-center gap-2">
-          <label htmlFor="tb-ai-lang" className="text-xs text-muted whitespace-nowrap m-0">
-            AI language / Ngôn ngữ
-          </label>
-          <select
-            id="tb-ai-lang"
-            value={aiLang}
-            onChange={(e) => persistAiLang(e.target.value === 'vi' ? 'vi' : 'en')}
-            disabled={aiLoading}
-            className="pixel-field text-sm py-1.5 px-2 min-w-[9rem] disabled:opacity-60"
-          >
-            <option value="en">English</option>
-            <option value="vi">Tiếng Việt</option>
-          </select>
-        </div>
-        <button
-          type="button"
-          onClick={() => void runTeamAnalyseByAi()}
-          disabled={aiLoading}
-          className="pixel-btn-primary text-sm py-2 px-3 disabled:opacity-60"
-        >
-          {aiLoading
-            ? aiLang === 'vi'
-              ? 'Đang phân tích…'
-              : 'Analysing…'
-            : aiLang === 'vi'
-              ? 'Phân tích đội (AI)'
-              : 'Team analyse by AI'}
-        </button>
+        {canUseTeamAi ? (
+          <>
+            <div className="flex flex-wrap items-center gap-2">
+              <label htmlFor="tb-ai-lang" className="text-xs text-muted whitespace-nowrap m-0">
+                AI language / Ngôn ngữ
+              </label>
+              <select
+                id="tb-ai-lang"
+                value={aiLang}
+                onChange={(e) => persistAiLang(e.target.value === 'vi' ? 'vi' : 'en')}
+                disabled={aiLoading}
+                className="pixel-field text-sm py-1.5 px-2 min-w-[9rem] disabled:opacity-60"
+              >
+                <option value="en">English</option>
+                <option value="vi">Tiếng Việt</option>
+              </select>
+            </div>
+            <button
+              type="button"
+              onClick={() => void runTeamAnalyseByAi()}
+              disabled={aiLoading}
+              className="pixel-btn-primary text-sm py-2 px-3 disabled:opacity-60"
+            >
+              {aiLoading
+                ? aiLang === 'vi'
+                  ? 'Đang phân tích…'
+                  : 'Analysing…'
+                : aiLang === 'vi'
+                  ? 'Phân tích đội (AI)'
+                  : 'Team analyse by AI'}
+            </button>
+          </>
+        ) : null}
       </div>
 
       {!authLoading ? (
@@ -716,35 +745,51 @@ export function TeamBuilder() {
           {!isAuthenticated ? (
             aiLang === 'vi' ? (
               <>
-                Phân tích AI cần <span className="text-[#f5efe6]/90">đăng nhập</span>. Tài khoản thường: tối đa{' '}
-                <span className="text-[#f5efe6]/90">1 lần / 48 giờ</span>.
+                Phân tích AI cần <span className="text-[#f5efe6]/90">đăng nhập</span>,{' '}
+                <span className="text-[#f5efe6]/90">xác minh in-game</span> (staff), rồi tối đa{' '}
+                <span className="text-[#f5efe6]/90">1 lần / 12 giờ</span>.
               </>
             ) : (
               <>
-                AI analysis requires <span className="text-[#f5efe6]/90">logging in</span>. Standard accounts:{' '}
-                <span className="text-[#f5efe6]/90">once per 48 hours</span>.
+                AI analysis requires <span className="text-[#f5efe6]/90">logging in</span>, staff{' '}
+                <span className="text-[#f5efe6]/90">in-game verification</span>, then standard accounts:{' '}
+                <span className="text-[#f5efe6]/90">once per 12 hours</span>.
               </>
             )
-          ) : isAdminUser ? (
-            aiLang === 'vi' ? (
+          ) : canUseTeamAi ? (
+            isAdminUser ? (
+              aiLang === 'vi' ? (
+                <>
+                  Tài khoản quản trị: <span className="text-[#f5efe6]/90">không giới hạn</span> số lần phân tích AI.
+                </>
+              ) : (
+                <>
+                  Admin account: <span className="text-[#f5efe6]/90">no limit</span> on AI analyses.
+                </>
+              )
+            ) : aiLang === 'vi' ? (
               <>
-                Tài khoản quản trị: <span className="text-[#f5efe6]/90">không giới hạn</span> số lần phân tích AI.
+                Đã xác minh in-game. Tài khoản thường: tối đa{' '}
+                <span className="text-[#f5efe6]/90">1 lần phân tích AI mỗi 12 giờ</span>.
               </>
             ) : (
               <>
-                Admin account: <span className="text-[#f5efe6]/90">no limit</span> on AI analyses.
+                In-game verified. Standard account:{' '}
+                <span className="text-[#f5efe6]/90">one AI analysis every 12 hours</span>.
               </>
             )
           ) : aiLang === 'vi' ? (
-            <>
-              Tài khoản thường: tối đa <span className="text-[#f5efe6]/90">1 lần phân tích AI mỗi 48 giờ</span>.
-            </>
+            <>{formatTeamAiVerificationMessage('vi')}</>
           ) : (
-            <>
-              Standard account: <span className="text-[#f5efe6]/90">one AI analysis every 48 hours</span>.
-            </>
+            <>{formatTeamAiVerificationMessage('en')}</>
           )}
         </p>
+      ) : null}
+
+      {isAuthenticated && !authLoading && !canUseTeamAi ? (
+        <div className="pixel-panel-soft p-3 text-xs text-amber-100/95 border border-amber-500/35 rounded-lg m-0 max-w-2xl leading-relaxed">
+          {formatTeamAiVerificationMessage(aiLang)}
+        </div>
       ) : null}
 
       {isAuthenticated && (
@@ -795,7 +840,7 @@ export function TeamBuilder() {
         </div>
       )}
 
-      {(aiError || aiAnalysis) && (
+      {(aiError || (canUseTeamAi && aiAnalysis)) && (
         <div className="pixel-panel-soft p-4 space-y-2 border-2 border-accent/25">
           <h2 className="text-base font-semibold text-[#f5efe6] m-0">
             {aiLang === 'vi' ? 'Phân tích đội (AI)' : 'AI team analysis'}
@@ -806,7 +851,7 @@ export function TeamBuilder() {
               : 'Suggestions are AI-generated and may be wrong. Your team is sent to the server for this request only.'}
           </p>
           {aiError ? <p className="text-sm text-red-400 m-0">{aiError}</p> : null}
-          {aiAnalysis ? (
+          {canUseTeamAi && aiAnalysis ? (
             <div className="mt-2 rounded-lg bg-surface-hover/40 border border-border/40 p-3 text-sm max-h-[min(28rem,55vh)] overflow-y-auto font-sans leading-relaxed [&>*:first-child]:mt-0">
               <ReactMarkdown components={aiAnalysisMarkdownComponents}>{aiAnalysis}</ReactMarkdown>
             </div>
@@ -959,7 +1004,7 @@ export function TeamBuilder() {
             {savedTeamRowId != null ? 'Save changes' : 'Save to account'}
           </button>
         </div>
-        {isAuthenticated ? (
+        {isAuthenticated && canUseTeamAi ? (
           <p className="text-xs text-muted m-0">
             {aiLang === 'vi'
               ? 'Bản phân tích AI mới nhất được lưu khi bạn bấm Lưu (và hiện lại khi tải đội này).'

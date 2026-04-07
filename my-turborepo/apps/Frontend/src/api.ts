@@ -81,6 +81,10 @@ export async function analyzeTeamWithAI(
     throw err
   }
 
+  if (res.status === 403 && data?.code === 'team_ai_verification_required') {
+    throw new Error('TEAM_AI_VERIFICATION_REQUIRED')
+  }
+
   if (!res.ok) {
     const msg =
       data && typeof data.error === 'string' ? data.error : `API ${res.status}: ${res.statusText}`

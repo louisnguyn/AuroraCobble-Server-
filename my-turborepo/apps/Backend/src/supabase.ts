@@ -12,6 +12,8 @@ export type UserRow = {
   password_hash: string;
   username: string;
   is_admin: boolean;
+  /** Set by admin when user was online on the configured Minecraft server (username = IGN). */
+  minecraft_verified_at?: string | null;
   created_at: string;
   updated_at: string;
 };

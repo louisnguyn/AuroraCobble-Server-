@@ -68,10 +68,91 @@ export interface AdminUser {
   username: string
   is_admin: boolean
   created_at: string
+  /** Set when staff verified this account was online on the Minecraft server (username = IGN). */
+  minecraft_verified_at?: string | null
 }
 
 export async function fetchAdminUsers(): Promise<{ users: AdminUser[] }> {
   return fetchJson<{ users: AdminUser[] }>('/admin/users')
+}
+
+export async function patchAdminUser(
+  userId: number,
+  body: { email?: string; username?: string; is_admin?: boolean }
+): Promise<{ user: AdminUser }> {
+  return fetchJson<{ user: AdminUser }>(`/admin/users/${userId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function verifyUserIngame(userId: number): Promise<{ user: AdminUser }> {
+  return fetchJson<{ user: AdminUser }>(`/admin/users/${userId}/verify-ingame`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+}
+
+export async function revokeUserIngameVerification(userId: number): Promise<{ user: AdminUser }> {
+  return fetchJson<{ user: AdminUser }>(`/admin/users/${userId}/revoke-ingame-verification`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+}
+
+export async function adminResetUserPassword(userId: number, newPassword: string): Promise<{ ok: boolean }> {
+  return fetchJson<{ ok: boolean }>(`/admin/users/${userId}/password`, {
+    method: 'POST',
+    body: JSON.stringify({ new_password: newPassword }),
+  })
+}
+
+export async function deleteAdminUser(userId: number): Promise<{ ok: boolean; id: number }> {
+  return fetchJson<{ ok: boolean; id: number }>(`/admin/users/${userId}`, {
+    method: 'DELETE',
+  })
+}
+
+export type AdminVerificationRequest = {
+  id: number
+  user_id: number
+  message: string | null
+  status: string
+  created_at: string
+  resolved_at: string | null
+  resolved_by_user_id: number | null
+  admin_note: string | null
+  user_email: string | null
+  user_username: string | null
+  user_minecraft_verified_at: string | null
+}
+
+export async function fetchAdminVerificationRequests(params?: {
+  status?: 'pending' | 'approved' | 'rejected' | 'all'
+}): Promise<{ requests: AdminVerificationRequest[] }> {
+  const sp = new URLSearchParams()
+  if (params?.status) sp.set('status', params.status)
+  const q = sp.toString()
+  return fetchJson<{ requests: AdminVerificationRequest[] }>(
+    `/admin/verification-requests${q ? `?${q}` : ''}`
+  )
+}
+
+export async function approveVerificationRequest(id: number): Promise<{ ok: boolean }> {
+  return fetchJson<{ ok: boolean }>(`/admin/verification-requests/${id}/approve`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+}
+
+export async function rejectVerificationRequest(
+  id: number,
+  adminNote?: string
+): Promise<{ ok: boolean }> {
+  return fetchJson<{ ok: boolean }>(`/admin/verification-requests/${id}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ ...(adminNote?.trim() ? { admin_note: adminNote.trim() } : {}) }),
+  })
 }
 
 export interface UserCurrencyRow {
@@ -89,6 +170,26 @@ export async function grantCurrency(userId: number, currencyType: string, amount
   return fetchJson<UserCurrencyRow>(`/admin/users/${userId}/currency`, {
     method: 'POST',
     body: JSON.stringify({ currency_type: currencyType, amount }),
+  })
+}
+
+export type BulkCobbleGrantResult = {
+  ok: boolean
+  currency: string
+  amount_per_user: number
+  granted: number
+  requested: number
+  failures: Array<{ user_id: number; error: string }>
+}
+
+export async function bulkGrantCobbledollars(body: {
+  user_ids: number[]
+  amount: number
+  note?: string
+}): Promise<BulkCobbleGrantResult> {
+  return fetchJson<BulkCobbleGrantResult>('/admin/cobbledollars/bulk-grant', {
+    method: 'POST',
+    body: JSON.stringify(body),
   })
 }
 
