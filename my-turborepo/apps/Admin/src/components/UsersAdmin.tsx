@@ -12,10 +12,13 @@ import {
   bulkGrantCobbledollars,
   verifyUserIngame,
   revokeUserIngameVerification,
+  fetchAdminMinecraftRoles,
+  grantAdminUserMinecraftRole,
   type AdminUser,
   type UserCurrencyRow,
   type AdminHistoryEntry,
 } from '../authApi'
+import { RoleBadge } from './RoleBadge.tsx'
 
 type UsersTab = 'account' | 'rewards' | 'bulkCobble'
 
@@ -51,6 +54,9 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [ingameVerifyBusy, setIngameVerifyBusy] = useState(false)
+  const [minecraftRoleKeys, setMinecraftRoleKeys] = useState<string[]>([])
+  const [grantRolePick, setGrantRolePick] = useState('')
+  const [grantRoleBusy, setGrantRoleBusy] = useState(false)
 
   const filteredUsers = useMemo(() => {
     const q = userSearchQuery.trim().toLowerCase()
@@ -65,11 +71,24 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
     })
   }, [users, userSearchQuery])
 
+  const roleSelectOptions = useMemo(() => {
+    const base = minecraftRoleKeys.length > 0 ? minecraftRoleKeys : ['member']
+    const cur = (selectedUser?.minecraft_role || '').trim().toLowerCase()
+    if (cur && !base.includes(cur)) return [cur, ...base]
+    return base
+  }, [minecraftRoleKeys, selectedUser?.minecraft_role])
+
   useEffect(() => {
     fetchAdminUsers()
       .then(({ users: u }) => setUsers(u))
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load users'))
       .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => {
+    fetchAdminMinecraftRoles()
+      .then(({ keys }) => setMinecraftRoleKeys(keys))
+      .catch(() => setMinecraftRoleKeys([]))
   }, [])
 
   useEffect(() => {
@@ -97,6 +116,7 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
       setEditEmail('')
       setEditUsername('')
       setEditIsAdmin(false)
+      setGrantRolePick('')
       return
     }
     setEditEmail(selectedUser.email)
@@ -104,6 +124,7 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
     setEditIsAdmin(selectedUser.is_admin)
     setNewPassword('')
     setConfirmPassword('')
+    setGrantRolePick((selectedUser.minecraft_role || 'member').trim().toLowerCase())
   }, [selectedUser])
 
   const mergeUserIntoList = (u: AdminUser) => {
@@ -268,6 +289,24 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
       setError(err instanceof Error ? err.message : 'Could not revoke verification')
     } finally {
       setIngameVerifyBusy(false)
+    }
+  }
+
+  const handleGrantMinecraftRole = async () => {
+    if (!selectedUser || grantRoleBusy) return
+    setGrantRoleBusy(true)
+    setError(null)
+    setSuccessMessage(null)
+    try {
+      const { user } = await grantAdminUserMinecraftRole(selectedUser.id, grantRolePick)
+      mergeUserIntoList(user)
+      const applied = (user.minecraft_role ?? grantRolePick).trim().toLowerCase()
+      setGrantRolePick(applied)
+      setSuccessMessage(`LuckPerms + website rank set to ${applied} for ${user.username}.`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not set Minecraft rank')
+    } finally {
+      setGrantRoleBusy(false)
     }
   }
 
@@ -443,7 +482,10 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
                         : 'hover:bg-surface-hover text-[#f5efe6]'
                     }`}
                   >
-                    <span className="font-medium">{u.username}</span>
+                    <span className="font-medium inline-flex items-center gap-1.5 flex-wrap">
+                      {u.username}
+                      <RoleBadge roleKey={u.minecraft_role ?? 'member'} compact className="opacity-90" />
+                    </span>
                     <span className="block text-xs text-muted truncate">{u.email}</span>
                     {u.is_admin && (
                       <span className="inline-block mt-1 text-xs px-1.5 py-0.5 rounded bg-accent/30 text-accent">
@@ -671,6 +713,53 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
                         className="px-3 py-1.5 rounded-lg text-sm border border-border text-muted hover:bg-surface-hover hover:text-[#f5efe6] disabled:opacity-40"
                       >
                         Clear verification
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg bg-surface border border-border p-4">
+                    <h2 className="text-sm font-semibold text-[#f5efe6] m-0 mb-2">Minecraft rank (LuckPerms)</h2>
+                    <p className="text-xs text-muted m-0 mb-3">
+                      Runs <code className="text-sky-300/90">lp user &lt;IGN&gt; parent set &lt;rank&gt;</code> via RCON,
+                      then updates this user&apos;s rank on the website. Same list as the public rank shop; use this to
+                      grant any role immediately without a user request.
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2 mb-3">
+                      <span className="text-xs text-muted">Current:</span>
+                      <RoleBadge roleKey={selectedUser.minecraft_role ?? 'member'} />
+                      <span className="text-xs text-[#f5efe6] font-mono">
+                        {(selectedUser.minecraft_role ?? 'member').toLowerCase()}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-end gap-2">
+                      <div className="min-w-[200px] flex-1">
+                        <label htmlFor="grant-mc-role" className="block text-xs text-muted mb-1">
+                          Set rank to
+                        </label>
+                        <select
+                          id="grant-mc-role"
+                          value={grantRolePick}
+                          onChange={(e) => setGrantRolePick(e.target.value)}
+                          className="w-full px-2 py-1.5 rounded bg-[#0f0d0b] border border-border text-sm text-[#f5efe6]"
+                        >
+                          {roleSelectOptions.map((k) => (
+                            <option key={k} value={k}>
+                              {k}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handleGrantMinecraftRole()}
+                        disabled={
+                          grantRoleBusy ||
+                          !grantRolePick ||
+                          grantRolePick === (selectedUser.minecraft_role ?? 'member').trim().toLowerCase()
+                        }
+                        className="px-3 py-1.5 rounded-lg bg-accent text-[#1a1510] text-sm font-medium hover:bg-accent/90 disabled:opacity-50"
+                      >
+                        {grantRoleBusy ? 'Applying…' : 'Apply rank'}
                       </button>
                     </div>
                   </div>

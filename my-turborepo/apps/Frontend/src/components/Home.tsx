@@ -14,7 +14,7 @@ const QUICK_LINKS: { id: Exclude<Page, 'main'>; label: string; description: stri
   {
     id: 'leaderboard',
     label: 'Leaderboard',
-    description: 'PvP ranks, Cobble$ economy & Battle Tower (live)',
+    description: 'PvP ranks, Cobble$ / PCO economy & Battle Tower (live)',
   },
   { id: 'usage', label: 'Usage Stats', description: 'Pokémon usage by tier and format' },
   { id: 'wiki', label: 'Wiki', description: 'Pokédex, moves, evolution & forms' },

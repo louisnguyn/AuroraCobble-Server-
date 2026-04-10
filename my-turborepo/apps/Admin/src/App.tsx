@@ -7,8 +7,18 @@ import { UsersAdmin } from './components/UsersAdmin.tsx'
 import { MinecraftDashboard } from './components/MinecraftDashboard.tsx'
 import { TournamentAdmin } from './components/TournamentAdmin.tsx'
 import { VerificationRequestsAdmin } from './components/VerificationRequestsAdmin.tsx'
+import { RoleRequestsAdmin } from './components/RoleRequestsAdmin.tsx'
+import { RoleBadge } from './components/RoleBadge.tsx'
 
-type Section = 'usage' | 'users' | 'verifications' | 'minecraft' | 'tournament' | 'settings' | 'bans'
+type Section =
+  | 'usage'
+  | 'users'
+  | 'verifications'
+  | 'role_requests'
+  | 'minecraft'
+  | 'tournament'
+  | 'settings'
+  | 'bans'
 
 const SECTIONS: { id: Section; label: string }[] = [
   { id: 'minecraft', label: 'Server Dashboard' },
@@ -16,6 +26,7 @@ const SECTIONS: { id: Section; label: string }[] = [
   { id: 'usage', label: 'Usage stats' },
   { id: 'users', label: 'Website users' },
   { id: 'verifications', label: 'Verification requests' },
+  { id: 'role_requests', label: 'Rank requests' },
   { id: 'settings', label: 'Settings' },
   { id: 'bans', label: 'Bans' },
 ]
@@ -123,8 +134,9 @@ export default function App() {
                 {user.username.charAt(0).toUpperCase()}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-[#f5efe6] truncate" title={user.username}>
-                  {user.username}
+                <p className="text-sm font-medium text-[#f5efe6] truncate flex items-center gap-1.5" title={user.username}>
+                  <RoleBadge roleKey={user.minecraft_role ?? 'member'} compact className="shrink-0" />
+                  <span className="truncate">{user.username}</span>
                 </p>
                 <p className="text-xs text-muted truncate" title={user.email}>
                   {user.email}
@@ -174,6 +186,7 @@ export default function App() {
           {section === 'usage' && <UsageStatsAdmin />}
           {section === 'users' && <UsersAdmin currentAdminId={user.id} />}
           {section === 'verifications' && <VerificationRequestsAdmin />}
+          {section === 'role_requests' && <RoleRequestsAdmin />}
           {section === 'minecraft' && <MinecraftDashboard viewerUsername={user.username} />}
           {section === 'tournament' && <TournamentAdmin />}
           {section === 'settings' && <Placeholder title="Settings" />}

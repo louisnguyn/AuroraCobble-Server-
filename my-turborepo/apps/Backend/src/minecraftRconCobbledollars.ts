@@ -42,6 +42,8 @@ export function parseCobbledollarsLeaderboardOutput(text: string): Map<string, n
 
     trimmed = trimmed
       .replace(/\s+(?:cobble\s*dollars?|\bcd\b|coins?)\s*$/i, "")
+      // PCO: in-game lines look like "1. notvel0 - 50000 PCo" — unit after amount breaks $-anchored regexes
+      .replace(/\s+(?:PCo|PCO|pco)\s*$/i, "")
       .trim();
 
     // "1. lEOALE_ig_ $ 2.05M" / "6. Erishu21 $ 998K" (CobbleDollars RCON format)
@@ -68,9 +70,9 @@ export function parseCobbledollarsLeaderboardOutput(text: string): Map<string, n
       }
     }
 
-    // "1. Name - 500" / "#1 Name | 500" (optional K/M/B)
+    // "1. Name - 500" / "1. Name - 50000 PCo" (unit stripped above; optional K/M/B before end)
     const ranked = trimmed.match(
-      /^#?\d+\s*[.)]\s*(.+?)\s*[-–—|]\s*\$?([\d,]+(?:\.\d+)?)\s*([KkMmBb])?\s*$/
+      /^#?\d+\s*[.)]\s*(.+?)\s*[-–—|]\s*\$?([\d,]+(?:\.\d+)?)\s*([KkMmBb])?(?:\s+(?:PCo|PCO|pco))?\s*$/i
     );
     if (ranked?.[1] && ranked[2]) {
       const name = ranked[1].trim();

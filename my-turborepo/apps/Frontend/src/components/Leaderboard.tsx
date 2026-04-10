@@ -14,10 +14,15 @@ import { CobbleDollars } from './CobbleDollars.tsx'
 type MainSection = 'ranks' | 'economy' | 'battle'
 type RankFormatId = 'singles' | 'doubles'
 type BattleModeId = 'singles' | 'doubles' | 'co-op' | 'boss'
+type EconomyKind = 'cobble' | 'pco'
 
 const MAIN_SECTIONS: { id: MainSection; label: string; description: string }[] = [
   { id: 'ranks', label: 'Ranks', description: 'PvP ELO & tiers' },
-  { id: 'economy', label: 'Economy', description: 'In-game Cobble$ top 10 (server)' },
+  {
+    id: 'economy',
+    label: 'Economy',
+    description: 'In-game Cobble$ or PCO top 10',
+  },
   { id: 'battle', label: 'Battle Tower', description: 'Floors & streaks' },
 ]
 
@@ -226,6 +231,7 @@ export function Leaderboard() {
   const viewerIgn = user?.username?.trim() ?? null
 
   const [mainSection, setMainSection] = useState<MainSection>('ranks')
+  const [economyKind, setEconomyKind] = useState<EconomyKind>('cobble')
   const [rankFormatId, setRankFormatId] = useState<RankFormatId>('singles')
   const [battleMode, setBattleMode] = useState<BattleModeId>('singles')
 
@@ -308,8 +314,8 @@ export function Leaderboard() {
       <header className="space-y-2 border-b border-border/50 pb-6">
         <h1 className="text-2xl font-semibold m-0 text-[#e2e8f0] tracking-tight">Leaderboard</h1>
         <p className="text-sm text-muted m-0 max-w-2xl leading-relaxed">
-          PvP ranks, in-game Cobble$, and Battle Tower. When you are signed in, your row is highlighted if your site
-          username matches your in-game name.
+          PvP ranks, in-game Cobble$ or PCO top 10, and Battle Tower. When you are signed in, your row is highlighted if
+          your site username matches your in-game name.
         </p>
         {!isAuthenticated ? (
           <p className="text-sm text-muted/90 m-0 pixel-panel-soft px-3 py-2 max-w-xl">
@@ -484,17 +490,28 @@ export function Leaderboard() {
         </section>
       )}
 
-      {/* ——— Economy (no sub-tabs) ——— */}
+      {/* ——— Economy: Cobble$ vs PCO ——— */}
       {mainSection === 'economy' && (
         <section className="space-y-4" aria-labelledby="economy-heading">
           <h2 id="economy-heading" className="text-lg font-semibold m-0 text-[#e2e8f0]">
             Economy
           </h2>
+          <div className="flex flex-wrap gap-2" role="tablist" aria-label="Economy currency">
+            <SubTab active={economyKind === 'cobble'} onClick={() => setEconomyKind('cobble')}>
+              Cobble$
+            </SubTab>
+            <SubTab active={economyKind === 'pco'} onClick={() => setEconomyKind('pco')}>
+              PCO
+            </SubTab>
+          </div>
           <p className="text-sm text-muted m-0">
-            Richest players on the Minecraft server (live CobbleDollars leaderboard via RCON). Manage your website
-            balance under Account → C$ balance.
+            {economyKind === 'cobble' ? (
+              <>Richest players by in-game Cobble$. Your website wallet is under Account → C$ balance.</>
+            ) : (
+              <>Top 10 by PCO in-game. Separate from website Cobble$.</>
+            )}
           </p>
-          <CobbleDollars viewerIgn={viewerIgn} />
+          <CobbleDollars viewerIgn={viewerIgn} kind={economyKind} />
         </section>
       )}
 
@@ -522,9 +539,7 @@ export function Leaderboard() {
             </button>
           </div>
 
-          <p className="text-xs text-muted m-0">
-            Top 10 per mode · <code className="text-amber-400/90/90">bt leaderboard</code> (RCON) · cached ~90s
-          </p>
+          <p className="text-xs text-muted m-0">Top 10 per mode · updates about every minute</p>
 
           {btLoading && !btData ? (
             <div className={panelClass}>Loading Battle Tower…</div>
@@ -533,9 +548,7 @@ export function Leaderboard() {
           ) : !btData ? (
             <div className={panelClass}>No data.</div>
           ) : btData.disabled ? (
-            <div className={`${panelClass} text-muted`}>
-              Battle Tower leaderboard is disabled (<code className="text-xs">MC_BT_DISABLE</code>).
-            </div>
+            <div className={`${panelClass} text-muted`}>Battle Tower leaderboard is turned off for this site.</div>
           ) : btData.error ? (
             <div className={`${panelClass} text-error text-sm`}>Could not load: {btData.error}</div>
           ) : btData.floorRows.length +
@@ -551,9 +564,7 @@ export function Leaderboard() {
               )}
               <header>
                 <h3 className="text-base font-semibold m-0 mb-1 text-[#e2e8f0]">Battle Tower (top 10)</h3>
-                <p className="text-sm text-muted m-0">
-                  Two lists per mode: highest floor and highest win streak (from server output).
-                </p>
+                <p className="text-sm text-muted m-0">Two lists per mode: highest floor and highest win streak.</p>
               </header>
               {(battleFloorYou || battleStreakYou) && (
                 <div
@@ -618,14 +629,13 @@ export function Leaderboard() {
               btData.streakRows.length === 0 &&
               (btData.fallbackFloorLines.length > 0 || btData.fallbackStreakLines.length > 0) ? (
                 <p className="text-xs text-muted m-0 max-w-5xl">
-                  Showing raw server lines where the parser could not split players — if stats look wrong, the mod
-                  output format may need a parser update.
+                  Some rows could not be split into clean stats — refresh later if numbers look off.
                 </p>
               ) : null}
             </>
           ) : (
             <div className={`${panelClass} text-muted text-sm`}>
-              No entries returned. Check RCON and Battle Tower on the server.
+              No entries yet. Try again after playing Battle Tower on the server.
             </div>
           )}
         </section>

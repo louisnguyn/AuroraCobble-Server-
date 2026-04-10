@@ -5,6 +5,8 @@ export interface AuthUser {
   email: string
   username: string
   is_admin: boolean
+  /** LuckPerms group mirrored from backend (badge in UI). */
+  minecraft_role?: string
 }
 
 export interface AuthResponse {
@@ -70,6 +72,8 @@ export interface AdminUser {
   created_at: string
   /** Set when staff verified this account was online on the Minecraft server (username = IGN). */
   minecraft_verified_at?: string | null
+  /** LuckPerms primary group mirrored on the site. */
+  minecraft_role?: string | null
 }
 
 export async function fetchAdminUsers(): Promise<{ users: AdminUser[] }> {
@@ -97,6 +101,20 @@ export async function revokeUserIngameVerification(userId: number): Promise<{ us
   return fetchJson<{ user: AdminUser }>(`/admin/users/${userId}/revoke-ingame-verification`, {
     method: 'POST',
     body: JSON.stringify({}),
+  })
+}
+
+export async function fetchAdminMinecraftRoles(): Promise<{ keys: string[] }> {
+  return fetchJson<{ keys: string[] }>('/admin/minecraft-roles')
+}
+
+export async function grantAdminUserMinecraftRole(
+  userId: number,
+  roleKey: string
+): Promise<{ user: AdminUser }> {
+  return fetchJson<{ user: AdminUser }>(`/admin/users/${userId}/minecraft-role`, {
+    method: 'POST',
+    body: JSON.stringify({ roleKey }),
   })
 }
 
@@ -150,6 +168,44 @@ export async function rejectVerificationRequest(
   adminNote?: string
 ): Promise<{ ok: boolean }> {
   return fetchJson<{ ok: boolean }>(`/admin/verification-requests/${id}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ ...(adminNote?.trim() ? { admin_note: adminNote.trim() } : {}) }),
+  })
+}
+
+export type AdminRoleGrantRequest = {
+  id: number
+  user_id: number
+  requested_role: string
+  message: string | null
+  status: string
+  created_at: string
+  resolved_at: string | null
+  resolved_by_user_id: number | null
+  admin_note: string | null
+  user_email: string | null
+  user_username: string | null
+  user_minecraft_role: string | null
+}
+
+export async function fetchAdminRoleRequests(params?: {
+  status?: 'pending' | 'approved' | 'rejected' | 'all'
+}): Promise<{ requests: AdminRoleGrantRequest[] }> {
+  const sp = new URLSearchParams()
+  if (params?.status) sp.set('status', params.status)
+  const q = sp.toString()
+  return fetchJson<{ requests: AdminRoleGrantRequest[] }>(`/admin/role-requests${q ? `?${q}` : ''}`)
+}
+
+export async function approveRoleRequest(id: number): Promise<{ ok: boolean }> {
+  return fetchJson<{ ok: boolean }>(`/admin/role-requests/${id}/approve`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+}
+
+export async function rejectRoleRequest(id: number, adminNote?: string): Promise<{ ok: boolean }> {
+  return fetchJson<{ ok: boolean }>(`/admin/role-requests/${id}/reject`, {
     method: 'POST',
     body: JSON.stringify({ ...(adminNote?.trim() ? { admin_note: adminNote.trim() } : {}) }),
   })

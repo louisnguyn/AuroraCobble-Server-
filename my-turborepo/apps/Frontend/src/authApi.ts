@@ -9,6 +9,8 @@ export interface AuthUser {
   is_admin?: boolean
   /** Staff confirmed this user was online on Minecraft (website username = IGN). Required for Team AI (non-admin). */
   minecraft_verified_at?: string | null
+  /** LuckPerms parent group mirrored on the site (e.g. member, pro). */
+  minecraft_role?: string
 }
 
 export interface AuthResponse {
@@ -334,6 +336,15 @@ export interface DailyLoginStatus {
   date: string
   timeZone: string
   eligible: boolean
+  /** Extra Cobble$ / tickets from `users.minecraft_role` (LuckPerms mirror). */
+  dailyRankBonus?: {
+    minecraftRole: string
+    /** Flat Cobble$ added every claim (on top of streak Cobble on days 1–6). */
+    flatCobbleBonusPerClaim: number
+    ticketBonusPerClaim: number
+    /** Total Cobble$ from this claim (streak + rank flat), or rank-only if next reward is item. */
+    nextClaimCobbleTotal: number | null
+  }
   streak: {
     nextDay: number
     nextReward: {
@@ -363,6 +374,7 @@ export async function claimDailyLoginReward(): Promise<{
   streakDay: number
   reward: string
   message: string
+  dailyRankBonus?: { flatCobbleBonus: number; ticketBonus: number }
 }> {
   return fetchApi<{
     ok: boolean
@@ -370,6 +382,7 @@ export async function claimDailyLoginReward(): Promise<{
     streakDay: number
     reward: string
     message: string
+    dailyRankBonus?: { flatCobbleBonus: number; ticketBonus: number }
   }>('/user/daily-login/claim', {
     method: 'POST',
     body: JSON.stringify({}),
@@ -402,11 +415,18 @@ export async function claimInventoryItem(itemKey: string, quantity = 1): Promise
 export interface ShopItem {
   itemKey: string
   label: string
+  /** List price before rank discount. */
   cost: number
+  /** Actual Cobble$ charged for 1 unit after rank discount. */
+  discountedCost: number
 }
 
-export async function fetchShopItems(): Promise<{ currency: string; items: ShopItem[] }> {
-  return fetchApi<{ currency: string; items: ShopItem[] }>('/shop/items')
+export async function fetchShopItems(): Promise<{
+  currency: string
+  shopDiscountPercent: number
+  items: ShopItem[]
+}> {
+  return fetchApi<{ currency: string; shopDiscountPercent: number; items: ShopItem[] }>('/shop/items')
 }
 
 export async function buyShopItem(itemKey: string, quantity = 1): Promise<{
@@ -414,6 +434,7 @@ export async function buyShopItem(itemKey: string, quantity = 1): Promise<{
   itemKey: string
   quantityPurchased: number
   totalCost: number
+  shopDiscountPercent: number
   newBalance: number
   newInventoryQuantity: number
 }> {
@@ -422,6 +443,7 @@ export async function buyShopItem(itemKey: string, quantity = 1): Promise<{
     itemKey: string
     quantityPurchased: number
     totalCost: number
+    shopDiscountPercent: number
     newBalance: number
     newInventoryQuantity: number
   }>('/shop/buy', {
@@ -431,11 +453,94 @@ export async function buyShopItem(itemKey: string, quantity = 1): Promise<{
   })
 }
 
+export type RoleWebsitePerks = {
+  shopDiscountPercent: number
+  dailyFlatCobble: number
+  dailyTickets: number
+}
+
+export type RoleCatalogEntry = {
+  key: string
+  label: string
+  cost?: number
+  purchasable: boolean
+  perks: RoleWebsitePerks
+}
+
+export async function fetchRoleCatalog(): Promise<{
+  currency: string
+  defaultRole: string
+  memberPerks: RoleWebsitePerks
+  purchasable: RoleCatalogEntry[]
+  grantOnly: RoleCatalogEntry[]
+}> {
+  return fetchApi<{
+    currency: string
+    defaultRole: string
+    memberPerks: RoleWebsitePerks
+    purchasable: RoleCatalogEntry[]
+    grantOnly: RoleCatalogEntry[]
+  }>('/roles/catalog')
+}
+
+export async function buyRank(roleKey: string): Promise<{
+  ok: boolean
+  roleKey: string
+  cost: number
+  newBalance: number
+}> {
+  return fetchApi<{ ok: boolean; roleKey: string; cost: number; newBalance: number }>('/roles/buy', {
+    method: 'POST',
+    body: JSON.stringify({ roleKey }),
+    headers: clientLocaleViHeaders(),
+  })
+}
+
+export type RoleGrantRequestRow = {
+  id: number
+  requested_role: string
+  message: string | null
+  status: string
+  created_at: string
+  resolved_at: string | null
+  admin_note: string | null
+}
+
+export async function fetchRoleRequestStatus(): Promise<{
+  currentRole: string
+  pending: RoleGrantRequestRow | null
+  lastResolved: RoleGrantRequestRow | null
+  grantOnlyRoleKeys: string[]
+}> {
+  return fetchApi<{
+    currentRole: string
+    pending: RoleGrantRequestRow | null
+    lastResolved: RoleGrantRequestRow | null
+    grantOnlyRoleKeys: string[]
+  }>('/user/role-request')
+}
+
+export async function submitRoleGrantRequest(
+  requestedRole: string,
+  message?: string
+): Promise<{ request: RoleGrantRequestRow }> {
+  return fetchApi<{ request: RoleGrantRequestRow }>('/user/role-request', {
+    method: 'POST',
+    body: JSON.stringify({
+      requestedRole,
+      ...(message?.trim() ? { message: message.trim() } : {}),
+    }),
+  })
+}
+
 export interface PokemonShopOffer {
   slot: number
   category: string
   species: string
   shiny: boolean
+  /** Catalog price before rank discount. */
+  listPrice: number
+  /** Cobble$ charged after rank discount. */
   price: number
   label: string
   purchased: boolean
@@ -444,6 +549,7 @@ export interface PokemonShopOffer {
 
 export interface PokemonShopOffersResponse {
   refreshHours: number
+  shopDiscountPercent: number
   windowStart: string
   windowEnd: string
   offers: PokemonShopOffer[]
@@ -470,6 +576,8 @@ export async function buyPokemonShopOffer(slot: number): Promise<{
   species: string
   shiny: boolean
   price: number
+  listPrice: number
+  shopDiscountPercent: number
   newBalance: number
 }> {
   return fetchApi<{
@@ -478,6 +586,8 @@ export async function buyPokemonShopOffer(slot: number): Promise<{
     species: string
     shiny: boolean
     price: number
+    listPrice: number
+    shopDiscountPercent: number
     newBalance: number
   }>('/pokemon-shop/buy', {
     method: 'POST',

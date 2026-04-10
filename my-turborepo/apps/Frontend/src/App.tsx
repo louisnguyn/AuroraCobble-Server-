@@ -77,12 +77,12 @@ function AppContent() {
           {isAuthenticated && user ? (
             <>
               <span
-                className="flex items-center gap-1 min-w-0 text-base text-muted max-w-[100px] sm:max-w-[180px]"
+                className="flex items-center gap-2 min-w-0 text-base text-muted max-w-[min(100vw-12rem,280px)] sm:max-w-[320px]"
                 title={user.email}
               >
-                <span className="truncate">{user.username}</span>
+                <span className="truncate text-[#e2e8f0]">{user.username}</span>
                 {isAccountVerified(user) ? (
-                  <VerifiedAccountBadge className="w-[18px] h-[18px] sm:w-5 sm:h-5 flex-shrink-0" />
+                  <VerifiedAccountBadge className="w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0" title="Verified account" />
                 ) : null}
               </span>
               <button type="button" onClick={logout} className="pixel-btn text-base py-2 px-3 sm:px-4">

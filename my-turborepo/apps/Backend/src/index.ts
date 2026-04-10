@@ -20,6 +20,7 @@ import {
 } from "./minecraftRoster.js";
 import { syncAndEnrichPresence } from "./minecraftPresence.js";
 import { fetchCobbledollarsViaRcon, topBalancesFromMap } from "./minecraftRconCobbledollars.js";
+import { fetchPcoTopViaRcon } from "./minecraftRconPcoTop.js";
 import {
   fetchBattleTowerLeaderboardViaRcon,
   normalizeBattleTowerMode,
@@ -27,6 +28,19 @@ import {
   type BattleTowerLeaderboardRow,
 } from "./minecraftRconBattleTower.js";
 import { executeMinecraftRconCommand } from "./minecraftRconExecute.js";
+import {
+  DEFAULT_MINECRAFT_ROLE,
+  GRANT_ONLY_ROLE_KEYS,
+  getDailyLoginFlatCobbleBonusPerClaim,
+  getDailyLoginTicketBonusPerClaim,
+  getPurchasableCost,
+  getRoleCatalog,
+  getWebsiteShopDiscountPercent,
+  isKnownRoleKey,
+  listAllKnownRoleKeys,
+  normalizeRoleKey,
+  runLuckpermsParentSet,
+} from "./minecraftRoles.js";
 import {
   buildGivePokemonOtherCommand,
   isGachaClaimEnabled,
@@ -40,6 +54,11 @@ import {
   isCobbledollarsDepositEnabled,
 } from "./minecraftCobbledollarsDeposit.js";
 
+function readMinecraftRoleField(row: { minecraft_role?: string | null } | null | undefined): string {
+  const r = row?.minecraft_role?.trim().toLowerCase();
+  return r || DEFAULT_MINECRAFT_ROLE;
+}
+
 const app = express();
 const port = process.env.PORT ?? 3001;
 
@@ -49,19 +68,18 @@ const cobbleStore = {
 };
 
 const COBBLEDOLLARS_PUBLIC_CACHE_TTL_MS = 90_000;
+/** PVP daily payout: only top 3 on the synced leaderboard (website usernames matched). */
 const PVP_DAILY_REWARDS: Record<number, number> = {
-  1: 60_000,
-  2: 50_000,
-  3: 45_000,
-  4: 40_000,
-  5: 35_000,
-  6: 30_000,
-  7: 25_000,
-  8: 20_000,
+  1: 50_000,
+  2: 45_000,
+  3: 40_000,
 };
-/** Ranks that receive bonus website “normal tickets” (user_currency `tickets`) each daily payout. */
-const PVP_DAILY_TICKET_BONUS_RANKS = new Set([1, 2]);
-const PVP_DAILY_TICKETS_PER_BONUS_RANK = 1;
+/** Bonus website normal tickets (`user_currency` `tickets`) per rank each daily payout. */
+const PVP_DAILY_TICKETS_BY_RANK: Record<number, number> = {
+  1: 2,
+  2: 1,
+  3: 1,
+};
 const PVP_TICKETS_CURRENCY = "tickets";
 
 /** PVP predictions: exact top-3 order pays `stake ×` this; each single-rank bet pays `stake ×` PVP_PREDICTION_SLOT_WIN_MULT. */
@@ -70,6 +88,17 @@ const PVP_PREDICTION_MIN_STAKE = 100;
 const PVP_PREDICTION_FULL_WIN_MULT = 4;
 const PVP_PREDICTION_SLOT_WIN_MULT = 2;
 let cobbledollarsPublicCache: {
+  at: number;
+  body: {
+    ok: boolean;
+    disabled: boolean;
+    top10: { name: string; balance: number }[];
+    error: string | null;
+    updatedAt: string | null;
+  };
+} | null = null;
+
+let pcoPublicCache: {
   at: number;
   body: {
     ok: boolean;
@@ -355,7 +384,12 @@ async function resolveDiscordUsername(userId: number): Promise<string> {
   return `user#${userId}`;
 }
 
-const DISCORD_COBBLEDOLLAR_LEDGER_KINDS = new Set(["deposit_to_server", "shop", "pokemon_shop"]);
+const DISCORD_COBBLEDOLLAR_LEDGER_KINDS = new Set([
+  "deposit_to_server",
+  "shop",
+  "pokemon_shop",
+  "role_shop",
+]);
 
 async function notifyDiscordCobbleLedger(
   userId: number,
@@ -383,6 +417,10 @@ async function notifyDiscordCobbleLedger(
     }
     case "pokemon_shop": {
       content = `${username} bought ${detail ?? "shiny"} for ${amountStr} Cobble$ (new balance ${balanceAfterStr})`;
+      break;
+    }
+    case "role_shop": {
+      content = `${username} bought rank ${detail ?? "role"} for ${amountStr} Cobble$ (new balance ${balanceAfterStr})`;
       break;
     }
   }
@@ -646,6 +684,50 @@ app.get("/minecraft/cobbledollars-leaderboard", async (_req, res) => {
   }
 });
 
+/** Public PCO top 10 from Minecraft RCON (`pco top` by default). Cached ~90s. No auth. */
+app.get("/minecraft/pco-leaderboard", async (_req, res) => {
+  if (process.env.MC_PCO_DISABLE === "true") {
+    res.json({
+      ok: false,
+      disabled: true,
+      top10: [],
+      error: null,
+      updatedAt: null,
+    });
+    return;
+  }
+  const now = Date.now();
+  if (
+    pcoPublicCache &&
+    now - pcoPublicCache.at < COBBLEDOLLARS_PUBLIC_CACHE_TTL_MS
+  ) {
+    res.json(pcoPublicCache.body);
+    return;
+  }
+  try {
+    const r = await fetchPcoTopViaRcon();
+    const top10 = topBalancesFromMap(r.balances, 10);
+    const body = {
+      ok: !r.error,
+      disabled: false,
+      top10,
+      error: r.error ?? null,
+      updatedAt: new Date().toISOString(),
+    };
+    pcoPublicCache = { at: now, body };
+    res.json(body);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.json({
+      ok: false,
+      disabled: false,
+      top10: [],
+      error: msg,
+      updatedAt: null,
+    });
+  }
+});
+
 /** Public Battle Tower leaderboard via RCON: `bt leaderboard <mode> top<N>` (Cobblemon Battle Tower). Cached ~90s per mode+top. */
 app.get("/minecraft/battle-tower-leaderboard", async (req, res) => {
   if (process.env.MC_BT_DISABLE === "true") {
@@ -815,6 +897,7 @@ app.post("/auth/signup", async (req, res) => {
       username: result.username,
       is_admin: isAdmin,
       minecraft_verified_at: mcVerified,
+      minecraft_role: readMinecraftRoleField(result as { minecraft_role?: string | null }),
     },
   });
 });
@@ -852,6 +935,7 @@ app.post("/auth/login", async (req, res) => {
       username: user.username,
       is_admin: isAdmin,
       minecraft_verified_at: mcVerified,
+      minecraft_role: readMinecraftRoleField(user as { minecraft_role?: string | null }),
     },
   });
 });
@@ -861,7 +945,7 @@ app.get("/auth/me", requireAuth, async (_req, res) => {
   if (supabase) {
     const { data: row, error } = await supabase
       .from("users")
-      .select("id, email, username, is_admin, minecraft_verified_at")
+      .select("id, email, username, is_admin, minecraft_verified_at, minecraft_role")
       .eq("id", tokenUser.userId)
       .maybeSingle();
     if (!error && row) {
@@ -871,6 +955,7 @@ app.get("/auth/me", requireAuth, async (_req, res) => {
         username: string;
         is_admin: boolean;
         minecraft_verified_at: string | null;
+        minecraft_role?: string | null;
       };
       res.json({
         user: {
@@ -879,6 +964,7 @@ app.get("/auth/me", requireAuth, async (_req, res) => {
           username: r.username,
           is_admin: !!r.is_admin,
           minecraft_verified_at: r.minecraft_verified_at ?? null,
+          minecraft_role: readMinecraftRoleField(r),
         },
       });
       return;
@@ -891,6 +977,7 @@ app.get("/auth/me", requireAuth, async (_req, res) => {
       username: tokenUser.username,
       is_admin: tokenUser.isAdmin ?? false,
       minecraft_verified_at: null as string | null,
+      minecraft_role: DEFAULT_MINECRAFT_ROLE,
     },
   });
 });
@@ -1447,6 +1534,414 @@ app.post("/admin/verification-requests/:id/reject", requireAuth, requireAdmin, a
     return;
   }
   res.json({ ok: true, request: updatedReq });
+});
+
+// --- Minecraft rank: catalog, Cobble$ purchase (RCON LuckPerms), grant-only requests ---
+app.get("/roles/catalog", requireAuth, (_req, res) => {
+  res.json({ currency: COBBLEDOLLARS_CURRENCY, ...getRoleCatalog() });
+});
+
+app.get("/user/role-request", requireAuth, async (_req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const userId = res.locals.user!.userId;
+  const { data: urow, error: uerr } = await supabase
+    .from("users")
+    .select("minecraft_role")
+    .eq("id", userId)
+    .maybeSingle();
+  if (uerr) {
+    res.status(500).json({ error: uerr.message });
+    return;
+  }
+  const currentRole = readMinecraftRoleField(urow as { minecraft_role?: string | null });
+
+  const { data: pending } = await supabase
+    .from("user_role_grant_requests")
+    .select("id, requested_role, message, status, created_at, resolved_at, admin_note")
+    .eq("user_id", userId)
+    .eq("status", "pending")
+    .maybeSingle();
+
+  const { data: lastResolvedRows } = await supabase
+    .from("user_role_grant_requests")
+    .select("id, requested_role, message, status, created_at, resolved_at, admin_note")
+    .eq("user_id", userId)
+    .neq("status", "pending")
+    .order("id", { ascending: false })
+    .limit(1);
+  const lastResolved = lastResolvedRows?.[0] ?? null;
+
+  res.json({
+    currentRole,
+    pending: pending ?? null,
+    lastResolved,
+    grantOnlyRoleKeys: [...GRANT_ONLY_ROLE_KEYS],
+  });
+});
+
+app.post("/user/role-request", requireAuth, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const userId = res.locals.user!.userId;
+  const requested_role = normalizeRoleKey(String((req.body as { requestedRole?: unknown })?.requestedRole ?? ""));
+  if (!requested_role || !GRANT_ONLY_ROLE_KEYS.has(requested_role)) {
+    res.status(400).json({
+      error:
+        "Choose a valid grant-only rank (Legend+ and staff/partner roles require approval — see catalog on Account).",
+    });
+    return;
+  }
+  const message = normalizeVerificationMessage((req.body as { message?: unknown })?.message);
+
+  const { data: urow, error: uerr } = await supabase
+    .from("users")
+    .select("minecraft_role")
+    .eq("id", userId)
+    .maybeSingle();
+  if (uerr || !urow) {
+    res.status(uerr ? 500 : 404).json({ error: uerr?.message ?? "User not found" });
+    return;
+  }
+  if (readMinecraftRoleField(urow as { minecraft_role?: string | null }) === requested_role) {
+    res.status(400).json({ error: "You already have this rank." });
+    return;
+  }
+
+  const { data: existingPending } = await supabase
+    .from("user_role_grant_requests")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("status", "pending")
+    .maybeSingle();
+  if (existingPending) {
+    res.status(409).json({ error: "You already have a pending rank request." });
+    return;
+  }
+
+  const { data: inserted, error: insErr } = await supabase
+    .from("user_role_grant_requests")
+    .insert({ user_id: userId, requested_role, message, status: "pending" })
+    .select("id, requested_role, message, status, created_at, resolved_at, admin_note")
+    .single();
+
+  if (insErr) {
+    if (/duplicate|unique|one_pending/i.test(insErr.message)) {
+      res.status(409).json({ error: "You already have a pending rank request." });
+      return;
+    }
+    res.status(500).json({ error: insErr.message });
+    return;
+  }
+  res.status(201).json({ request: inserted });
+});
+
+app.get("/admin/role-requests", requireAuth, requireAdmin, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const statusQ = String(req.query.status ?? "pending").toLowerCase();
+  const status = statusQ === "all" ? null : statusQ === "rejected" || statusQ === "approved" ? statusQ : "pending";
+
+  let q = supabase
+    .from("user_role_grant_requests")
+    .select(
+      "id, user_id, requested_role, message, status, created_at, resolved_at, resolved_by_user_id, admin_note"
+    )
+    .order("created_at", { ascending: true });
+
+  if (status) q = q.eq("status", status);
+
+  const { data: reqs, error } = await q;
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+  const list = reqs ?? [];
+  const userIds = [...new Set(list.map((r) => (r as { user_id: number }).user_id))];
+  const byUser = new Map<number, { email: string; username: string; minecraft_role: string }>();
+  if (userIds.length > 0) {
+    const { data: users, error: uerr } = await supabase
+      .from("users")
+      .select("id, email, username, minecraft_role")
+      .in("id", userIds);
+    if (uerr) {
+      res.status(500).json({ error: uerr.message });
+      return;
+    }
+    for (const u of users ?? []) {
+      const row = u as {
+        id: number;
+        email: string;
+        username: string;
+        minecraft_role?: string | null;
+      };
+      byUser.set(row.id, {
+        email: row.email,
+        username: row.username,
+        minecraft_role: readMinecraftRoleField(row),
+      });
+    }
+  }
+
+  const rows = list.map((row) => {
+    const r = row as {
+      id: number;
+      user_id: number;
+      requested_role: string;
+      message: string | null;
+      status: string;
+      created_at: string;
+      resolved_at: string | null;
+      resolved_by_user_id: number | null;
+      admin_note: string | null;
+    };
+    const u = byUser.get(r.user_id);
+    return {
+      id: r.id,
+      user_id: r.user_id,
+      requested_role: r.requested_role,
+      message: r.message,
+      status: r.status,
+      created_at: r.created_at,
+      resolved_at: r.resolved_at,
+      resolved_by_user_id: r.resolved_by_user_id,
+      admin_note: r.admin_note,
+      user_email: u?.email ?? null,
+      user_username: u?.username ?? null,
+      user_minecraft_role: u?.minecraft_role ?? null,
+    };
+  });
+
+  res.json({ requests: rows });
+});
+
+app.post("/admin/role-requests/:id/approve", requireAuth, requireAdmin, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const staff = res.locals.user!;
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: "Invalid request id" });
+    return;
+  }
+  const { data: reqRow, error: findErr } = await supabase
+    .from("user_role_grant_requests")
+    .select("id, user_id, requested_role, status")
+    .eq("id", id)
+    .maybeSingle();
+  if (findErr) {
+    res.status(500).json({ error: findErr.message });
+    return;
+  }
+  if (!reqRow) {
+    res.status(404).json({ error: "Request not found" });
+    return;
+  }
+  const r = reqRow as { user_id: number; status: string; requested_role: string };
+  if (r.status !== "pending") {
+    res.status(400).json({ error: "This request is no longer pending." });
+    return;
+  }
+  const roleKey = normalizeRoleKey(r.requested_role);
+  if (!GRANT_ONLY_ROLE_KEYS.has(roleKey)) {
+    res.status(400).json({ error: "Invalid grant-only role on this request." });
+    return;
+  }
+  const { data: urow, error: uerr } = await supabase
+    .from("users")
+    .select("username")
+    .eq("id", r.user_id)
+    .maybeSingle();
+  if (uerr || !urow) {
+    res.status(uerr ? 500 : 404).json({ error: uerr?.message ?? "User not found" });
+    return;
+  }
+  const username = (urow as { username: string }).username.trim();
+  const lp = await runLuckpermsParentSet(username, roleKey);
+  if (!lp.ok) {
+    res.status(502).json({ error: lp.error });
+    return;
+  }
+  const now = new Date().toISOString();
+  const { error: userUpErr } = await supabase
+    .from("users")
+    .update({ minecraft_role: roleKey, updated_at: now })
+    .eq("id", r.user_id);
+  if (userUpErr) {
+    res.status(500).json({ error: userUpErr.message });
+    return;
+  }
+  const { data: updatedReq, error: upReqErr } = await supabase
+    .from("user_role_grant_requests")
+    .update({
+      status: "approved",
+      resolved_at: now,
+      resolved_by_user_id: staff.userId,
+      admin_note: null,
+    })
+    .eq("id", id)
+    .eq("status", "pending")
+    .select()
+    .maybeSingle();
+  if (upReqErr) {
+    res.status(500).json({ error: upReqErr.message });
+    return;
+  }
+  if (!updatedReq) {
+    res.status(409).json({ error: "Request was updated by another action." });
+    return;
+  }
+  res.json({ ok: true, request: updatedReq });
+});
+
+app.post("/admin/role-requests/:id/reject", requireAuth, requireAdmin, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const staff = res.locals.user!;
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: "Invalid request id" });
+    return;
+  }
+  const noteRaw = (req.body as { admin_note?: unknown })?.admin_note;
+  const admin_note =
+    typeof noteRaw === "string" ? noteRaw.trim().slice(0, MAX_VERIFICATION_ADMIN_NOTE) || null : null;
+
+  const { data: reqRow, error: findErr } = await supabase
+    .from("user_role_grant_requests")
+    .select("id, status")
+    .eq("id", id)
+    .maybeSingle();
+  if (findErr) {
+    res.status(500).json({ error: findErr.message });
+    return;
+  }
+  if (!reqRow) {
+    res.status(404).json({ error: "Request not found" });
+    return;
+  }
+  if ((reqRow as { status: string }).status !== "pending") {
+    res.status(400).json({ error: "This request is no longer pending." });
+    return;
+  }
+  const now = new Date().toISOString();
+  const { data: updatedReq, error: upErr } = await supabase
+    .from("user_role_grant_requests")
+    .update({
+      status: "rejected",
+      resolved_at: now,
+      resolved_by_user_id: staff.userId,
+      admin_note,
+    })
+    .eq("id", id)
+    .eq("status", "pending")
+    .select()
+    .maybeSingle();
+  if (upErr) {
+    res.status(500).json({ error: upErr.message });
+    return;
+  }
+  if (!updatedReq) {
+    res.status(409).json({ error: "Request was updated by another action." });
+    return;
+  }
+  res.json({ ok: true, request: updatedReq });
+});
+
+app.post("/roles/buy", requireAuth, async (req, res) => {
+  const user = res.locals.user!;
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  if (!(await userMayUseTeamAiFeatures(user.userId))) {
+    const wantVi = String(req.headers["x-client-locale"] ?? "").toLowerCase() === "vi";
+    res.status(403).json({
+      code: "shop_verification_required",
+      error: wantVi
+        ? "Cần tài khoản đã xác minh mới mua được rank trên shop website."
+        : "A verified account is required to purchase ranks on the website shop.",
+    });
+    return;
+  }
+  const roleKey = normalizeRoleKey(String((req.body as { roleKey?: unknown })?.roleKey ?? ""));
+  const cost = getPurchasableCost(roleKey);
+  if (cost == null || roleKey === DEFAULT_MINECRAFT_ROLE || GRANT_ONLY_ROLE_KEYS.has(roleKey)) {
+    res.status(400).json({ error: "This rank cannot be purchased on the web shop." });
+    return;
+  }
+
+  const wallet = await ensureUserCobbledollarsRow(user.userId);
+  if (!wallet) {
+    res.status(500).json({ error: "Could not open Cobble$ wallet" });
+    return;
+  }
+  if (wallet.balance < cost) {
+    res.status(400).json({
+      error: "Not enough Cobble$",
+      balance: wallet.balance,
+      required: cost,
+    });
+    return;
+  }
+
+  const newBalance = wallet.balance - cost;
+  const now = new Date().toISOString();
+  const { data: updated, error: updErr } = await supabase
+    .from("user_currency")
+    .update({ balance: newBalance, updated_at: now })
+    .eq("id", wallet.id)
+    .eq("balance", wallet.balance)
+    .select("balance");
+  if (updErr) {
+    res.status(500).json({ error: updErr.message });
+    return;
+  }
+  if (!updated?.length) {
+    res.status(409).json({ error: "Balance changed — try again" });
+    return;
+  }
+
+  const lp = await runLuckpermsParentSet(user.username, roleKey);
+  if (!lp.ok) {
+    await supabase
+      .from("user_currency")
+      .update({ balance: wallet.balance, updated_at: new Date().toISOString() })
+      .eq("id", wallet.id);
+    res.status(502).json({ error: lp.error });
+    return;
+  }
+
+  const { error: roleErr } = await supabase
+    .from("users")
+    .update({ minecraft_role: roleKey, updated_at: now })
+    .eq("id", user.userId);
+  if (roleErr) {
+    console.error("[roles/buy] LuckPerms OK but users.minecraft_role update failed", roleErr);
+    res.status(500).json({
+      error:
+        "Rank was applied on the Minecraft server but the website failed to save it. Staff can fix your account — your Cobble$ was still charged.",
+    });
+    return;
+  }
+
+  await recordCobbledollarLedger(user.userId, -cost, newBalance, "role_shop", roleKey);
+  res.json({
+    ok: true,
+    roleKey,
+    cost,
+    newBalance,
+  });
 });
 
 // --- Gacha (requires login) ---
@@ -2203,16 +2698,33 @@ const DAILY_STREAK_REWARDS = [
   { day: 7, kind: "item", itemKey: "masterball", amount: 1, label: "Master Ball x1" },
 ] as const;
 const SHOP_ITEMS = [
-  { itemKey: "exp_candy_xl", label: "EXP Candy XL", cost: 40_000 },
-  { itemKey: "ancient_origin_ball", label: "Ancient Origin Ball", cost: 300_000 },
-  { itemKey: "master_ball", label: "Master Ball", cost: 100_000 },
-  { itemKey: "gold_bottle_cap", label: "Gold Bottle Cap", cost: 2_000_000 },
+  { itemKey: "exp_candy_xl", label: "EXP Candy XL", cost: 60_000 },
+  { itemKey: "ancient_origin_ball", label: "Ancient Origin Ball", cost: 500_000 },
+  { itemKey: "master_ball", label: "Master Ball", cost: 300_000 },
+  { itemKey: "gold_bottle_cap", label: "Gold Bottle Cap", cost: 3_000_000 },
 ] as const;
+
+/** Cobble$ after integer percent-off (rank shop discount). */
+function applyCobbleShopDiscount(baseCobble: number, discountPercent: number): number {
+  const b = Math.floor(Number(baseCobble));
+  const p = Math.min(100, Math.max(0, Math.floor(Number(discountPercent))));
+  if (!Number.isFinite(b) || b <= 0 || p <= 0) return Math.max(0, b);
+  const out = Math.floor((b * (100 - p)) / 100);
+  return Math.max(1, out);
+}
+
+async function getUserMinecraftRoleForShop(userId: number): Promise<string> {
+  if (!supabase) return DEFAULT_MINECRAFT_ROLE;
+  const { data, error } = await supabase.from("users").select("minecraft_role").eq("id", userId).maybeSingle();
+  if (error || !data) return DEFAULT_MINECRAFT_ROLE;
+  return readMinecraftRoleField(data as { minecraft_role?: string | null });
+}
+
 const POKEMON_SHOP_REFRESH_HOURS = 4;
 const POKEMON_SHOP_OFFER_COUNT = 3;
 const POKEMON_SHOP_CATEGORIES = {
   starter: {
-    price: 375_000,
+    price: 750_000,
     species: [
       "bulbasaur", "charmander", "squirtle", "chikorita", "cyndaquil", "totodile", "treecko",
       "torchic", "mudkip", "turtwig", "chimchar", "piplup", "snivy", "tepig", "oshawott",
@@ -2221,7 +2733,7 @@ const POKEMON_SHOP_CATEGORIES = {
     ],
   },
   mythic: {
-    price: 3_500_000,
+    price: 4_000_000,
     species: [
       "mew", "celebi", "jirachi", "deoxys", "manaphy", "phione", "darkrai", "shaymin",
       "arceus", "victini", "keldeo", "meloetta", "genesect", "diancie", "hoopa", "volcanion",
@@ -2229,14 +2741,14 @@ const POKEMON_SHOP_CATEGORIES = {
     ],
   },
   pseudo_legend: {
-    price: 1_000_000,
+    price: 1_500_000,
     species: [
       "dragonite", "tyranitar", "salamence", "metagross", "garchomp", "hydreigon",
       "goodra", "kommo-o", "dragapult", "baxcalibur",
     ],
   },
   legend: {
-    price: 5_000_000,
+    price: 8_000_000,
     species: [
       "articuno", "zapdos", "moltres", "mewtwo", "raikou", "entei", "suicune", "lugia", "hooh",
       "regirock", "regice", "registeel", "latias", "latios", "kyogre", "groudon", "rayquaza",
@@ -2757,8 +3269,20 @@ app.post("/user/inventory/claim", requireAuth, async (req, res) => {
   });
 });
 
-app.get("/shop/items", requireAuth, (_req, res) => {
-  res.json({ currency: COBBLEDOLLARS_CURRENCY, items: SHOP_ITEMS });
+app.get("/shop/items", requireAuth, async (_req, res) => {
+  const user = res.locals.user!;
+  const role = await getUserMinecraftRoleForShop(user.userId);
+  const shopDiscountPercent = getWebsiteShopDiscountPercent(role);
+  res.json({
+    currency: COBBLEDOLLARS_CURRENCY,
+    shopDiscountPercent,
+    items: SHOP_ITEMS.map((item) => ({
+      itemKey: item.itemKey,
+      label: item.label,
+      cost: item.cost,
+      discountedCost: applyCobbleShopDiscount(item.cost, shopDiscountPercent),
+    })),
+  });
 });
 
 app.post("/shop/buy", requireAuth, async (req, res) => {
@@ -2789,7 +3313,9 @@ app.post("/shop/buy", requireAuth, async (req, res) => {
     res.status(400).json({ error: "Unknown item key" });
     return;
   }
-  const totalCost = item.cost * quantity;
+  const role = await getUserMinecraftRoleForShop(user.userId);
+  const shopDiscountPercent = getWebsiteShopDiscountPercent(role);
+  const totalCost = applyCobbleShopDiscount(item.cost * quantity, shopDiscountPercent);
 
   const wallet = await ensureUserCobbledollarsRow(user.userId);
   if (!wallet) {
@@ -2829,13 +3355,16 @@ app.post("/shop/buy", requireAuth, async (req, res) => {
       -totalCost,
       newBalance,
       "shop",
-      `${item.label} ×${quantity}`
+      shopDiscountPercent > 0
+        ? `${item.label} ×${quantity} (−${shopDiscountPercent}% rank)`
+        : `${item.label} ×${quantity}`
     );
     res.json({
       ok: true,
       itemKey: item.itemKey,
       quantityPurchased: quantity,
       totalCost,
+      shopDiscountPercent,
       newBalance,
       newInventoryQuantity: newQty,
     });
@@ -2860,6 +3389,8 @@ app.get("/pokemon-shop/offers", requireAuth, async (req, res) => {
   const { start, end } = currentPokemonShopWindow();
   const windowStartIso = start.toISOString();
   const offers = buildPokemonShopOffers(windowStartIso);
+  const role = await getUserMinecraftRoleForShop(user.userId);
+  const shopDiscountPercent = getWebsiteShopDiscountPercent(role);
 
   if (pokemonShopLastNotifiedWindowStartIso !== windowStartIso) {
     pokemonShopLastNotifiedWindowStartIso = windowStartIso;
@@ -2890,13 +3421,24 @@ app.get("/pokemon-shop/offers", requireAuth, async (req, res) => {
   }
   res.json({
     refreshHours: POKEMON_SHOP_REFRESH_HOURS,
+    shopDiscountPercent,
     windowStart: windowStartIso,
     windowEnd: end.toISOString(),
-    offers: offers.map((o) => ({
-      ...o,
-      purchased: purchasedMap.has(o.slot),
-      claimed: Boolean(purchasedMap.get(o.slot)?.claimed_at),
-    })),
+    offers: offers.map((o) => {
+      const listPrice = o.price;
+      const price = applyCobbleShopDiscount(listPrice, shopDiscountPercent);
+      return {
+        slot: o.slot,
+        category: o.category,
+        species: o.species,
+        shiny: o.shiny,
+        listPrice,
+        price,
+        label: o.label,
+        purchased: purchasedMap.has(o.slot),
+        claimed: Boolean(purchasedMap.get(o.slot)?.claimed_at),
+      };
+    }),
   });
 });
 
@@ -2928,6 +3470,10 @@ app.post("/pokemon-shop/buy", requireAuth, async (req, res) => {
     res.status(404).json({ error: "Offer not found" });
     return;
   }
+  const role = await getUserMinecraftRoleForShop(user.userId);
+  const shopDiscountPercent = getWebsiteShopDiscountPercent(role);
+  const payPrice = applyCobbleShopDiscount(offer.price, shopDiscountPercent);
+
   const { data: already } = await supabase
     .from("user_pokemon_shop_purchases")
     .select("id")
@@ -2945,13 +3491,13 @@ app.post("/pokemon-shop/buy", requireAuth, async (req, res) => {
     res.status(500).json({ error: "Could not open Cobble$ wallet" });
     return;
   }
-  if (wallet.balance < offer.price) {
-    res.status(400).json({ error: "Not enough Cobble$", balance: wallet.balance, required: offer.price });
+  if (wallet.balance < payPrice) {
+    res.status(400).json({ error: "Not enough Cobble$", balance: wallet.balance, required: payPrice });
     return;
   }
 
   const now = new Date().toISOString();
-  const newBalance = wallet.balance - offer.price;
+  const newBalance = wallet.balance - payPrice;
   const { data: updated, error: updErr } = await supabase
     .from("user_currency")
     .update({ balance: newBalance, updated_at: now })
@@ -2973,7 +3519,7 @@ app.post("/pokemon-shop/buy", requireAuth, async (req, res) => {
     slot: offer.slot,
     species: offer.species,
     category: offer.category,
-    price: offer.price,
+    price: payPrice,
     shiny: true,
     purchased_at: now,
     updated_at: now,
@@ -2993,10 +3539,12 @@ app.post("/pokemon-shop/buy", requireAuth, async (req, res) => {
 
   await recordCobbledollarLedger(
     user.userId,
-    -offer.price,
+    -payPrice,
     newBalance,
     "pokemon_shop",
-    `${offer.species} (shiny)`
+    shopDiscountPercent > 0
+      ? `${offer.species} (shiny) (−${shopDiscountPercent}% rank)`
+      : `${offer.species} (shiny)`
   );
 
   res.json({
@@ -3004,7 +3552,9 @@ app.post("/pokemon-shop/buy", requireAuth, async (req, res) => {
     slot: offer.slot,
     species: offer.species,
     shiny: true,
-    price: offer.price,
+    price: payPrice,
+    listPrice: offer.price,
+    shopDiscountPercent,
     newBalance,
   });
 });
@@ -3129,11 +3679,26 @@ app.get("/user/daily-login/status", requireAuth, async (_req, res) => {
   const prevStreak = Number((prev as { streak_day?: number } | null)?.streak_day ?? 0) || 0;
   const nextDay = prevDate === yesterdayDateOnly(today) ? (prevStreak >= 7 ? 1 : prevStreak + 1) : 1;
   const nextReward = DAILY_STREAK_REWARDS.find((r) => r.day === nextDay) ?? DAILY_STREAK_REWARDS[0]!;
+  const role = await getUserMinecraftRoleForShop(user.userId);
+  const flatCobbleBonusPerClaim = getDailyLoginFlatCobbleBonusPerClaim(role);
+  const ticketBonusPerClaim = getDailyLoginTicketBonusPerClaim(role);
+  const nextClaimCobbleTotal =
+    nextReward.kind === "cobbledollars"
+      ? nextReward.amount + flatCobbleBonusPerClaim
+      : flatCobbleBonusPerClaim > 0
+        ? flatCobbleBonusPerClaim
+        : null;
 
   res.json({
     date: today,
     timeZone: DAILY_RESET_TIMEZONE,
     eligible,
+    dailyRankBonus: {
+      minecraftRole: role,
+      flatCobbleBonusPerClaim,
+      ticketBonusPerClaim,
+      nextClaimCobbleTotal,
+    },
     streak: { nextDay, nextReward },
     claim: todayClaim
       ? {
@@ -3190,15 +3755,26 @@ app.post("/user/daily-login/claim", requireAuth, async (_req, res) => {
   const prevStreak = Number((prev as { streak_day?: number } | null)?.streak_day ?? 0) || 0;
   const streakDay = prevDate === yesterdayDateOnly(today) ? (prevStreak >= 7 ? 1 : prevStreak + 1) : 1;
   const reward = DAILY_STREAK_REWARDS.find((r) => r.day === streakDay) ?? DAILY_STREAK_REWARDS[0]!;
+  const role = await getUserMinecraftRoleForShop(user.userId);
+  const flatCobbleBonus = getDailyLoginFlatCobbleBonusPerClaim(role);
+  const ticketBonus = getDailyLoginTicketBonusPerClaim(role);
+  const streakCobbleTotal =
+    reward.kind === "cobbledollars" ? reward.amount + flatCobbleBonus : reward.amount;
+  const selectedRewardLabel =
+    reward.kind === "cobbledollars" && flatCobbleBonus > 0
+      ? `${reward.label} + ${flatCobbleBonus.toLocaleString()} Cobble$ rank`
+      : reward.kind === "item" && flatCobbleBonus > 0
+        ? `${reward.label} + ${flatCobbleBonus.toLocaleString()} Cobble$ rank`
+        : reward.label;
 
   if (!existing) {
     const { error: insErr } = await supabase.from("user_daily_login_claims").insert({
       user_id: user.userId,
       claim_date: today,
       streak_day: streakDay,
-      selected_reward: reward.label,
+      selected_reward: selectedRewardLabel,
       reward_kind: reward.kind,
-      reward_amount: reward.amount,
+      reward_amount: reward.kind === "cobbledollars" ? streakCobbleTotal : reward.amount,
       status: "pending",
       updated_at: new Date().toISOString(),
     });
@@ -3214,26 +3790,48 @@ app.post("/user/daily-login/claim", requireAuth, async (_req, res) => {
 
   try {
     let message = "";
+    let newBalance = 0;
     if (reward.kind === "cobbledollars") {
-      const newBalance = await incrementUserCurrency(
-        user.userId,
-        COBBLEDOLLARS_CURRENCY,
-        reward.amount,
-        { kind: "daily_login", detail: `Day ${streakDay} — ${reward.label}` }
-      );
-      message = `Day ${streakDay}: +${reward.amount.toLocaleString()} Cobble$ (new balance ${newBalance.toLocaleString()})`;
+      newBalance = await incrementUserCurrency(user.userId, COBBLEDOLLARS_CURRENCY, reward.amount, {
+        kind: "daily_login",
+        detail: `Day ${streakDay} — streak (${reward.label})`,
+      });
+      if (flatCobbleBonus > 0) {
+        newBalance = await incrementUserCurrency(user.userId, COBBLEDOLLARS_CURRENCY, flatCobbleBonus, {
+          kind: "daily_login",
+          detail: `Day ${streakDay} — rank daily bonus (${role})`,
+        });
+      }
+      message = `Day ${streakDay}: +${(reward.amount + flatCobbleBonus).toLocaleString()} Cobble$`;
+      if (flatCobbleBonus > 0) message += ` (streak + rank)`;
+      message += ` (new balance ${newBalance.toLocaleString()})`;
     } else {
       const totalQty = await incrementUserInventory(user.userId, reward.itemKey, reward.amount);
       message = `Day ${streakDay}: +${reward.amount} ${reward.itemKey} in website inventory (total ${totalQty})`;
+      if (flatCobbleBonus > 0) {
+        newBalance = await incrementUserCurrency(user.userId, COBBLEDOLLARS_CURRENCY, flatCobbleBonus, {
+          kind: "daily_login",
+          detail: `Day ${streakDay} — rank daily bonus (${role})`,
+        });
+        message += ` · +${flatCobbleBonus.toLocaleString()} Cobble$ rank bonus (balance ${newBalance.toLocaleString()})`;
+      }
+    }
+
+    if (ticketBonus > 0) {
+      const tb = await incrementUserCurrency(user.userId, PVP_TICKETS_CURRENCY, ticketBonus, {
+        kind: "daily_login",
+        detail: `Day ${streakDay} — rank ticket bonus`,
+      });
+      message += ` · +${ticketBonus} normal ticket(s) (balance ${tb.toLocaleString()})`;
     }
 
     await supabase
       .from("user_daily_login_claims")
       .update({
         streak_day: streakDay,
-        selected_reward: reward.label,
+        selected_reward: selectedRewardLabel,
         reward_kind: reward.kind,
-        reward_amount: reward.amount,
+        reward_amount: reward.kind === "cobbledollars" ? streakCobbleTotal : reward.amount,
         status: "success",
         claimed_at: new Date().toISOString(),
         error_message: null,
@@ -3242,16 +3840,26 @@ app.post("/user/daily-login/claim", requireAuth, async (_req, res) => {
       .eq("user_id", user.userId)
       .eq("claim_date", today);
 
-    res.json({ ok: true, date: today, streakDay, reward: reward.label, message });
+    res.json({
+      ok: true,
+      date: today,
+      streakDay,
+      reward: selectedRewardLabel,
+      message,
+      dailyRankBonus: {
+        flatCobbleBonus,
+        ticketBonus,
+      },
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await supabase
       .from("user_daily_login_claims")
       .update({
         streak_day: streakDay,
-        selected_reward: reward.label,
+        selected_reward: selectedRewardLabel,
         reward_kind: reward.kind,
-        reward_amount: reward.amount,
+        reward_amount: reward.kind === "cobbledollars" ? streakCobbleTotal : reward.amount,
         status: "failed",
         error_message: msg,
         updated_at: new Date().toISOString(),
@@ -3264,11 +3872,11 @@ app.post("/user/daily-login/claim", requireAuth, async (_req, res) => {
 
 // Ticket exchange: spend tickets for special ticket types
 const EXCHANGE_RATES: { to_currency: string; cost_tickets: number; label: string }[] = [
-  { to_currency: "mythic tickets", cost_tickets: 5, label: "Mythic Tickets" },
-  { to_currency: "shiny mythic tickets", cost_tickets: 10, label: "Shiny Mythic Tickets" },
-  { to_currency: "legendary tickets", cost_tickets: 10, label: "Legend Tickets" },
-  { to_currency: "shiny legendary tickets", cost_tickets: 20, label: "Shiny Legend Tickets" },
-  { to_currency: "shiny paradox tickets", cost_tickets: 10, label: "Shiny Paradox Tickets" },
+  { to_currency: "mythic tickets", cost_tickets: 20, label: "Mythic Tickets" },
+  { to_currency: "shiny mythic tickets", cost_tickets: 40, label: "Shiny Mythic Tickets" },
+  { to_currency: "legendary tickets", cost_tickets: 30, label: "Legend Tickets" },
+  { to_currency: "shiny legendary tickets", cost_tickets: 60, label: "Shiny Legend Tickets" },
+  { to_currency: "shiny paradox tickets", cost_tickets: 40, label: "Shiny Paradox Tickets" },
 ];
 
 app.get("/user/exchange-rates", requireAuth, (_req, res) => {
@@ -3421,13 +4029,73 @@ app.get("/admin/users", requireAuth, requireAdmin, async (_req, res) => {
   }
   const { data, error } = await supabase
     .from("users")
-    .select("id, email, username, is_admin, created_at, minecraft_verified_at")
+    .select("id, email, username, is_admin, created_at, minecraft_verified_at, minecraft_role")
     .order("created_at", { ascending: false });
   if (error) {
     res.status(500).json({ error: error.message });
     return;
   }
   res.json({ users: data ?? [] });
+});
+
+app.get("/admin/minecraft-roles", requireAuth, requireAdmin, (_req, res) => {
+  res.json({ keys: listAllKnownRoleKeys() });
+});
+
+app.post("/admin/users/:userId/minecraft-role", requireAuth, requireAdmin, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const userId = Number(req.params.userId);
+  if (!Number.isFinite(userId)) {
+    res.status(400).json({ error: "Invalid user id" });
+    return;
+  }
+  const roleKey = normalizeRoleKey(String((req.body as { roleKey?: unknown })?.roleKey ?? ""));
+  if (!roleKey || !isKnownRoleKey(roleKey)) {
+    res.status(400).json({ error: "Unknown or invalid role key" });
+    return;
+  }
+  const { data: target, error: fetchErr } = await supabase
+    .from("users")
+    .select("id, username")
+    .eq("id", userId)
+    .maybeSingle();
+  if (fetchErr) {
+    res.status(500).json({ error: fetchErr.message });
+    return;
+  }
+  if (!target) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+  const username = (target as { username: string }).username.trim();
+  if (!username) {
+    res.status(400).json({ error: "User has no username" });
+    return;
+  }
+  const lp = await runLuckpermsParentSet(username, roleKey);
+  if (!lp.ok) {
+    res.status(502).json({ error: lp.error });
+    return;
+  }
+  const now = new Date().toISOString();
+  const { data: updated, error: updErr } = await supabase
+    .from("users")
+    .update({ minecraft_role: roleKey, updated_at: now })
+    .eq("id", userId)
+    .select("id, email, username, is_admin, created_at, minecraft_verified_at, minecraft_role")
+    .single();
+  if (updErr) {
+    console.error("[admin/minecraft-role] RCON ok but DB update failed", updErr);
+    res.status(500).json({
+      error:
+        "LuckPerms command ran on the server but the website failed to save the rank. Fix the DB row manually.",
+    });
+    return;
+  }
+  res.json({ user: updated });
 });
 
 async function countAdminUsers(): Promise<number> {
@@ -3534,7 +4202,7 @@ app.patch("/admin/users/:userId", requireAuth, requireAdmin, async (req, res) =>
     .from("users")
     .update(patch)
     .eq("id", userId)
-    .select("id, email, username, is_admin, created_at, minecraft_verified_at")
+    .select("id, email, username, is_admin, created_at, minecraft_verified_at, minecraft_role")
     .single();
   if (updErr) {
     res.status(500).json({ error: updErr.message });
@@ -3572,7 +4240,7 @@ app.post("/admin/users/:userId/verify-ingame", requireAuth, requireAdmin, async 
     .from("users")
     .update({ minecraft_verified_at: verifiedAt, updated_at: verifiedAt })
     .eq("id", userId)
-    .select("id, email, username, is_admin, created_at, minecraft_verified_at")
+    .select("id, email, username, is_admin, created_at, minecraft_verified_at, minecraft_role")
     .single();
   if (updErr) {
     res.status(500).json({ error: updErr.message });
@@ -3606,7 +4274,7 @@ app.post("/admin/users/:userId/revoke-ingame-verification", requireAuth, require
     .from("users")
     .update({ minecraft_verified_at: null, updated_at: now })
     .eq("id", userId)
-    .select("id, email, username, is_admin, created_at, minecraft_verified_at")
+    .select("id, email, username, is_admin, created_at, minecraft_verified_at, minecraft_role")
     .maybeSingle();
   if (updErr) {
     res.status(500).json({ error: updErr.message });
@@ -3733,6 +4401,7 @@ async function runDailyPvpRankPayout(): Promise<{
         minecraft_username: row.playerName,
         user_id: null,
         amount,
+        ticket_bonus: 0,
         status: "skipped",
         note: "No matching website username",
         paid_at: now,
@@ -3741,13 +4410,18 @@ async function runDailyPvpRankPayout(): Promise<{
       skipped.push({ rank, username: row.playerName, reason: "No matching website username" });
       continue;
     }
+    const ticketBonus = PVP_DAILY_TICKETS_BY_RANK[rank] ?? 0;
     await incrementUserCurrency(user.id, COBBLEDOLLARS_CURRENCY, amount, {
       kind: "pvp_rank_daily",
-      detail: `Rank ${rank} — ${row.formatKey}`,
+      detail: `Rank ${rank} — ${row.formatKey} (daily job)`,
     });
-    const ticketBonus = PVP_DAILY_TICKET_BONUS_RANKS.has(rank) ? PVP_DAILY_TICKETS_PER_BONUS_RANK : 0;
+    let note: string | null = null;
     if (ticketBonus > 0) {
-      await incrementUserCurrency(user.id, PVP_TICKETS_CURRENCY, ticketBonus);
+      await incrementUserCurrency(user.id, PVP_TICKETS_CURRENCY, ticketBonus, {
+        kind: "pvp_rank_daily",
+        detail: `Rank ${rank} — tickets (daily job)`,
+      });
+      note = `+${ticketBonus} website normal ticket(s) (${PVP_TICKETS_CURRENCY})`;
     }
     await supabase.from("user_pvp_daily_payouts").insert({
       payout_date: payoutDate,
@@ -3756,12 +4430,11 @@ async function runDailyPvpRankPayout(): Promise<{
       minecraft_username: row.playerName,
       user_id: user.id,
       amount,
+      ticket_bonus: ticketBonus,
       status: "success",
-      note:
-        ticketBonus > 0
-          ? `+${ticketBonus} website normal ticket(s) (${PVP_TICKETS_CURRENCY})`
-          : null,
+      note,
       paid_at: now,
+      claimed_at: now,
       updated_at: now,
     });
     paid.push({

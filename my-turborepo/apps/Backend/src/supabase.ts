@@ -14,6 +14,8 @@ export type UserRow = {
   is_admin: boolean;
   /** Set by admin when user was online on the configured Minecraft server (username = IGN). */
   minecraft_verified_at?: string | null;
+  /** LuckPerms parent group key mirrored from purchases / staff grants. */
+  minecraft_role?: string | null;
   created_at: string;
   updated_at: string;
 };

@@ -22,6 +22,11 @@ export async function fetchCobbleDollarsLeaderboard() {
   return get<import('./types').CobbleDollarsLeaderboardResponse>('/minecraft/cobbledollars-leaderboard')
 }
 
+/** PCO top 10 — same response shape as Cobble$ (RCON `pco top`). */
+export async function fetchPcoLeaderboard() {
+  return get<import('./types').CobbleDollarsLeaderboardResponse>('/minecraft/pco-leaderboard')
+}
+
 export async function fetchBattleTowerLeaderboard(params?: { mode?: string; top?: 10 | 25 | 50 | 100 }) {
   const sp = new URLSearchParams()
   if (params?.mode) sp.set('mode', params.mode)

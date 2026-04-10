@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import {
   buyPokemonShopOffer,
@@ -18,7 +18,13 @@ import {
   fetchUserInventory,
   fetchVerificationStatus,
   submitVerificationRequest,
+  fetchRoleCatalog,
+  buyRank,
+  fetchRoleRequestStatus,
+  submitRoleGrantRequest,
   type VerificationStatusResponse,
+  type RoleCatalogEntry,
+  type RoleWebsitePerks,
   type DailyLoginStatus,
   type PokemonShopOffer,
   type PokemonShopPurchase,
@@ -29,9 +35,66 @@ import {
 import { AuthModal } from './AuthModal'
 import { CobbleWebsiteWallet } from './CobbleWebsiteWallet.tsx'
 import { isAccountVerified, VerifiedAccountBadge } from './VerifiedAccountBadge.tsx'
+import { RoleBadge } from './RoleBadge.tsx'
+
+function perksForMinecraftRole(
+  cat: {
+    purchasable: RoleCatalogEntry[]
+    grantOnly: RoleCatalogEntry[]
+    memberPerks: RoleWebsitePerks
+  },
+  minecraftRole: string
+): RoleWebsitePerks {
+  const k = minecraftRole.trim().toLowerCase()
+  return (
+    cat.purchasable.find((e) => e.key === k)?.perks ??
+    cat.grantOnly.find((e) => e.key === k)?.perks ??
+    cat.memberPerks
+  )
+}
+
+function RolePerksSummary({ perks }: { perks: RoleWebsitePerks }) {
+  const d = perks.shopDiscountPercent
+  const cellClass =
+    'rounded-md border border-white/[0.06] bg-slate-950/55 px-2.5 py-2 min-h-[4rem] sm:min-h-0 flex flex-col justify-center gap-0.5'
+  const labelClass = 'text-[10px] uppercase tracking-wide text-slate-500 m-0'
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] sm:text-xs leading-snug text-slate-300">
+      <div className={cellClass}>
+        <p className={labelClass}>Shop</p>
+        <p className="m-0">
+          {d > 0 ? (
+            <span className="text-emerald-300 font-semibold tabular-nums">−{d}%</span>
+          ) : (
+            <span className="text-slate-500">0%</span>
+          )}
+          <span className="text-slate-500 block sm:inline sm:ml-1 text-[10px] sm:text-[11px] mt-0.5 sm:mt-0">
+            Items &amp; Pokémon
+          </span>
+        </p>
+      </div>
+      <div className={cellClass}>
+        <p className={labelClass}>Daily reward</p>
+        <p className="m-0">
+          <span className="text-amber-200/95 font-medium tabular-nums">
+            +{perks.dailyFlatCobble.toLocaleString()}
+          </span>
+          <span className="text-slate-500 block text-[10px] sm:text-[11px] mt-0.5">Extra Cobble$</span>
+        </p>
+      </div>
+      <div className={cellClass}>
+        <p className={labelClass}>Tickets</p>
+        <p className="m-0">
+          <span className="text-sky-200/95 font-medium tabular-nums">+{perks.dailyTickets}</span>
+          <span className="text-slate-500 block text-[10px] sm:text-[11px] mt-0.5">Per daily claim</span>
+        </p>
+      </div>
+    </div>
+  )
+}
 
 export function Account() {
-  type AccountTab = 'account' | 'daily' | 'predict' | 'shop' | 'inventory' | 'cobble'
+  type AccountTab = 'account' | 'daily' | 'predict' | 'shop' | 'ranks' | 'inventory' | 'cobble'
   const { isAuthenticated, user, refreshUser } = useAuth()
   const canUseWebsiteShop = Boolean(user?.is_admin) || isAccountVerified(user)
   const [showAuth, setShowAuth] = useState(false)
@@ -43,12 +106,14 @@ export function Account() {
   const [submitting, setSubmitting] = useState(false)
   const [daily, setDaily] = useState<DailyLoginStatus | null>(null)
   const [dailyLoading, setDailyLoading] = useState(false)
-  const [dailyBusy, setDailyBusy] = useState(false)
-  const [dailyError, setDailyError] = useState<string | null>(null)
-  const [dailySuccess, setDailySuccess] = useState<string | null>(null)
+  const [dailyLoadError, setDailyLoadError] = useState<string | null>(null)
+  const [rewardsClaimBusy, setRewardsClaimBusy] = useState(false)
+  const [rewardsClaimError, setRewardsClaimError] = useState<string | null>(null)
+  const [rewardsClaimSuccess, setRewardsClaimSuccess] = useState<string | null>(null)
   const [dailyResetCountdown, setDailyResetCountdown] = useState('—')
   const [inventory, setInventory] = useState<{ item_key: string; quantity: number }[]>([])
   const [shopItems, setShopItems] = useState<ShopItem[]>([])
+  const [shopDiscountPercent, setShopDiscountPercent] = useState(0)
   const [shopBusyItem, setShopBusyItem] = useState<string | null>(null)
   const [shopError, setShopError] = useState<string | null>(null)
   const [shopSuccess, setShopSuccess] = useState<string | null>(null)
@@ -85,6 +150,19 @@ export function Account() {
   const [vError, setVError] = useState<string | null>(null)
   const [vRequestNote, setVRequestNote] = useState('')
   const [vSubmitting, setVSubmitting] = useState(false)
+  const [roleCat, setRoleCat] = useState<{
+    defaultRole: string
+    memberPerks: RoleWebsitePerks
+    purchasable: RoleCatalogEntry[]
+    grantOnly: RoleCatalogEntry[]
+  } | null>(null)
+  const [roleStatus, setRoleStatus] = useState<Awaited<ReturnType<typeof fetchRoleRequestStatus>> | null>(null)
+  const [rankBusyKey, setRankBusyKey] = useState<string | null>(null)
+  const [rankError, setRankError] = useState<string | null>(null)
+  const [rankSuccess, setRankSuccess] = useState<string | null>(null)
+  const [grantRolePick, setGrantRolePick] = useState('')
+  const [grantMessage, setGrantMessage] = useState('')
+  const [grantSubmitting, setGrantSubmitting] = useState(false)
   const refreshWebsiteCobbleBalance = useCallback(() => {
     fetchUserCurrencies().then(({ currencies }) => {
       setCobbleBalance(currencies.find((c) => c.currency_type === 'cobbledollars')?.balance ?? 0)
@@ -92,14 +170,14 @@ export function Account() {
   }, [])
 
   const PVP_DAILY_REWARD_BY_RANK: Record<number, number> = {
-    1: 60_000,
-    2: 50_000,
-    3: 45_000,
-    4: 40_000,
-    5: 35_000,
-    6: 30_000,
-    7: 25_000,
-    8: 20_000,
+    1: 50_000,
+    2: 45_000,
+    3: 40_000,
+  }
+  const PVP_DAILY_TICKETS_BY_RANK: Record<number, number> = {
+    1: 2,
+    2: 1,
+    3: 1,
   }
 
   const displayItemName = (key: string): string => {
@@ -162,7 +240,7 @@ export function Account() {
   useEffect(() => {
     if (!isAuthenticated) return
     setDailyLoading(true)
-    setDailyError(null)
+    setDailyLoadError(null)
     Promise.all([
       fetchDailyLoginStatus(),
       fetchUserInventory(),
@@ -172,11 +250,14 @@ export function Account() {
       fetchPokemonShopOffers(),
       fetchPokemonShopPurchases(20),
       fetchPvpTopPrediction().catch(() => null),
+      fetchRoleCatalog().catch(() => null),
+      fetchRoleRequestStatus().catch(() => null),
     ])
-      .then(([d, inv, shop, currencies, pvpRank, pOffers, pPurchases, predict]) => {
+      .then(([d, inv, shop, currencies, pvpRank, pOffers, pPurchases, predict, roles, rStatus]) => {
         setDaily(d)
         setInventory(inv.inventory ?? [])
         setShopItems(shop.items ?? [])
+        setShopDiscountPercent(shop.shopDiscountPercent ?? pOffers.shopDiscountPercent ?? 0)
         setCobbleBalance(
           currencies.currencies.find((c) => c.currency_type === 'cobbledollars')?.balance ?? 0
         )
@@ -185,8 +266,17 @@ export function Account() {
         setPokemonWindowEnd(pOffers.windowEnd ?? null)
         setPokemonPurchases(pPurchases.purchases ?? [])
         if (predict) setPvpPredict(predict)
+        if (roles) {
+          setRoleCat({
+            defaultRole: roles.defaultRole,
+            memberPerks: roles.memberPerks,
+            purchasable: roles.purchasable,
+            grantOnly: roles.grantOnly,
+          })
+        }
+        if (rStatus) setRoleStatus(rStatus)
       })
-      .catch((e) => setDailyError(e instanceof Error ? e.message : 'Failed to load daily rewards'))
+      .catch((e) => setDailyLoadError(e instanceof Error ? e.message : 'Failed to load daily rewards'))
       .finally(() => setDailyLoading(false))
   }, [isAuthenticated])
 
@@ -237,6 +327,61 @@ export function Account() {
     const id = setInterval(update, 1000)
     return () => clearInterval(id)
   }, [daily?.timeZone])
+
+  const pvpLeaderboardPreview = useMemo(() => {
+    const rk = userPvpRank?.rank ?? null
+    const inTop3 = rk != null && rk >= 1 && rk <= 3
+    const cobble = rk != null ? PVP_DAILY_REWARD_BY_RANK[rk] ?? 0 : 0
+    const tickets = rk != null ? PVP_DAILY_TICKETS_BY_RANK[rk] ?? 0 : 0
+    return { rk, inTop3, cobble, tickets }
+  }, [userPvpRank])
+
+  const rewardsBreakdown = useMemo(() => {
+    const empty = {
+      claimedToday: false,
+      canClaimDaily: false,
+      rb: undefined as DailyLoginStatus['dailyRankBonus'],
+      nr: undefined as DailyLoginStatus['streak']['nextReward'] | undefined,
+      streakLadderCobble: 0,
+      roleFlatCobble: 0,
+      roleTickets: 0,
+      nextClaimCobbleTotal: null as number | null,
+      dailyBundleCobble: 0,
+      dailyBundleTickets: 0,
+      totalCobble: 0,
+      totalTickets: 0,
+      hasClaimable: false,
+    }
+    if (!daily) return empty
+
+    const claimedToday = daily.claim?.status === 'success'
+    const canClaimDaily = Boolean(daily.eligible && !claimedToday)
+    const rb = daily.dailyRankBonus
+    const nr = daily.streak?.nextReward
+    const streakLadderCobble = nr?.kind === 'cobbledollars' ? nr.amount : 0
+    const roleFlatCobble = rb?.flatCobbleBonusPerClaim ?? 0
+    const roleTickets = rb?.ticketBonusPerClaim ?? 0
+    const nextClaimCobbleTotal = rb?.nextClaimCobbleTotal ?? null
+
+    const dailyBundleCobble = canClaimDaily ? (nextClaimCobbleTotal ?? 0) : 0
+    const dailyBundleTickets = canClaimDaily ? roleTickets : 0
+
+    return {
+      claimedToday,
+      canClaimDaily,
+      rb,
+      nr,
+      streakLadderCobble,
+      roleFlatCobble,
+      roleTickets,
+      nextClaimCobbleTotal,
+      dailyBundleCobble,
+      dailyBundleTickets,
+      totalCobble: dailyBundleCobble,
+      totalTickets: dailyBundleTickets,
+      hasClaimable: canClaimDaily,
+    }
+  }, [daily])
 
   const handleVerificationSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -298,26 +443,35 @@ export function Account() {
     )
   }
 
-  const handleClaimDaily = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setDailyError(null)
-    setDailySuccess(null)
-    setDailyBusy(true)
+  const handleClaimDailyReward = async () => {
+    const claimedToday = daily?.claim?.status === 'success'
+    const canClaimDaily = Boolean(daily?.eligible && !claimedToday)
+    if (!canClaimDaily) return
+
+    setRewardsClaimError(null)
+    setRewardsClaimSuccess(null)
+    setRewardsClaimBusy(true)
     try {
-      const result = await claimDailyLoginReward()
-      setDailySuccess(result.message)
-      const [d, inv, currencies] = await Promise.all([
-        fetchDailyLoginStatus(),
-        fetchUserInventory(),
-        fetchUserCurrencies(),
-      ])
-      setDaily(d)
-      setInventory(inv.inventory ?? [])
-      setCobbleBalance(currencies.currencies.find((c) => c.currency_type === 'cobbledollars')?.balance ?? 0)
-    } catch (err) {
-      setDailyError(err instanceof Error ? err.message : 'Claim failed')
+      const r = await claimDailyLoginReward()
+      setRewardsClaimSuccess(r.message)
+    } catch (e) {
+      setRewardsClaimError(e instanceof Error ? e.message : 'Claim failed')
     } finally {
-      setDailyBusy(false)
+      try {
+        const [d, inv, currencies, pvpRank] = await Promise.all([
+          fetchDailyLoginStatus(),
+          fetchUserInventory(),
+          fetchUserCurrencies(),
+          fetchUserPvpRank(),
+        ])
+        setDaily(d)
+        setInventory(inv.inventory ?? [])
+        setCobbleBalance(currencies.currencies.find((c) => c.currency_type === 'cobbledollars')?.balance ?? 0)
+        setUserPvpRank(pvpRank)
+      } catch {
+        /* ignore refresh errors */
+      }
+      setRewardsClaimBusy(false)
     }
   }
 
@@ -345,6 +499,7 @@ export function Account() {
   const refreshPokemonShop = async () => {
     const [offers, purchases] = await Promise.all([fetchPokemonShopOffers(), fetchPokemonShopPurchases(20)])
     setPokemonOffers(offers.offers ?? [])
+    setShopDiscountPercent(offers.shopDiscountPercent ?? 0)
     setPokemonWindowEnd(offers.windowEnd ?? null)
     setPokemonPurchases(purchases.purchases ?? [])
   }
@@ -405,36 +560,64 @@ export function Account() {
     }
   }
 
+  const handleBuyRank = async (entry: RoleCatalogEntry) => {
+    if (!canUseWebsiteShop) {
+      setRankError('Cần xác minh tài khoản trên web để mua rank (admin được miễn).')
+      return
+    }
+    setRankError(null)
+    setRankSuccess(null)
+    setRankBusyKey(entry.key)
+    try {
+      const out = await buyRank(entry.key)
+      setRankSuccess(`Đã mua rank ${entry.label} — sẽ có hiệu lực trong game sau vài giây.`)
+      setCobbleBalance(out.newBalance)
+      void refreshUser()
+      const [shopUp, pOffersUp, rs] = await Promise.all([
+        fetchShopItems(),
+        fetchPokemonShopOffers(),
+        fetchRoleRequestStatus().catch(() => null),
+      ])
+      setShopItems(shopUp.items ?? [])
+      setShopDiscountPercent(shopUp.shopDiscountPercent ?? pOffersUp.shopDiscountPercent ?? 0)
+      setPokemonOffers(pOffersUp.offers ?? [])
+      setPokemonWindowEnd(pOffersUp.windowEnd ?? null)
+      if (rs) setRoleStatus(rs)
+    } catch (err) {
+      setRankError(err instanceof Error ? err.message : 'Mua rank thất bại')
+    } finally {
+      setRankBusyKey(null)
+    }
+  }
+
+  const handleSubmitGrant = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!grantRolePick.trim()) return
+    setGrantSubmitting(true)
+    setRankError(null)
+    setRankSuccess(null)
+    try {
+      await submitRoleGrantRequest(grantRolePick.trim(), grantMessage.trim() || undefined)
+      setGrantMessage('')
+      const rs = await fetchRoleRequestStatus()
+      setRoleStatus(rs)
+      setRankSuccess('Đã gửi yêu cầu rank — staff sẽ duyệt hoặc từ chối.')
+    } catch (err) {
+      setRankError(err instanceof Error ? err.message : 'Không gửi được yêu cầu')
+    } finally {
+      setGrantSubmitting(false)
+    }
+  }
+
   return (
-    <div className="max-w-lg mx-auto pixel-panel-soft p-6 sm:p-8">
+    <div className="mx-auto w-full max-w-lg md:max-w-3xl pixel-panel-soft p-6 sm:p-8">
       <h1 className="text-3xl font-bold text-[#e2e8f0] m-0 mb-1">Account</h1>
       <p className="text-muted text-base mb-6">
         Signed in as{' '}
-        <span className="inline-flex items-center gap-1.5 align-middle">
+        <span className="inline-flex items-center gap-1.5 flex-wrap align-middle">
+          <RoleBadge roleKey={user?.minecraft_role ?? 'member'} />
           <span className="text-[#e2e8f0]">{user?.username}</span>
           {user && isAccountVerified(user) ? <VerifiedAccountBadge className="w-5 h-5" /> : null}
-        </span>
-        <span className="block mt-1">
-          PVP rank:{' '}
-          <span className="text-[#e2e8f0]">
-            {userPvpRank?.rank != null
-              ? `#${userPvpRank.rank}${userPvpRank.tier ? ` (${displayItemName(userPvpRank.tier)})` : ''}`
-              : 'Unranked'}
-          </span>
-        </span>
-        <span className="block mt-1">
-          Next reset reward:{' '}
-          <span className="text-[#fbbf24]">
-            {(
-              userPvpRank?.rank != null
-                ? (PVP_DAILY_REWARD_BY_RANK[userPvpRank.rank] ?? 0)
-                : 0
-            ).toLocaleString()}{' '}
-            Cobble$
-            {(userPvpRank?.rank === 1 || userPvpRank?.rank === 2) && (
-              <span className="text-[#e2e8f0] font-normal"> + 1 normal ticket (website)</span>
-            )}
-          </span>
         </span>
         {user?.email && (
           <span className="block mt-1 truncate" title={user.email}>
@@ -449,6 +632,7 @@ export function Account() {
             ['daily', 'Daily'],
             ['predict', 'PVP predict'],
             ['shop', 'Shop'],
+            ['ranks', 'Ranks'],
             ['inventory', 'Inventory'],
             ['cobble', 'C$ balance'],
             ['account', 'Account'],
@@ -471,40 +655,156 @@ export function Account() {
 
       {activeTab === 'daily' && (
         <>
-          <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-3">Daily streak rewards</h2>
+          <div className="mb-4 rounded-lg border border-amber-500/30 bg-[#0a1020] px-4 py-3 shadow-[inset_0_1px_0_0_rgba(251,191,36,0.08)]">
+            <h3 className="text-sm font-semibold text-amber-200/95 m-0 mb-2 tracking-tight">PVP leaderboard</h3>
+            <p className="text-sm text-[#e2e8f0] m-0">
+              Current rank:{' '}
+              <span className="text-[#fbbf24] font-medium">
+                {userPvpRank?.rank != null
+                  ? `#${userPvpRank.rank}${userPvpRank.tier ? ` (${displayItemName(userPvpRank.tier)})` : ''}`
+                  : 'Unranked'}
+              </span>
+            </p>
+            <p className="text-sm m-0 mt-2">
+              <span className="text-slate-400">Next reset reward: </span>
+              {pvpLeaderboardPreview.inTop3 ? (
+                <span className="text-amber-100/95">
+                  <span className="tabular-nums font-semibold">
+                    {pvpLeaderboardPreview.cobble.toLocaleString()} Cobble$
+                  </span>
+                  {pvpLeaderboardPreview.tickets > 0 ? (
+                    <span> + {pvpLeaderboardPreview.tickets} normal ticket(s)</span>
+                  ) : null}
+                  <span className="text-slate-500 font-normal text-xs">
+                    {' '}
+                    — if you&apos;re still in the top 3 after the next reset
+                  </span>
+                </span>
+              ) : (
+                <span className="text-slate-500">— For top 3 only. Credited to your site balance automatically.</span>
+              )}
+            </p>
+            <p className="text-xs text-slate-500 m-0 mt-2 leading-relaxed">
+              Not part of the daily claim below — only your streak and role bonuses use that button.
+            </p>
+          </div>
+
+          <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-3">Daily login &amp; role</h2>
           {dailyLoading ? (
-            <p className="text-sm text-muted mb-6">Loading daily rewards…</p>
+            <p className="text-sm text-muted mb-6">Loading rewards…</p>
+          ) : dailyLoadError ? (
+            <p className="text-sm text-error mb-6">{dailyLoadError}</p>
+          ) : !daily ? (
+            <p className="text-sm text-muted mb-6">No reward data.</p>
           ) : (
-            <div className="mb-6 pixel-well p-4">
+            <div className="mb-6 pixel-well p-4 space-y-4">
               <p className="text-sm text-muted m-0">
-                Reset: 00:00 ({daily?.timeZone ?? 'Asia/Ho_Chi_Minh'}) · Date: {daily?.date ?? '—'}
+                Reset: 00:00 ({daily.timeZone}) · Date: {daily.date}
               </p>
               <p className="text-sm text-muted mt-2 mb-0">Next reset in: {dailyResetCountdown}</p>
-              <p className="text-sm text-violet-200 mt-2 mb-2">
-                Next: Day {daily?.streak.nextDay ?? 1} · {daily?.streak.nextReward?.label ?? 'Reward'}
-              </p>
-              <p className={`text-sm mt-0 mb-3 ${daily?.eligible ? 'text-emerald-300' : 'text-amber-300'}`}>
-                {daily?.eligible
-                  ? 'Eligible today: you have been online at least once after reset.'
-                  : 'Not eligible yet today. Join server first.'}
-              </p>
-              {daily?.claim?.status === 'success' ? (
-                <p className="text-sm text-emerald-300 m-0">
-                  Claimed today (Day {daily.claim.streakDay ?? '?'}) — {daily.claim.selectedReward ?? 'Reward'}
+
+              <section>
+                <h3 className="text-sm font-semibold text-[#cbd5e1] m-0 mb-2">Your rank perks</h3>
+                <div className="text-xs text-muted space-y-1.5 border border-border/50 rounded-lg px-2 py-2 bg-[#0f172a]/50">
+                  {rewardsBreakdown.rb ? (
+                    <>
+                      <p className="m-0 text-[#e2e8f0]">
+                        Rank: <span className="text-slate-300">({rewardsBreakdown.rb.minecraftRole})</span>
+                      </p>
+                      {rewardsBreakdown.roleFlatCobble > 0 ? (
+                        <p className="m-0">
+                          <span className="text-slate-400">Extra Cobble$ (with daily claim): </span>
+                          <span className="tabular-nums text-amber-200/95">
+                            +{rewardsBreakdown.roleFlatCobble.toLocaleString()}
+                          </span>
+                        </p>
+                      ) : (
+                        <p className="m-0 text-slate-500">No extra Cobble$ from rank for this tier.</p>
+                      )}
+                      {rewardsBreakdown.roleTickets > 0 ? (
+                        <p className="m-0">
+                          <span className="text-slate-400">Extra tickets (with daily claim): </span>
+                          <span className="tabular-nums text-sky-200/95">+{rewardsBreakdown.roleTickets}</span> normal
+                          ticket(s)
+                        </p>
+                      ) : (
+                        <p className="m-0 text-slate-500">No extra tickets from rank.</p>
+                      )}
+                      {rewardsBreakdown.claimedToday ? (
+                        <p className="m-0 text-emerald-300/90 text-[11px]">
+                          Role bonuses were included when you claimed today&apos;s daily reward.
+                        </p>
+                      ) : null}
+                      {!rewardsBreakdown.canClaimDaily && !rewardsBreakdown.claimedToday && daily.eligible === false ? (
+                        <p className="m-0 text-amber-300/90 text-[11px]">
+                          Join the server after reset to unlock the daily bundle (streak + role together).
+                        </p>
+                      ) : null}
+                    </>
+                  ) : (
+                    <p className="m-0 text-slate-500">Role bonus data unavailable.</p>
+                  )}
+                </div>
+              </section>
+
+              <section className="border-t border-border/50 pt-3">
+                <h3 className="text-sm font-semibold text-[#cbd5e1] m-0 mb-2">Daily streak</h3>
+                <p className="text-sm text-violet-200 m-0">
+                  Next step: Day {daily.streak.nextDay} · {daily.streak.nextReward?.label ?? '—'}
                 </p>
-              ) : (
-                <form onSubmit={handleClaimDaily}>
-                  <button
-                    type="submit"
-                    disabled={dailyBusy || !daily?.eligible}
-                    className="py-2 px-4 pixel-btn-primary disabled:opacity-50"
-                  >
-                    {dailyBusy ? 'Claiming…' : 'Claim daily reward'}
-                  </button>
-                </form>
-              )}
-              {dailySuccess && <p className="text-sm text-emerald-300 mt-3 mb-0">{dailySuccess}</p>}
-              {dailyError && <p className="text-sm text-error mt-3 mb-0">{dailyError}</p>}
+                <p className="text-xs text-muted mt-1 m-0">
+                  Base Cobble$ from streak (before rank extras):{' '}
+                  {rewardsBreakdown.nr?.kind === 'cobbledollars' ? (
+                    <span className="tabular-nums text-slate-300">
+                      {rewardsBreakdown.streakLadderCobble.toLocaleString()}
+                    </span>
+                  ) : (
+                    <span className="text-slate-400">
+                      — (today&apos;s reward: {rewardsBreakdown.nr?.label ?? '—'})
+                    </span>
+                  )}
+                </p>
+                <p className={`text-sm mt-2 mb-0 ${daily.eligible ? 'text-emerald-300' : 'text-amber-300'}`}>
+                  {daily.eligible
+                    ? 'Eligible today: you have been online at least once after reset.'
+                    : 'Not eligible yet today. Join the server first.'}
+                </p>
+                {rewardsBreakdown.claimedToday ? (
+                  <p className="text-sm text-emerald-300 mt-2 m-0">
+                    Claimed today (Day {daily.claim?.streakDay ?? '?'}) — {daily.claim?.selectedReward ?? 'Reward'}
+                  </p>
+                ) : null}
+              </section>
+
+              <section className="border-t border-border/40 pt-4">
+                <h3 className="text-sm font-semibold text-[#cbd5e1] m-0 mb-2">Daily claim total</h3>
+                <p className="text-sm m-0 text-[#e2e8f0]">
+                  Cobble$:{' '}
+                  <span className="tabular-nums text-[#fbbf24] font-semibold">
+                    {rewardsBreakdown.totalCobble.toLocaleString()}
+                  </span>
+                  {' · '}
+                  Tickets:{' '}
+                  <span className="tabular-nums text-sky-200/95 font-semibold">{rewardsBreakdown.totalTickets}</span>
+                </p>
+                <p className="text-xs text-muted mt-2 mb-3">
+                  Claims your <strong className="text-slate-400">daily streak</strong> and <strong className="text-slate-400">rank perks</strong> above. PVP rewards use the separate box.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void handleClaimDailyReward()}
+                  disabled={rewardsClaimBusy || !rewardsBreakdown.hasClaimable}
+                  className="py-2 px-4 pixel-btn-primary disabled:opacity-50"
+                >
+                  {rewardsClaimBusy ? 'Claiming…' : 'Claim daily reward'}
+                </button>
+                {rewardsClaimSuccess ? (
+                  <p className="text-sm text-emerald-300 mt-3 mb-0">{rewardsClaimSuccess}</p>
+                ) : null}
+                {rewardsClaimError ? (
+                  <p className="text-sm text-error mt-3 mb-0">{rewardsClaimError}</p>
+                ) : null}
+              </section>
             </div>
           )}
         </>
@@ -517,18 +817,14 @@ export function Account() {
             Exact order #1–#3: win {pvpPredict?.winMultiplierFull ?? 4}× that stake if all three are correct.
             Or bet separately on who finishes #1, #2, or #3 — each pays {pvpPredict?.winMultiplierSlot ?? 2}× that
             line if correct. Per-line stake {pvpPredict?.minStake ?? 100}–{pvpPredict?.maxStake ?? 20_000}{' '}
-            Cobble$. Settles 00:00 ({pvpPredict?.resetTimeZone ?? 'Asia/Ho_Chi_Minh'}), same as daily & PVP
-            payouts — round: {pvpPredict?.forPayoutDate ?? '—'}.
+            Cobble$. Resets 00:00 ({pvpPredict?.resetTimeZone ?? 'Asia/Ho_Chi_Minh'}). Top-3 payouts go to your site
+            balance automatically — round: {pvpPredict?.forPayoutDate ?? '—'}.
           </p>
           {!pvpPredict ? (
-            <p className="text-sm text-amber-200/90 m-0">
-              Could not load predictions. Run <code className="text-xs">pvp_top_predictions.sql</code> (or{' '}
-              <code className="text-xs">pvp_top_predictions_alter.sql</code> if the table already exists) in
-              Supabase, then redeploy.
-            </p>
+            <p className="text-sm text-amber-200/90 m-0">Predictions are unavailable right now. Try again later.</p>
           ) : pvpPredict.rankedPlayers.length < 3 ? (
             <p className="text-sm text-muted m-0">
-              Need at least 3 ranked players on the synced leaderboard before predictions open.
+              Predictions open once there are at least three ranked players on the leaderboard.
             </p>
           ) : (
             <div className="mb-6 pixel-well p-4 space-y-4">
@@ -857,7 +1153,7 @@ export function Account() {
               if (!claimedAt) return null
               return (
                 <p key={`claimed-${it.item_key}`} className="text-xs text-emerald-300 m-0">
-                  {displayItemName(it.item_key)} claimed to server at{' '}
+                  {displayItemName(it.item_key)} delivered in-game at{' '}
                   {new Date(claimedAt).toLocaleTimeString()}.
                 </p>
               )
@@ -892,18 +1188,34 @@ export function Account() {
           ) : null}
 
           <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-3">Shop</h2>
+          {shopDiscountPercent > 0 ? (
+            <p className="text-sm text-emerald-300/95 m-0 mb-3">
+              Rank discount: −{shopDiscountPercent}% on Cobble$ (item shop + Pokémon shop).
+            </p>
+          ) : null}
           <div className="mb-6 pixel-well p-4">
             <div className="space-y-2">
               {shopItems.map((item) => (
                 <div key={item.itemKey} className="flex items-center justify-between gap-3 rounded-lg border border-border/70 px-3 py-2">
                   <div className="min-w-0">
                     <p className="text-sm text-[#e2e8f0] m-0">{item.label}</p>
-                    <p className="text-xs text-muted m-0">Cost: {item.cost.toLocaleString()} Cobble$</p>
+                    <p className="text-xs text-muted m-0">
+                      {item.discountedCost < item.cost ? (
+                        <>
+                          <span className="line-through opacity-70">{item.cost.toLocaleString()}</span>{' '}
+                          <span className="text-[#fbbf24] tabular-nums">{item.discountedCost.toLocaleString()} Cobble$</span>
+                        </>
+                      ) : (
+                        <>Cost: {item.cost.toLocaleString()} Cobble$</>
+                      )}
+                    </p>
                   </div>
                   <button
                     type="button"
                     onClick={() => handleBuyItem(item)}
-                    disabled={!canUseWebsiteShop || shopBusyItem === item.itemKey || cobbleBalance < item.cost}
+                    disabled={
+                      !canUseWebsiteShop || shopBusyItem === item.itemKey || cobbleBalance < item.discountedCost
+                    }
                     className="shrink-0 py-2 px-3 pixel-btn-primary disabled:opacity-50 text-base"
                   >
                     {shopBusyItem === item.itemKey ? 'Buying…' : 'Buy'}
@@ -924,7 +1236,15 @@ export function Account() {
                   <div className="min-w-0">
                     <p className="text-sm text-[#e2e8f0] m-0">Shiny {displayItemName(offer.species)}</p>
                     <p className="text-xs text-muted m-0">
-                      {offer.category.replace(/_/g, ' ')} · {offer.price.toLocaleString()} Cobble$
+                      {offer.category.replace(/_/g, ' ')} ·{' '}
+                      {shopDiscountPercent > 0 && offer.price < offer.listPrice ? (
+                        <>
+                          <span className="line-through opacity-70">{offer.listPrice.toLocaleString()}</span>{' '}
+                          <span className="text-[#fbbf24] tabular-nums">{offer.price.toLocaleString()} Cobble$</span>
+                        </>
+                      ) : (
+                        <span className="tabular-nums">{offer.price.toLocaleString()} Cobble$</span>
+                      )}
                     </p>
                   </div>
                   <button
@@ -960,7 +1280,7 @@ export function Account() {
                       </p>
                       {(p.claimedAt || pokemonClaimedToServerAt[p.id]) && (
                         <p className="text-xs text-emerald-300 m-0 mt-1">
-                          {displayItemName(p.species)} claimed to server at{' '}
+                          {displayItemName(p.species)} delivered in-game at{' '}
                           {new Date(pokemonClaimedToServerAt[p.id] ?? p.claimedAt ?? '').toLocaleTimeString()}.
                         </p>
                       )}
@@ -986,6 +1306,198 @@ export function Account() {
         </>
       )}
 
+      {activeTab === 'ranks' && (
+        <>
+          <p className="text-sm text-muted m-0 mb-2">
+            Cobble$ balance:{' '}
+            <span className="text-[#fbbf24] font-semibold tabular-nums">{cobbleBalance.toLocaleString()}</span>
+          </p>
+          <p className="text-sm text-muted m-0 mb-3">
+            Rank hiện tại:{' '}
+            <span className="inline-flex align-middle mr-1">
+              <RoleBadge roleKey={roleStatus?.currentRole ?? user?.minecraft_role ?? 'member'} />
+            </span>
+            <span className="text-[#e2e8f0] font-medium">
+              {(roleStatus?.currentRole ?? user?.minecraft_role ?? 'member').toUpperCase()}
+            </span>
+          </p>
+          {!canUseWebsiteShop ? (
+            <div
+              className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100"
+              role="status"
+            >
+              <p className="m-0 font-medium">Mua rank cần tài khoản đã xác minh</p>
+              <p className="m-0 mt-1 text-xs text-amber-100/85">
+                Verified accounts only can purchase ranks; you can still request staff-granted ranks below (pending
+                review).
+              </p>
+            </div>
+          ) : null}
+
+          <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-3">Mua rank (Cobble$)</h2>
+          <p className="text-xs text-muted m-0 mb-3">
+            Bên dưới là quyền lợi đang áp dụng cho rank của bạn. Các thẻ tiếp theo để xem hoặc mua nâng rank.
+          </p>
+          {roleCat ? (
+            <div className="mb-4 rounded-lg border border-emerald-600/40 bg-emerald-950/25 px-3 py-2">
+              <p className="text-[11px] font-medium text-emerald-200/95 m-0 mb-1">
+                Quyền lợi của bạn —{' '}
+                <span className="text-[#e2e8f0]">
+                  {(roleStatus?.currentRole ?? user?.minecraft_role ?? 'member').toUpperCase()}
+                </span>
+              </p>
+              <RolePerksSummary
+                perks={perksForMinecraftRole(
+                  roleCat,
+                  roleStatus?.currentRole ?? user?.minecraft_role ?? 'member'
+                )}
+              />
+            </div>
+          ) : null}
+          <p className="text-xs text-muted m-0 mb-3">Sau khi thanh toán, rank được cập nhật trong game sau vài giây.</p>
+          <div className="mb-6 pixel-well p-4 space-y-3">
+            {roleCat?.purchasable?.length ? (
+              roleCat.purchasable.map((entry) => (
+                <div
+                  key={entry.key}
+                  className="flex flex-col gap-3 rounded-lg border border-border/70 bg-[#0a0f18]/40 px-3 py-3 sm:px-4 sm:py-3"
+                >
+                  <div className="flex flex-row items-start justify-between gap-3">
+                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                      <div className="shrink-0">
+                        <RoleBadge roleKey={entry.key} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="m-0 text-sm font-semibold text-[#e2e8f0]">{entry.label}</p>
+                        <p className="m-0 mt-1 text-sm font-medium tabular-nums text-[#fbbf24]">
+                          {(entry.cost ?? 0).toLocaleString()} Cobble$
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleBuyRank(entry)}
+                      disabled={
+                        !canUseWebsiteShop || rankBusyKey === entry.key || cobbleBalance < (entry.cost ?? 0)
+                      }
+                      className="shrink-0 self-start px-4 py-2 text-base pixel-btn-primary disabled:opacity-50"
+                    >
+                      {rankBusyKey === entry.key ? 'Buying…' : 'Buy'}
+                    </button>
+                  </div>
+                  <div className="w-full border-t border-border/45 pt-3">
+                    <RolePerksSummary perks={entry.perks} />
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted m-0">Không tải được danh sách rank (kiểm tra API / database).</p>
+            )}
+          </div>
+
+          <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-2">Rank chỉ admin cấp / xin cấp</h2>
+          <p className="text-xs text-muted m-0 mb-3">
+            Legend, Ultimate, Overlord, God và các rank staff/partner (Champion, Helper, Mod, TikTok, YouTube, Builder) —
+            không mua Cobble$ trên web. Gửi yêu cầu; staff duyệt sẽ cập nhật rank cho bạn.
+          </p>
+          <div className="mb-4 space-y-3">
+            {(roleCat?.grantOnly ?? []).map((g) => (
+              <div
+                key={g.key}
+                className={`flex flex-col gap-3 rounded-lg border px-3 py-3 sm:px-4 transition-colors ${
+                  grantRolePick === g.key
+                    ? 'border-emerald-500/55 bg-emerald-950/15'
+                    : 'border-border/70 bg-[#0a0f18]/40 hover:border-border'
+                }`}
+              >
+                <div className="flex flex-row items-start justify-between gap-3">
+                  <div className="flex min-w-0 flex-1 items-start gap-3">
+                    <div className="shrink-0">
+                      <RoleBadge roleKey={g.key} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="m-0 text-sm font-semibold text-[#e2e8f0]">{g.label}</p>
+                      <p className="m-0 mt-0.5 text-[10px] uppercase tracking-wide text-amber-200/75">
+                        Grant / request
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setGrantRolePick(g.key)}
+                    className={`shrink-0 self-start px-3 py-2 text-xs rounded-md border text-[#e2e8f0] ${
+                      grantRolePick === g.key
+                        ? 'border-emerald-500/70 bg-emerald-950/30'
+                        : 'border-border bg-[#0f172a] hover:bg-[#1e293b]'
+                    }`}
+                  >
+                    {grantRolePick === g.key ? 'Đã chọn' : 'Chọn'}
+                  </button>
+                </div>
+                <div className="w-full border-t border-border/45 pt-3">
+                  <RolePerksSummary perks={g.perks} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mb-6 pixel-well p-4 space-y-3">
+            {roleStatus?.pending ? (
+              <p className="text-sm text-amber-200 m-0">
+                Đang chờ duyệt: <strong>{roleStatus.pending.requested_role}</strong> (gửi lúc{' '}
+                {new Date(roleStatus.pending.created_at).toLocaleString()})
+              </p>
+            ) : (
+              <form onSubmit={handleSubmitGrant} className="space-y-2">
+                <label className="block text-sm text-[#e2e8f0]">
+                  Rank đã chọn
+                  <select
+                    value={grantRolePick}
+                    onChange={(e) => setGrantRolePick(e.target.value)}
+                    className="mt-1 block w-full rounded border border-border bg-[#0f172a] px-2 py-2 text-base text-[#e2e8f0]"
+                  >
+                    <option value="">— Chọn ở danh sách trên hoặc tại đây —</option>
+                    {(roleCat?.grantOnly ?? []).map((g) => (
+                      <option key={g.key} value={g.key}>
+                        {g.label} ({g.key})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-sm text-[#e2e8f0]">
+                  Lời nhắn (tuỳ chọn)
+                  <textarea
+                    value={grantMessage}
+                    onChange={(e) => setGrantMessage(e.target.value)}
+                    rows={2}
+                    className="mt-1 block w-full rounded border border-border bg-[#0f172a] px-2 py-2 text-base text-[#e2e8f0]"
+                    placeholder="Ví dụ: link TikTok / lý do cần rank…"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  disabled={grantSubmitting || !grantRolePick || Boolean(roleStatus?.pending)}
+                  className="py-2 px-4 pixel-btn-primary disabled:opacity-50"
+                >
+                  {grantSubmitting ? 'Sending…' : 'Gửi yêu cầu'}
+                </button>
+              </form>
+            )}
+            {roleStatus?.lastResolved ? (
+              <p className="text-xs text-muted m-0 border-t border-border/60 pt-2">
+                Gần nhất: {roleStatus.lastResolved.status} — {roleStatus.lastResolved.requested_role}
+                {roleStatus.lastResolved.resolved_at
+                  ? ` · ${new Date(roleStatus.lastResolved.resolved_at).toLocaleString()}`
+                  : ''}
+                {roleStatus.lastResolved.admin_note ? ` — Note: ${roleStatus.lastResolved.admin_note}` : ''}
+              </p>
+            ) : null}
+          </div>
+
+          {rankSuccess && <p className="text-sm text-emerald-300 mb-2 m-0">{rankSuccess}</p>}
+          {rankError && <p className="text-sm text-error mb-2 m-0">{rankError}</p>}
+        </>
+      )}
+
       {activeTab === 'account' && (
         <>
           {isAuthenticated && (
@@ -997,9 +1509,6 @@ export function Account() {
               {vError && !vLoading && (
                 <p className="text-sm text-red-400 m-0">
                   {vError}
-                  {/verification|user_verification|does not exist|relation/i.test(vError)
-                    ? ' — Nếu mới triển khai, chạy file SQL `user_verification_requests.sql` trên Supabase.'
-                    : null}
                 </p>
               )}
               {user?.is_admin ? (

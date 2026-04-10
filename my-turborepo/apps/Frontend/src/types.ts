@@ -107,7 +107,7 @@ export interface SpawnBossResponse {
   rows: SpawnBossRow[]
 }
 
-/** GET /minecraft/cobbledollars-leaderboard */
+/** GET /minecraft/cobbledollars-leaderboard — also used for GET /minecraft/pco-leaderboard */
 export interface CobbleDollarsLeaderboardResponse {
   ok: boolean
   disabled?: boolean

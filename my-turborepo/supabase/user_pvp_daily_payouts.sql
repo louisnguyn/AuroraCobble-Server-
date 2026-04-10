@@ -8,9 +8,11 @@ CREATE TABLE IF NOT EXISTS user_pvp_daily_payouts (
   minecraft_username text NOT NULL,
   user_id bigint NULL REFERENCES users(id) ON DELETE SET NULL,
   amount integer NOT NULL,
+  ticket_bonus integer NOT NULL DEFAULT 0,
   status text NOT NULL DEFAULT 'success',
   note text NULL,
   paid_at timestamptz NOT NULL DEFAULT now(),
+  claimed_at timestamptz NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );

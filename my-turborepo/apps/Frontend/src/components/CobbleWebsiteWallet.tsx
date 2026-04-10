@@ -8,19 +8,18 @@ import {
 } from '../authApi'
 
 const LEDGER_KIND_LABEL: Record<string, string> = {
-  deposit_to_server: 'Deposit to Minecraft',
+  deposit_to_server: 'Sent to game',
   shop: 'Item shop',
   pokemon_shop: 'Shiny Pokémon shop',
+  role_shop: 'Rank shop',
   daily_login: 'Daily streak',
-  pvp_rank_daily: 'PvP rank reward',
-  pvp_prediction_stake: 'PVP top-3 prediction (stake)',
-  pvp_prediction_win: 'PVP top-3 prediction (win)',
+  pvp_rank_daily: 'PvP leaderboard reward',
+  pvp_prediction_stake: 'PvP prediction (bet)',
+  pvp_prediction_win: 'PvP prediction (win)',
   admin_grant: 'Staff grant',
 }
 
-/**
- * Website Cobble$ wallet: balance, deposit to server, recent ledger (Account → C$ balance).
- */
+/** Website Cobble$ balance and history. */
 export function CobbleWebsiteWallet({ onBalanceUpdated }: { onBalanceUpdated?: () => void }) {
   const { isAuthenticated } = useAuth()
   const [walletBalance, setWalletBalance] = useState<number | null>(null)
@@ -99,8 +98,8 @@ export function CobbleWebsiteWallet({ onBalanceUpdated }: { onBalanceUpdated?: (
     <section className="pixel-well p-5 sm:p-6 text-left">
       <h2 className="text-lg font-semibold m-0 mb-1 text-[#e2e8f0]">C$ balance</h2>
       <p className="text-sm text-muted m-0 mb-4">
-        Website Cobble$ — earn on the site, then deposit into your in-game balance. Your site username must match
-        your Minecraft name.
+        Cobble$ you earn on this site. You can send them to your in-game balance. Your account name must match your
+        in-game name.
       </p>
       {walletLoading ? (
         <p className="text-sm text-muted m-0">Loading balance…</p>
@@ -128,7 +127,7 @@ export function CobbleWebsiteWallet({ onBalanceUpdated }: { onBalanceUpdated?: (
               disabled={depositBusy || walletBalance == null || walletBalance < 1}
               className="shrink-0 px-4 py-2.5 pixel-btn-primary text-base disabled:opacity-50"
             >
-              {depositBusy ? 'Depositing…' : 'Deposit to server'}
+              {depositBusy ? 'Sending…' : 'Send to game'}
             </button>
           </form>
           {depositError && <p className="text-sm text-error m-0 mt-3">{depositError}</p>}
