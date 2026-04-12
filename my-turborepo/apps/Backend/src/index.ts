@@ -2695,7 +2695,7 @@ const DAILY_STREAK_REWARDS = [
   { day: 4, kind: "cobbledollars", amount: 50_000, label: "Cobble$ +50,000" },
   { day: 5, kind: "cobbledollars", amount: 60_000, label: "Cobble$ +60,000" },
   { day: 6, kind: "cobbledollars", amount: 70_000, label: "Cobble$ +70,000" },
-  { day: 7, kind: "item", itemKey: "masterball", amount: 1, label: "Master Ball x1" },
+  { day: 7, kind: "item", itemKey: "master_ball", amount: 1, label: "Master Ball x1" },
 ] as const;
 const SHOP_ITEMS = [
   { itemKey: "exp_candy_xl", label: "EXP Candy XL", cost: 60_000 },
@@ -2818,8 +2818,6 @@ function buildPokemonShopOffers(windowStartIso: string) {
 const INVENTORY_ITEM_DEFS = [
   { key: "exp_candy_xl", label: "EXP Candy XL", itemId: "cobblemon:exp_candy_xl" },
   { key: "ancient_origin_ball", label: "Ancient Origin Ball", itemId: "cobblemon:ancient_origin_ball" },
-  // legacy alias in case old rows exist
-  { key: "origin_ball", label: "Origin Ball", itemId: "cobblemon:origin_ball" },
   { key: "master_ball", label: "Master Ball", itemId: "cobblemon:master_ball" },
   { key: "gold_bottle_cap", label: "Gold Bottle Cap", itemId: "obc:bottle_cap_gold" },
 ] as const;
@@ -2832,7 +2830,7 @@ function inventoryItemDef(itemKey: string) {
 }
 
 function normalizeInventoryKey(itemKey: string): string {
-  return itemKey === "origin_ball" ? "ancient_origin_ball" : itemKey;
+  return itemKey.trim().toLowerCase();
 }
 
 function localDateOnly(d: Date, timeZone: string): string {
@@ -2955,11 +2953,12 @@ async function incrementUserInventory(
   amount: number
 ): Promise<number> {
   if (!supabase) throw new Error("Database not configured");
+  const key = normalizeInventoryKey(itemKey);
   const { data: row } = await supabase
     .from("user_inventory")
     .select("id, quantity")
     .eq("user_id", userId)
-    .eq("item_key", itemKey)
+    .eq("item_key", key)
     .maybeSingle();
   const now = new Date().toISOString();
   if (row) {
@@ -2973,7 +2972,7 @@ async function incrementUserInventory(
   }
   const { error } = await supabase.from("user_inventory").insert({
     user_id: userId,
-    item_key: itemKey,
+    item_key: key,
     quantity: amount,
   });
   if (error) throw new Error(error.message);
@@ -3206,19 +3205,6 @@ app.post("/user/inventory/claim", requireAuth, async (req, res) => {
         .eq("item_key", itemKey)
         .maybeSingle()
     ).data as { id: number; quantity: number; item_key: string } | null;
-
-  // Backward-compat: old key `origin_ball` should be claimable as `ancient_origin_ball`.
-  if (!row && itemKey === "ancient_origin_ball") {
-    row =
-      (
-        await supabase
-          .from("user_inventory")
-          .select("id, quantity, item_key")
-          .eq("user_id", user.userId)
-          .eq("item_key", "origin_ball")
-          .maybeSingle()
-      ).data as { id: number; quantity: number; item_key: string } | null;
-  }
 
   if (!row) {
     res.status(400).json({ error: "Not enough quantity in inventory" });

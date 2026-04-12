@@ -184,7 +184,6 @@ export function Account() {
     const map: Record<string, string> = {
       exp_candy_xl: 'EXP Candy XL',
       ancient_origin_ball: 'Ancient Origin Ball',
-      origin_ball: 'Origin Ball',
       master_ball: 'Master Ball',
       gold_bottle_cap: 'Gold Bottle Cap',
     }
@@ -1397,7 +1396,7 @@ export function Account() {
 
           <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-2">Rank chỉ admin cấp / xin cấp</h2>
           <p className="text-xs text-muted m-0 mb-3">
-            Legend, Ultimate, Overlord, God và các rank staff/partner (Champion, Helper, Mod, TikTok, YouTube, Builder) —
+            Legend, Ultimate, Overlord, God và các rank staff/partner (Champion, Helper, Mod, TikTok, Youtuber, Builder) —
             không mua Cobble$ trên web. Gửi yêu cầu; staff duyệt sẽ cập nhật rank cho bạn.
           </p>
           <div className="mb-4 space-y-3">
