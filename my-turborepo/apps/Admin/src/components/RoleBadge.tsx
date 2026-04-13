@@ -5,6 +5,8 @@ const RANK_IMAGE_FILE: Record<string, string> = {}
 
 const RANK_EXT = ['png', 'webp', 'jpg', 'jpeg'] as const
 
+const RANK_BADGE_PUBLIC_DIR = 'roles'
+
 export function rankBadgeSrcCandidates(roleKey: string): string[] {
   const k = (roleKey || 'member').trim().toLowerCase()
   const mapped = RANK_IMAGE_FILE[k] ?? k
@@ -12,7 +14,7 @@ export function rankBadgeSrcCandidates(roleKey: string): string[] {
   const out: string[] = []
   for (const name of names) {
     for (const ext of RANK_EXT) {
-      out.push(`/ranks/${name}.${ext}`)
+      out.push(`/${RANK_BADGE_PUBLIC_DIR}/${name}.${ext}`)
     }
   }
   for (const name of names) {
@@ -37,7 +39,7 @@ type RoleBadgeProps = {
   compact?: boolean
 }
 
-/** Đặt ảnh vào `apps/Admin/public/ranks/<tên>.png` — cùng quy ước tên file với website. */
+/** Đặt ảnh vào `apps/Admin/public/roles/<tên>.png` — cùng quy ước với website. */
 export function RoleBadge({ roleKey, className = '', compact }: RoleBadgeProps) {
   const k = (roleKey || 'member').trim().toLowerCase()
   const candidates = useMemo(() => rankBadgeSrcCandidates(k), [k])

@@ -84,7 +84,10 @@ export function listAllKnownRoleKeys(): string[] {
   return arr;
 }
 
-/** Old LuckPerms group name → canonical key (LP uses `youtuber`). */
+/**
+ * Legacy name → canonical LuckPerms group key.
+ * Only `youtube` → `youtuber` (never the reverse): LP must use `parent set youtuber`.
+ */
 const LEGACY_ROLE_KEY_ALIASES: Record<string, string> = {
   youtube: "youtuber",
 };

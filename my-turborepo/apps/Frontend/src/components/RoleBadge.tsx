@@ -5,10 +5,13 @@ const RANK_IMAGE_FILE: Record<string, string> = {}
 
 const RANK_EXT = ['png', 'webp', 'jpg', 'jpeg'] as const
 
+/** Subfolder under `public/` for rank badge images. */
+const RANK_BADGE_PUBLIC_DIR = 'roles'
+
 /**
  * Các URL thử lần lượt khi ảnh lỗi (404):
- * - `public/ranks/<tên>.<ext>` — chuẩn khuyến nghị
- * - `public/<tên>.<ext>` — nếu bạn để ảnh thẳng trong `public/`
+ * - `public/roles/<tên>.<ext>`
+ * - `public/<tên>.<ext>` — nếu để ảnh thẳng trong `public/`
  * Thử cả tên map và tên key khi có alias trong RANK_IMAGE_FILE.
  */
 export function rankBadgeSrcCandidates(roleKey: string): string[] {
@@ -18,7 +21,7 @@ export function rankBadgeSrcCandidates(roleKey: string): string[] {
   const out: string[] = []
   for (const name of names) {
     for (const ext of RANK_EXT) {
-      out.push(`/ranks/${name}.${ext}`)
+      out.push(`/${RANK_BADGE_PUBLIC_DIR}/${name}.${ext}`)
     }
   }
   for (const name of names) {
@@ -31,7 +34,7 @@ export function rankBadgeSrcCandidates(roleKey: string): string[] {
 
 export function rankBadgeImageSrc(roleKey: string): string {
   const all = rankBadgeSrcCandidates(roleKey)
-  return all[0] ?? `/ranks/${(roleKey || 'member').trim().toLowerCase()}.png`
+  return all[0] ?? `/roles/${(roleKey || 'member').trim().toLowerCase()}.png`
 }
 
 function fallbackLabel(roleKey: string): string {
@@ -50,8 +53,8 @@ type RoleBadgeProps = {
 }
 
 /**
- * Badge rank cạnh username. Đặt ảnh vào `apps/<app>/public/ranks/<tên>.png` (hoặc `.webp`/`.jpg`).
- * Vite phục vụ `public/` tại URL gốc → `/ranks/champion.png`.
+ * Badge rank cạnh username. Đặt ảnh vào `apps/<app>/public/roles/<tên>.png` (hoặc `.webp`/`.jpg`).
+ * Vite phục vụ `public/` tại URL gốc → `/roles/champion.png`.
  */
 export function RoleBadge({ roleKey, className = '', compact }: RoleBadgeProps) {
   const k = (roleKey || 'member').trim().toLowerCase()
