@@ -8,7 +8,7 @@ export const GRANT_ONLY_ROLE_KEYS = new Set([
   "helper",
   "mod",
   "tiktok",
-  "youtube",
+  "youtuber",
   "builder",
   "legend",
   "ultimate",
@@ -45,7 +45,7 @@ const GRANT_ONLY_LABELS: Record<string, string> = {
   helper: "HELPER",
   mod: "MOD",
   tiktok: "TIKTOK",
-  youtube: "YOUTUBER",
+  youtuber: "YOUTUBER",
   builder: "BUILDER",
   legend: "LEGEND",
   ultimate: "ULTIMATE",
@@ -59,7 +59,7 @@ const GRANT_ONLY_FLAT_SHOP_DISCOUNT_15 = new Set([
   "helper",
   "mod",
   "tiktok",
-  "youtube",
+  "youtuber",
   "builder",
 ]);
 
@@ -84,8 +84,14 @@ export function listAllKnownRoleKeys(): string[] {
   return arr;
 }
 
+/** Old LuckPerms group name → canonical key (LP uses `youtuber`). */
+const LEGACY_ROLE_KEY_ALIASES: Record<string, string> = {
+  youtube: "youtuber",
+};
+
 export function normalizeRoleKey(key: string): string {
-  return key.trim().toLowerCase();
+  const k = key.trim().toLowerCase();
+  return LEGACY_ROLE_KEY_ALIASES[k] ?? k;
 }
 
 export function getPurchasableCost(roleKey: string): number | null {
@@ -96,7 +102,7 @@ export function getPurchasableCost(roleKey: string): number | null {
 
 /**
  * Percent off website Cobble$ shop (items + Pokémon shop).
- * Staff/special grant ranks (champion, helper, mod, tiktok, youtube, builder): 15%.
+ * Staff/special grant ranks (champion, helper, mod, tiktok, youtuber, builder): 15%.
  * Legend+ (grant-only): 18%–30%. Purchasable ranks: stepped up to MASTER 15%.
  */
 export function getWebsiteShopDiscountPercent(roleKey: string): number {

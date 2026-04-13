@@ -1,9 +1,7 @@
 import { useMemo, useState } from 'react'
 
-/** LuckPerms key → tên file ảnh (không đuôi), nếu khác key (vd: youtube → youtuber). */
-const RANK_IMAGE_FILE: Record<string, string> = {
-  youtube: 'youtuber',
-}
+/** LuckPerms key → tên file ảnh (không đuôi), khi khác key. */
+const RANK_IMAGE_FILE: Record<string, string> = {}
 
 const RANK_EXT = ['png', 'webp', 'jpg', 'jpeg'] as const
 
@@ -11,7 +9,7 @@ const RANK_EXT = ['png', 'webp', 'jpg', 'jpeg'] as const
  * Các URL thử lần lượt khi ảnh lỗi (404):
  * - `public/ranks/<tên>.<ext>` — chuẩn khuyến nghị
  * - `public/<tên>.<ext>` — nếu bạn để ảnh thẳng trong `public/`
- * Thử cả tên map và tên key (vd: youtube: youtuber trước, rồi youtube).
+ * Thử cả tên map và tên key khi có alias trong RANK_IMAGE_FILE.
  */
 export function rankBadgeSrcCandidates(roleKey: string): string[] {
   const k = (roleKey || 'member').trim().toLowerCase()
@@ -40,7 +38,6 @@ function fallbackLabel(roleKey: string): string {
   const k = roleKey.trim().toLowerCase()
   const map: Record<string, string> = {
     member: 'MEMBER',
-    youtube: 'YOUTUBER',
   }
   return map[k] ?? k.toUpperCase()
 }

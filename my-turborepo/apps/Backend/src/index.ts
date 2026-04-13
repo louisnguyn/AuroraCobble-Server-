@@ -55,8 +55,9 @@ import {
 } from "./minecraftCobbledollarsDeposit.js";
 
 function readMinecraftRoleField(row: { minecraft_role?: string | null } | null | undefined): string {
-  const r = row?.minecraft_role?.trim().toLowerCase();
-  return r || DEFAULT_MINECRAFT_ROLE;
+  const r = row?.minecraft_role?.trim();
+  if (!r) return DEFAULT_MINECRAFT_ROLE;
+  return normalizeRoleKey(r);
 }
 
 const app = express();
@@ -2819,6 +2820,7 @@ const INVENTORY_ITEM_DEFS = [
   { key: "exp_candy_xl", label: "EXP Candy XL", itemId: "cobblemon:exp_candy_xl" },
   { key: "ancient_origin_ball", label: "Ancient Origin Ball", itemId: "cobblemon:ancient_origin_ball" },
   { key: "master_ball", label: "Master Ball", itemId: "cobblemon:master_ball" },
+  // Website key is gold_bottle_cap; mod registry id is bottle_cap_gold (not obc:gold_bottle_cap).
   { key: "gold_bottle_cap", label: "Gold Bottle Cap", itemId: "obc:bottle_cap_gold" },
 ] as const;
 const INVENTORY_CLAIM_COMMAND_TEMPLATE =
