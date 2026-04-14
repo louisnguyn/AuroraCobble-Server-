@@ -748,6 +748,12 @@ export function Account() {
 
               <section className="border-t border-border/50 pt-3">
                 <h3 className="text-sm font-semibold text-[#cbd5e1] m-0 mb-2">Daily streak</h3>
+                <p className="text-xs text-muted m-0 mb-1.5">
+                  Total days claimed:{' '}
+                  <span className="tabular-nums text-slate-300">
+                    {(daily.totalClaimDays ?? 0).toLocaleString()}
+                  </span>
+                </p>
                 <p className="text-sm text-violet-200 m-0">
                   Next step: Day {daily.streak.nextDay} · {daily.streak.nextReward?.label ?? '—'}
                 </p>

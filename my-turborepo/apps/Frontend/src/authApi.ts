@@ -355,6 +355,8 @@ export interface DailyLoginStatus {
       itemKey?: string
     }
   }
+  /** Successful daily claims all-time (one per local day max). Omitted if backend is older. */
+  totalClaimDays?: number
   claim: {
     status: string | null
     claimedAt: string | null

@@ -2102,7 +2102,11 @@ app.post("/gacha/pull", requireAuth, async (req, res) => {
     // table may not exist yet; pull still succeeds
   }
 
-  await notifyDiscordPull(user.username, poolName, chosen.reward_type);
+  // Do not await: a slow/hanging Discord webhook fetch would block the response and leave the
+  // client stuck on "Fetching your drop from the server…" forever.
+  void notifyDiscordPull(user.username, poolName, chosen.reward_type).catch((err) =>
+    console.warn("[gacha/pull] Discord notify failed:", err)
+  );
 
   res.json({
     reward: {
@@ -3663,6 +3667,13 @@ app.get("/user/daily-login/status", requireAuth, async (_req, res) => {
     .limit(1)
     .maybeSingle();
 
+  const { count: totalClaimDaysRaw } = await supabase
+    .from("user_daily_login_claims")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.userId)
+    .eq("status", "success");
+  const totalClaimDays = totalClaimDaysRaw ?? 0;
+
   const prevDate = (prev as { claim_date?: string } | null)?.claim_date ?? null;
   const prevStreak = Number((prev as { streak_day?: number } | null)?.streak_day ?? 0) || 0;
   const nextDay = prevDate === yesterdayDateOnly(today) ? (prevStreak >= 7 ? 1 : prevStreak + 1) : 1;
@@ -3688,6 +3699,8 @@ app.get("/user/daily-login/status", requireAuth, async (_req, res) => {
       nextClaimCobbleTotal,
     },
     streak: { nextDay, nextReward },
+    /** Lifetime count of successful daily claims (distinct calendar days in reset timezone). */
+    totalClaimDays,
     claim: todayClaim
       ? {
           status: (todayClaim as { status?: string }).status ?? null,

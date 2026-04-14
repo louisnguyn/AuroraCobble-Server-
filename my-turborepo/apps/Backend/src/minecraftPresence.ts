@@ -3,6 +3,8 @@ import type { PlayerWithStatus } from "./minecraftRoster.js";
 
 export type EnrichedPlayer = PlayerWithStatus & {
   streakDays: number;
+  /** Distinct UTC days seen online at least once (lifetime; increments when dashboard sync first sees them each UTC day). */
+  totalUtcDaysSeen: number;
   /** ISO timestamp of last time we saw them online */
   lastSeenOnline: string | null;
   /** Seconds offline since last online; null when online or never seen online */
@@ -15,6 +17,7 @@ type PresenceRow = {
   last_seen_online: string | null;
   streak_days: number;
   streak_last_date: string | null;
+  total_utc_days_seen?: number | null;
 };
 
 function utcDateOnly(d: Date): string {
@@ -44,6 +47,7 @@ export async function syncAndEnrichPresence(
     players.map((p) => ({
       ...p,
       streakDays: 0,
+      totalUtcDaysSeen: 0,
       lastSeenOnline: null,
       offlineSeconds: null,
     }));
@@ -56,7 +60,7 @@ export async function syncAndEnrichPresence(
 
   const { data: existingRows, error: fetchErr } = await supabase
     .from("minecraft_player_presence")
-    .select("player_key, display_name, last_seen_online, streak_days, streak_last_date")
+    .select("player_key, display_name, last_seen_online, streak_days, streak_last_date, total_utc_days_seen")
     .in("player_key", keys);
 
   if (fetchErr) {
@@ -77,6 +81,7 @@ export async function syncAndEnrichPresence(
     last_seen_online: string | null;
     streak_days: number;
     streak_last_date: string | null;
+    total_utc_days_seen: number;
     updated_at: string;
   }> = [];
 
@@ -86,6 +91,12 @@ export async function syncAndEnrichPresence(
     const key = p.name.toLowerCase();
     const row = map.get(key);
     const prevLastSeen = row?.last_seen_online ? new Date(String(row.last_seen_online)) : null;
+
+    const prevStreakLastDate = row?.streak_last_date ?? null;
+    let totalUtcDaysSeen = Math.max(0, Number(row?.total_utc_days_seen ?? 0) || 0);
+    if (p.status === "online" && prevStreakLastDate !== today) {
+      totalUtcDaysSeen += 1;
+    }
 
     let streakDays = row?.streak_days ?? 0;
     let streakLastDate = row?.streak_last_date ?? null;
@@ -115,6 +126,7 @@ export async function syncAndEnrichPresence(
       last_seen_online: newLastSeenIso,
       streak_days: streakDays,
       streak_last_date: streakLastDate,
+      total_utc_days_seen: totalUtcDaysSeen,
       updated_at: now.toISOString(),
     });
 
@@ -122,6 +134,7 @@ export async function syncAndEnrichPresence(
       enriched.push({
         ...p,
         streakDays,
+        totalUtcDaysSeen,
         lastSeenOnline: now.toISOString(),
         offlineSeconds: null,
       });
@@ -133,6 +146,7 @@ export async function syncAndEnrichPresence(
       enriched.push({
         ...p,
         streakDays,
+        totalUtcDaysSeen,
         lastSeenOnline: prevLastSeen?.toISOString() ?? null,
         offlineSeconds,
       });

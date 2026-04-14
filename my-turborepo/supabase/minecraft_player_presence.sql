@@ -13,3 +13,9 @@ CREATE TABLE IF NOT EXISTS minecraft_player_presence (
 CREATE INDEX IF NOT EXISTS idx_minecraft_presence_updated ON minecraft_player_presence (updated_at DESC);
 
 COMMENT ON TABLE minecraft_player_presence IS 'Minecraft IGN presence for admin streak/offline stats (updated on /admin/minecraft/dashboard)';
+
+-- Lifetime: distinct UTC days with at least one online snapshot when admin dashboard sync ran (additive over time).
+ALTER TABLE minecraft_player_presence
+  ADD COLUMN IF NOT EXISTS total_utc_days_seen INT NOT NULL DEFAULT 0;
+
+COMMENT ON COLUMN minecraft_player_presence.total_utc_days_seen IS 'Lifetime count of distinct UTC days seen online (admin dashboard snapshots only; not retroactive before this column existed)';
