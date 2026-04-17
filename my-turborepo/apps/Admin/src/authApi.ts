@@ -249,6 +249,34 @@ export async function bulkGrantCobbledollars(body: {
   })
 }
 
+export type GrantableInventoryItem = { key: string; label: string }
+
+export async function fetchGrantableInventoryItems(): Promise<{ items: GrantableInventoryItem[] }> {
+  return fetchJson<{ items: GrantableInventoryItem[] }>('/admin/inventory/grantable-items')
+}
+
+export type BulkInventoryGrantResult = {
+  ok: boolean
+  item_key: string
+  label: string
+  amount_per_user: number
+  granted: number
+  requested: number
+  failures: Array<{ user_id: number; error: string }>
+}
+
+export async function bulkGrantInventory(body: {
+  user_ids: number[]
+  item_key: string
+  amount: number
+  note?: string
+}): Promise<BulkInventoryGrantResult> {
+  return fetchJson<BulkInventoryGrantResult>('/admin/inventory/bulk-grant', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
 export interface AdminHistoryEntry {
   id: number
   poolId: number

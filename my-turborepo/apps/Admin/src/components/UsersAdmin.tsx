@@ -10,6 +10,8 @@ import {
   adminResetUserPassword,
   deleteAdminUser,
   bulkGrantCobbledollars,
+  bulkGrantInventory,
+  fetchGrantableInventoryItems,
   verifyUserIngame,
   revokeUserIngameVerification,
   fetchAdminMinecraftRoles,
@@ -20,7 +22,7 @@ import {
 } from '../authApi'
 import { RoleBadge } from './RoleBadge.tsx'
 
-type UsersTab = 'account' | 'rewards' | 'bulkCobble'
+type UsersTab = 'account' | 'rewards' | 'bulkCobble' | 'bulkItems'
 
 export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
   const [users, setUsers] = useState<AdminUser[]>([])
@@ -52,6 +54,11 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
   const [bulkNote, setBulkNote] = useState('')
   const [bulkBusy, setBulkBusy] = useState(false)
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false)
+  const [grantableItems, setGrantableItems] = useState<{ key: string; label: string }[]>([])
+  const [bulkItemKey, setBulkItemKey] = useState('')
+  const [bulkItemQty, setBulkItemQty] = useState('1')
+  const [bulkItemConfirmOpen, setBulkItemConfirmOpen] = useState(false)
+  const [bulkItemBusy, setBulkItemBusy] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [ingameVerifyBusy, setIngameVerifyBusy] = useState(false)
   const [minecraftRoleKeys, setMinecraftRoleKeys] = useState<string[]>([])
@@ -89,6 +96,15 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
     fetchAdminMinecraftRoles()
       .then(({ keys }) => setMinecraftRoleKeys(keys))
       .catch(() => setMinecraftRoleKeys([]))
+  }, [])
+
+  useEffect(() => {
+    fetchGrantableInventoryItems()
+      .then(({ items }) => {
+        setGrantableItems(items)
+        setBulkItemKey((k) => (k && items.some((i) => i.key === k) ? k : items[0]?.key ?? ''))
+      })
+      .catch(() => setGrantableItems([]))
   }, [])
 
   useEffect(() => {
@@ -190,6 +206,58 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
       setBulkConfirmOpen(false)
     } finally {
       setBulkBusy(false)
+    }
+  }
+
+  const openBulkItemConfirm = () => {
+    setError(null)
+    setSuccessMessage(null)
+    const qty = Number(bulkItemQty)
+    if (bulkIds.length === 0) {
+      setError('Select at least one user in the list (use the checkboxes).')
+      return
+    }
+    if (bulkIds.length > 500) {
+      setError('At most 500 users per request. Clear some selections or run multiple batches.')
+      return
+    }
+    if (!bulkItemKey || !grantableItems.some((i) => i.key === bulkItemKey)) {
+      setError('Choose an item from the list.')
+      return
+    }
+    if (!Number.isFinite(qty) || qty <= 0 || !Number.isInteger(qty)) {
+      setError('Enter a positive whole number for quantity per user.')
+      return
+    }
+    setBulkItemConfirmOpen(true)
+  }
+
+  const confirmBulkItemGrant = async () => {
+    const qty = Number(bulkItemQty)
+    if (!Number.isFinite(qty) || qty <= 0) return
+    setBulkItemBusy(true)
+    setError(null)
+    setSuccessMessage(null)
+    try {
+      const res = await bulkGrantInventory({
+        user_ids: [...new Set(bulkIds)],
+        item_key: bulkItemKey,
+        amount: qty,
+        ...(bulkNote.trim() ? { note: bulkNote.trim() } : {}),
+      })
+      setBulkItemConfirmOpen(false)
+      const failMsg =
+        res.failures.length > 0
+          ? ` ${res.failures.length} failed (${res.failures.slice(0, 3).map((f) => `#${f.user_id}`).join(', ')}${res.failures.length > 3 ? '…' : ''}).`
+          : ''
+      setSuccessMessage(
+        `Granted ${res.amount_per_user}× ${res.label} to ${res.granted} of ${res.requested} accounts.${failMsg}`
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Bulk item grant failed')
+      setBulkItemConfirmOpen(false)
+    } finally {
+      setBulkItemBusy(false)
     }
   }
 
@@ -420,7 +488,7 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
               className="w-full px-2.5 py-2 rounded-md bg-[#0f0d0b] border border-border text-sm text-[#f5efe6] placeholder:text-muted/70 focus:outline-none focus:ring-1 focus:ring-accent/50 focus:border-accent/40"
               autoComplete="off"
             />
-            {tab === 'bulkCobble' && filteredUsers.length > 0 && (
+            {(tab === 'bulkCobble' || tab === 'bulkItems') && filteredUsers.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -440,7 +508,7 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
               </div>
             )}
             <p className="text-[11px] text-muted m-0">
-              {tab === 'bulkCobble' ? (
+              {tab === 'bulkCobble' || tab === 'bulkItems' ? (
                 <>
                   <span className="text-accent font-semibold">{bulkIds.length}</span> selected ·{' '}
                   {filteredUsers.length === users.length
@@ -460,14 +528,14 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
             ) : (
               filteredUsers.map((u) => (
                 <li key={u.id} className="flex items-stretch border-b border-border/50">
-                  {tab === 'bulkCobble' && (
+                  {(tab === 'bulkCobble' || tab === 'bulkItems') && (
                     <div className="flex items-center pl-3 pr-0 shrink-0">
                       <input
                         type="checkbox"
                         checked={bulkIds.includes(u.id)}
                         onChange={() => toggleBulkId(u.id)}
                         className="rounded border-border"
-                        aria-label={`Include ${u.username} in bulk Cobble$ grant`}
+                        aria-label={`Include ${u.username} in bulk grant`}
                       />
                     </div>
                   )}
@@ -475,7 +543,7 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
                     type="button"
                     onClick={() => setSelectedUser(u)}
                     className={`flex-1 min-w-0 text-left py-3 pr-4 text-sm transition-colors border-l border-transparent ${
-                      tab === 'bulkCobble' ? 'pl-2' : 'pl-4'
+                      tab === 'bulkCobble' || tab === 'bulkItems' ? 'pl-2' : 'pl-4'
                     } ${
                       selectedUser?.id === u.id
                         ? 'bg-accent/20 text-accent font-medium'
@@ -548,6 +616,20 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
             >
               Bulk Cobble$
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                setTab('bulkItems')
+                setSuccessMessage(null)
+              }}
+              className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                tab === 'bulkItems'
+                  ? 'bg-accent/25 text-accent border border-accent/40'
+                  : 'text-muted hover:text-[#f5efe6] border border-transparent'
+              }`}
+            >
+              Bulk items
+            </button>
           </div>
 
           {tab === 'bulkCobble' && (
@@ -603,13 +685,87 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
             </div>
           )}
 
-          {tab !== 'bulkCobble' && !selectedUser && (
+          {tab === 'bulkItems' && (
+            <div className="rounded-lg bg-surface border border-border p-4 space-y-4">
+              <div>
+                <h2 className="text-sm font-semibold text-[#f5efe6] m-0 mb-1">Bulk items (website inventory)</h2>
+                <p className="text-xs text-muted m-0">
+                  Same checkboxes as Cobble$: each selected account receives the same item stack in their website
+                  inventory (claim in-game per your server setup).
+                </p>
+              </div>
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label htmlFor="bulk-item-key" className="block text-xs text-muted mb-1">
+                    Item
+                  </label>
+                  <select
+                    id="bulk-item-key"
+                    value={bulkItemKey}
+                    onChange={(e) => setBulkItemKey(e.target.value)}
+                    className="min-w-[12rem] px-2 py-1.5 rounded bg-[#0f0d0b] border border-border text-sm text-[#f5efe6]"
+                  >
+                    {grantableItems.length === 0 ? (
+                      <option value="">Loading…</option>
+                    ) : (
+                      grantableItems.map((it) => (
+                        <option key={it.key} value={it.key}>
+                          {it.label}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="bulk-item-qty" className="block text-xs text-muted mb-1">
+                    Qty per user
+                  </label>
+                  <input
+                    id="bulk-item-qty"
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={bulkItemQty}
+                    onChange={(e) => setBulkItemQty(e.target.value)}
+                    className="w-28 px-2 py-1.5 rounded bg-[#0f0d0b] border border-border text-sm text-[#f5efe6]"
+                  />
+                </div>
+                <div className="flex-1 min-w-[200px]">
+                  <label htmlFor="bulk-item-note" className="block text-xs text-muted mb-1">
+                    Note (optional)
+                  </label>
+                  <input
+                    id="bulk-item-note"
+                    type="text"
+                    maxLength={500}
+                    value={bulkNote}
+                    onChange={(e) => setBulkNote(e.target.value)}
+                    placeholder="e.g. event reward"
+                    className="w-full px-2 py-1.5 rounded bg-[#0f0d0b] border border-border text-sm text-[#f5efe6]"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={openBulkItemConfirm}
+                  className="px-3 py-1.5 rounded-lg bg-accent text-[#1a1510] text-sm font-medium hover:bg-accent/90"
+                >
+                  Review &amp; grant…
+                </button>
+              </div>
+              <p className="text-xs text-muted m-0">
+                Selected: <span className="text-[#f5efe6] font-medium">{bulkIds.length}</span> users · max 500 per
+                request.
+              </p>
+            </div>
+          )}
+
+          {tab !== 'bulkCobble' && tab !== 'bulkItems' && !selectedUser && (
             <div className="rounded-lg bg-surface border border-border p-8 text-center text-muted">
               Select a user to manage their account or tickets and gacha history.
             </div>
           )}
 
-          {tab !== 'bulkCobble' && selectedUser && (
+          {tab !== 'bulkCobble' && tab !== 'bulkItems' && selectedUser && (
             <>
               {tab === 'account' && (
                 <div className="space-y-4">
@@ -942,6 +1098,61 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
           )}
         </div>
       </div>
+
+      {bulkItemConfirmOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="bulk-item-title"
+          onClick={() => !bulkItemBusy && setBulkItemConfirmOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-xl bg-surface border border-border shadow-xl p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="bulk-item-title" className="text-lg font-semibold text-[#f5efe6] m-0 mb-2">
+              Grant items to {bulkIds.length} accounts?
+            </h3>
+            <p className="text-sm text-muted m-0 mb-4">
+              Each account will receive{' '}
+              <span className="text-[#f5efe6] font-medium">
+                {Number(bulkItemQty).toLocaleString()} ×{' '}
+                {grantableItems.find((i) => i.key === bulkItemKey)?.label ?? bulkItemKey}
+              </span>
+              . Total items credited:{' '}
+              <span className="text-[#f5efe6] font-medium">
+                {(Number(bulkItemQty) * bulkIds.length).toLocaleString()}
+              </span>
+              .
+              {bulkNote.trim() ? (
+                <>
+                  {' '}
+                  Note: <span className="text-[#f5efe6]">{bulkNote.trim()}</span>
+                </>
+              ) : null}
+            </p>
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => !bulkItemBusy && setBulkItemConfirmOpen(false)}
+                disabled={bulkItemBusy}
+                className="px-4 py-2 rounded-lg text-sm border border-border text-muted hover:bg-surface-hover hover:text-[#f5efe6] disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmBulkItemGrant}
+                disabled={bulkItemBusy}
+                className="px-4 py-2 rounded-lg text-sm bg-accent text-[#1a1510] font-medium hover:bg-accent/90 disabled:opacity-50"
+              >
+                {bulkItemBusy ? 'Granting…' : 'Confirm grant'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {bulkConfirmOpen && (
         <div

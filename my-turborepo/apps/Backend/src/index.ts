@@ -4744,6 +4744,97 @@ app.post("/admin/cobbledollars/bulk-grant", requireAuth, requireAdmin, async (re
   });
 });
 
+/** Website inventory items staff may grant in bulk (same keys as shop / daily streak). */
+app.get("/admin/inventory/grantable-items", requireAuth, requireAdmin, (_req, res) => {
+  res.json({
+    items: INVENTORY_ITEM_DEFS.map((it) => ({ key: it.key, label: it.label })),
+  });
+});
+
+/** Grant website inventory items (e.g. Master Ball) to many users in one request. */
+app.post("/admin/inventory/bulk-grant", requireAuth, requireAdmin, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const staff = res.locals.user!;
+  const body = req.body ?? {};
+  const rawIds = body.user_ids;
+  const rawKey = typeof body.item_key === "string" ? body.item_key : "";
+  const itemKey = normalizeInventoryKey(rawKey);
+  const amount = body.amount;
+  const note =
+    typeof body.note === "string" ? body.note.trim().slice(0, 500) : "";
+
+  const def = inventoryItemDef(itemKey);
+  if (!def) {
+    res.status(400).json({
+      error: "Unknown item_key",
+      allowed: INVENTORY_ITEM_DEFS.map((it) => it.key),
+    });
+    return;
+  }
+
+  if (!Array.isArray(rawIds) || rawIds.length === 0) {
+    res.status(400).json({ error: "user_ids must be a non-empty array" });
+    return;
+  }
+  if (typeof amount !== "number" || !Number.isFinite(amount) || amount <= 0 || !Number.isInteger(amount)) {
+    res.status(400).json({ error: "amount must be a positive whole number" });
+    return;
+  }
+  const maxPerUser = 100_000;
+  if (amount > maxPerUser) {
+    res.status(400).json({ error: `amount per user must be at most ${maxPerUser}` });
+    return;
+  }
+
+  const userIds = [
+    ...new Set(
+      rawIds
+        .map((x: unknown) => Number(x))
+        .filter((n): n is number => Number.isFinite(n) && Number.isInteger(n) && n > 0)
+    ),
+  ];
+  if (userIds.length === 0) {
+    res.status(400).json({ error: "No valid user ids" });
+    return;
+  }
+  const maxBulk = 500;
+  if (userIds.length > maxBulk) {
+    res.status(400).json({ error: `At most ${maxBulk} users per request` });
+    return;
+  }
+
+  const detailNote = note.length > 0 ? ` (${note})` : "";
+  const failures: Array<{ user_id: number; error: string }> = [];
+  let granted = 0;
+  for (const userId of userIds) {
+    try {
+      await incrementUserInventory(userId, itemKey, amount);
+      granted += 1;
+      console.info(
+        `[admin] bulk inventory +${amount} ${itemKey} user ${userId} by ${staff.username}${detailNote}`
+      );
+    } catch (e) {
+      failures.push({
+        user_id: userId,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+
+  res.json({
+    ok: true,
+    item_key: def.key,
+    label: def.label,
+    amount_per_user: amount,
+    granted,
+    requested: userIds.length,
+    failures,
+  });
+});
+
 app.get("/admin/users/:userId/history", requireAuth, requireAdmin, async (req, res) => {
   if (!supabase) {
     res.status(503).json({ error: "Database not configured" });
