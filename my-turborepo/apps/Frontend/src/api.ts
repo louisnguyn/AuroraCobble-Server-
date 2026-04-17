@@ -37,6 +37,24 @@ export async function fetchBattleTowerLeaderboard(params?: { mode?: string; top?
   )
 }
 
+export async function fetchBattleReplays(params?: { limit?: number }) {
+  const sp = new URLSearchParams()
+  if (params?.limit != null) sp.set('limit', String(params.limit))
+  const q = sp.toString()
+  return get<import('./types').RankedFeedListResponse<import('./types').BattleReplayPayload>>(
+    `/battle-replays${q ? `?${q}` : ''}`
+  )
+}
+
+export async function fetchMatchResults(params?: { limit?: number }) {
+  const sp = new URLSearchParams()
+  if (params?.limit != null) sp.set('limit', String(params.limit))
+  const q = sp.toString()
+  return get<import('./types').RankedFeedListResponse<import('./types').MatchResultPayload>>(
+    `/match-results${q ? `?${q}` : ''}`
+  )
+}
+
 export async function fetchSpawnPokemon(params?: { q?: string; generation?: string; source?: string; limit?: number }) {
   const sp = new URLSearchParams()
   if (params?.q) sp.set('q', params.q)

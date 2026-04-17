@@ -8,22 +8,26 @@ export interface UsageStatsResponse {
 }
 
 export interface FormatUsage {
-  format: string
+  format?: string
   tiers?: Record<string, TierUsage>
 }
 
 export interface TierUsage {
   minElo: number
-  maxElo: number
+  /** Open-ended tier bands use `null` (e.g. 1500+). */
+  maxElo: number | null
   totalBattles: number
-  totalPokemon: number
+  totalPokemon?: number
   species?: SpeciesUsage[]
 }
 
 export interface SpeciesUsage {
   name: string
   usagePercent: number
-  count: number
+  /** Older CobbleRanked payloads included counts; tier usage may omit this. */
+  count?: number
+  /** Win rate for this species in the tier (percent). */
+  winRate?: number
   abilities?: Record<string, number>
   items?: Record<string, number>
   moves?: Record<string, number>
@@ -70,6 +74,65 @@ export interface LeaderboardEntry {
   wins?: number
   losses?: number
   [key: string]: unknown
+}
+
+/** POST /battle-replay — CobbleRanked Web API */
+export interface BattleReplayPlayer {
+  uuid?: string
+  playerName?: string
+  team?: string[]
+  isWinner?: boolean
+}
+
+export interface BattleReplayPayload {
+  matchId?: string
+  serverId?: string
+  seasonName?: string
+  format?: string
+  timestamp?: string
+  turnCount?: number
+  players?: BattleReplayPlayer[]
+  battleLog?: string[]
+  endReason?: string
+  [key: string]: unknown
+}
+
+/** POST /match-result — CobbleRanked Web API */
+export interface MatchResultPokemon {
+  species: string
+  ability?: string
+  item?: string
+  moves?: string[]
+  nature?: string
+  evSpread?: string
+}
+
+export interface MatchResultPlayer {
+  uuid?: string
+  playerName?: string
+  eloBefore?: number
+  eloAfter?: number
+  eloChange?: number
+  isWinner?: boolean
+  faintedCount?: number
+  team?: MatchResultPokemon[]
+}
+
+export interface MatchResultPayload {
+  matchId?: string
+  serverId?: string
+  seasonName?: string
+  format?: string
+  matchType?: string
+  timestamp?: string
+  durationSeconds?: number
+  endReason?: string
+  players?: MatchResultPlayer[]
+  [key: string]: unknown
+}
+
+export interface RankedFeedListResponse<T> {
+  items: T[]
 }
 
 export interface SpawnPokemonRow {

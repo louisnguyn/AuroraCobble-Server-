@@ -10,8 +10,9 @@ import type {
   LeaderboardPlayer,
 } from '../types'
 import { CobbleDollars } from './CobbleDollars.tsx'
+import { RankedApiFeed } from './RankedApiFeed.tsx'
 
-type MainSection = 'ranks' | 'economy' | 'battle'
+type MainSection = 'ranks' | 'economy' | 'battle' | 'ranked'
 type RankFormatId = 'singles' | 'doubles'
 type BattleModeId = 'singles' | 'doubles' | 'co-op' | 'boss'
 type EconomyKind = 'cobble' | 'pco'
@@ -24,6 +25,11 @@ const MAIN_SECTIONS: { id: MainSection; label: string; description: string }[] =
     description: 'In-game Cobble$ or PCO top 10',
   },
   { id: 'battle', label: 'Battle Tower', description: 'Floors & streaks' },
+  {
+    id: 'ranked',
+    label: 'Ranked feed',
+    description: 'CobbleRanked match results & battle replays (API sync)',
+  },
 ]
 
 const RANK_FORMATS: { id: RankFormatId; label: string }[] = [
@@ -314,8 +320,8 @@ export function Leaderboard() {
       <header className="space-y-2 border-b border-border/50 pb-6">
         <h1 className="text-2xl font-semibold m-0 text-[#e2e8f0] tracking-tight">Leaderboard</h1>
         <p className="text-sm text-muted m-0 max-w-2xl leading-relaxed">
-          PvP ranks, in-game Cobble$ or PCO top 10, and Battle Tower. When you are signed in, your row is highlighted if
-          your site username matches your in-game name.
+          PvP ranks, in-game Cobble$ or PCO top 10, Battle Tower, and CobbleRanked match results / replays. When you are
+          signed in, your row is highlighted if your site username matches your in-game name.
         </p>
         {!isAuthenticated ? (
           <p className="text-sm text-muted/90 m-0 pixel-panel-soft px-3 py-2 max-w-xl">
@@ -640,6 +646,8 @@ export function Leaderboard() {
           )}
         </section>
       )}
+
+      {mainSection === 'ranked' && <RankedApiFeed />}
     </div>
   )
 }

@@ -313,7 +313,9 @@ function SpeciesCard({
             {s.usagePercent.toFixed(1)}
             <span className="text-xs align-top">%</span>
           </div>
-          <div className="text-[11px] text-muted">{s.count} games</div>
+          <div className="text-[11px] text-muted">
+            {s.count != null ? `${s.count} games` : s.winRate != null ? `${s.winRate.toFixed(1)}% WR` : '—'}
+          </div>
         </div>
       </button>
     </div>
@@ -330,7 +332,7 @@ export function UsageStats() {
     rank: number
     tierLabel: string
     tierMinElo: number
-    tierMaxElo: number
+    tierMaxElo: number | typeof Infinity
     tierBattles: number
   } | null>(null)
 
@@ -391,6 +393,12 @@ export function UsageStats() {
                 <span className="text-xs align-top ml-0.5">%</span>
               </div>
             </div>
+            {s.winRate != null ? (
+              <div>
+                <div className="text-[0.7rem] uppercase tracking-wide text-muted">Species win rate</div>
+                <div className="font-semibold text-sky-400 tabular-nums">{s.winRate.toFixed(1)}%</div>
+              </div>
+            ) : null}
           </div>
         </div>
         <div className="rounded-lg p-4 bg-surface border border-border text-xs sm:text-sm">
@@ -469,7 +477,7 @@ export function UsageStats() {
           return (
             <div key={tierKey} className="mb-6 rounded-lg p-4 bg-surface border border-border">
               <h3 className="text-[0.95rem] font-medium m-0 mb-3 text-muted">
-                ELO {tier?.minElo ?? 0} – {tier?.maxElo ?? '∞'} · {tier?.totalBattles ?? 0} battles
+                ELO {tier?.minElo ?? 0} – {tier?.maxElo == null ? '∞' : tier.maxElo} · {tier?.totalBattles ?? 0} battles
               </h3>
               <div className="flex flex-col gap-3">
                 {sorted.map((s, i) => (
@@ -483,7 +491,7 @@ export function UsageStats() {
                         rank,
                         tierLabel: tierKey,
                         tierMinElo: tier?.minElo ?? 0,
-                        tierMaxElo: tier?.maxElo ?? Infinity,
+                        tierMaxElo: tier?.maxElo == null ? Infinity : tier.maxElo,
                         tierBattles: tier?.totalBattles ?? 0,
                       })
                     }

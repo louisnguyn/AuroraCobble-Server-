@@ -299,6 +299,8 @@ export type MinecraftDashboardResponse = {
     streakDays: number
     /** Distinct UTC days seen online at least once (lifetime; from admin dashboard sync). */
     totalUtcDaysSeen?: number
+    /** Successful daily claim count (lifetime), from user_daily_login_claims. */
+    totalClaimDays?: number
     lastSeenOnline: string | null
     offlineSeconds: number | null
   }[]

@@ -1,4 +1,4 @@
-// Backend serves /usage-stats and /leaderboard at root (no /api prefix). Set VITE_API_URL in .env.
+// Backend serves CobbleRanked sync at /usage-stats and /api/usage-stats (same for leaderboard, etc.). Set VITE_API_URL in .env.
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
 function buildUrl(path: string): string {

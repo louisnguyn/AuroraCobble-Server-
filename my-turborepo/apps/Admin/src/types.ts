@@ -8,22 +8,23 @@ export interface UsageStatsResponse {
 }
 
 export interface FormatUsage {
-  format: string
+  format?: string
   tiers?: Record<string, TierUsage>
 }
 
 export interface TierUsage {
   minElo: number
-  maxElo: number
+  maxElo: number | null
   totalBattles: number
-  totalPokemon: number
+  totalPokemon?: number
   species?: SpeciesUsage[]
 }
 
 export interface SpeciesUsage {
   name: string
   usagePercent: number
-  count: number
+  count?: number
+  winRate?: number
   abilities?: Record<string, number>
   items?: Record<string, number>
   moves?: Record<string, number>

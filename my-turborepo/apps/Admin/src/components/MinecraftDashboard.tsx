@@ -73,6 +73,11 @@ function formatTotalDaysSeen(n: number | undefined | null): string {
   return v > 0 ? `${v}d` : '—'
 }
 
+function formatTotalClaimDays(n: number | undefined | null): string {
+  const v = n ?? 0
+  return v > 0 ? `${v}d` : '—'
+}
+
 function formatOfflineDuration(seconds: number | null): string {
   if (seconds == null || seconds < 0) return '—'
   const d = Math.floor(seconds / 86400)
@@ -302,8 +307,8 @@ export function MinecraftDashboard({ viewerUsername }: { viewerUsername?: string
                   {data.presenceTracking ? (
                     <span className="text-slate-600">
                       {' '}
-                      · streak = consecutive UTC days online · total days = lifetime distinct UTC days seen (dashboard
-                      sync)
+                      · streak = consecutive UTC days online · total seen = lifetime distinct UTC days seen (dashboard
+                      sync) · total claimed = lifetime successful daily claims
                     </span>
                   ) : null}
                   {data.rosterFromServerWhitelist != null && data.rosterFromServerWhitelist > 0 && (
@@ -348,10 +353,10 @@ export function MinecraftDashboard({ viewerUsername }: { viewerUsername?: string
             ) : (
               <div className="overflow-x-auto max-h-[min(70vh,32rem)] overflow-y-auto">
                 {/* table + table-fixed: header and body share the same column widths (grid per-row auto cols did not) */}
-                <table className="w-full min-w-[640px] border-collapse table-fixed">
+                <table className="w-full min-w-[760px] border-collapse table-fixed">
                   <thead>
                     <tr className="border-b border-white/10">
-                      <th className="w-[30%] px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      <th className="w-[26%] px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
                         Player
                       </th>
                       <th className="w-[14%] px-2 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -361,9 +366,12 @@ export function MinecraftDashboard({ viewerUsername }: { viewerUsername?: string
                         Day streak
                       </th>
                       <th className="w-[12%] px-2 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">
-                        Total days
+                        Total seen
                       </th>
-                      <th className="w-[32%] px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      <th className="w-[12%] px-2 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">
+                        Total claimed
+                      </th>
+                      <th className="w-[24%] px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">
                         Offline for
                       </th>
                     </tr>
@@ -407,6 +415,9 @@ export function MinecraftDashboard({ viewerUsername }: { viewerUsername?: string
                         </td>
                         <td className="px-2 py-3 align-middle text-center text-sm text-sky-200/90 font-semibold tabular-nums">
                           {formatTotalDaysSeen(p.totalUtcDaysSeen)}
+                        </td>
+                        <td className="px-2 py-3 align-middle text-center text-sm text-violet-200/90 font-semibold tabular-nums">
+                          {formatTotalClaimDays(p.totalClaimDays)}
                         </td>
                         <td className="px-4 py-3 align-middle text-center text-sm text-slate-300 tabular-nums">
                           {p.status === 'online' ? '—' : formatOfflineDuration(p.offlineSeconds)}

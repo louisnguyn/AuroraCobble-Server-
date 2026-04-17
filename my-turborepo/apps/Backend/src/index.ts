@@ -66,7 +66,22 @@ const port = process.env.PORT ?? 3001;
 const cobbleStore = {
   usageStats: null as unknown,
   leaderboard: null as unknown,
+  /** Newest first; bounded by COBBLE_RANKED_FEED_MAX */
+  battleReplays: [] as unknown[],
+  matchResults: [] as unknown[],
 };
+
+function pushCobbleRankedFeed(kind: "battleReplays" | "matchResults", body: unknown) {
+  const arr = cobbleStore[kind] as unknown[];
+  arr.unshift(body);
+  if (arr.length > COBBLE_RANKED_FEED_MAX) arr.length = COBBLE_RANKED_FEED_MAX;
+}
+
+function parseRankedFeedLimit(raw: unknown): number {
+  const n = parseInt(String(raw ?? "50"), 10);
+  if (!Number.isFinite(n) || n < 1) return 50;
+  return Math.min(n, 200);
+}
 
 const COBBLEDOLLARS_PUBLIC_CACHE_TTL_MS = 90_000;
 /** PVP daily payout: only top 3 on the synced leaderboard (website usernames matched). */
@@ -125,6 +140,11 @@ type BattleTowerPublicBody = {
 const battleTowerPublicCache = new Map<string, { at: number; body: BattleTowerPublicBody }>();
 
 const COBBLE_API_KEY = process.env.COBBLE_API_KEY;
+const COBBLE_RANKED_FEED_MAX = (() => {
+  const n = parseInt(process.env.COBBLE_RANKED_FEED_MAX ?? "200", 10);
+  if (!Number.isFinite(n) || n < 1) return 200;
+  return Math.min(n, 2000);
+})();
 const CORS_ORIGIN = process.env.CORS_ORIGIN ?? "*";
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL?.trim() || null;
 console.log("[Discord] webhook configured:", DISCORD_WEBHOOK_URL ? "yes" : "no");
@@ -451,7 +471,7 @@ app.use((_req, res, next) => {
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, X-Client-Locale",
+    "Content-Type, Authorization, X-Client-Locale, X-API-Key",
   );
   next();
 });
@@ -464,7 +484,10 @@ function requireCobbleAuth(
 ) {
   if (!COBBLE_API_KEY) return next();
   const auth = req.headers.authorization;
-  const token = auth?.startsWith("Bearer ") ? auth.slice(7) : null;
+  const bearer = auth?.startsWith("Bearer ") ? auth.slice(7) : null;
+  const xApiKeyRaw = req.headers["x-api-key"];
+  const xApiKey = typeof xApiKeyRaw === "string" ? xApiKeyRaw : Array.isArray(xApiKeyRaw) ? xApiKeyRaw[0] : null;
+  const token = bearer ?? xApiKey;
   if (token !== COBBLE_API_KEY) {
     res.status(401).json({ error: { code: "401", message: "token expired or incorrect" } });
     return;
@@ -514,7 +537,8 @@ function requireAdmin(
   next();
 }
 
-app.use(express.json());
+const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT?.trim() || "12mb";
+app.use(express.json({ limit: JSON_BODY_LIMIT }));
 
 registerTournamentRoutes(app, { requireAuth, requireAdmin });
 
@@ -617,29 +641,64 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
-app.get("/usage-stats", (_req, res) => res.json(cobbleStore.usageStats ?? {}));
-app.post("/usage-stats", requireCobbleAuth, (req, res) => {
+/** CobbleRanked Web API — mounted at `/` and `/api` so `baseUrl` can be `https://host` or `https://host/api`. */
+const cobbleRankedSyncRouter = express.Router();
+cobbleRankedSyncRouter.get("/usage-stats", (_req, res) => res.json(cobbleStore.usageStats ?? {}));
+cobbleRankedSyncRouter.post("/usage-stats", requireCobbleAuth, (req, res) => {
   cobbleStore.usageStats = req.body;
   res.json({ ok: true });
 });
-app.get("/leaderboard", (_req, res) => res.json(cobbleStore.leaderboard ?? {}));
-app.post("/leaderboard", requireCobbleAuth, (req, res) => {
+cobbleRankedSyncRouter.get("/leaderboard", (_req, res) => res.json(cobbleStore.leaderboard ?? {}));
+cobbleRankedSyncRouter.post("/leaderboard", requireCobbleAuth, (req, res) => {
   cobbleStore.leaderboard = req.body;
   void syncWebsitePvpRanksFromLeaderboard(req.body);
   res.json({ ok: true });
 });
-
-app.get("/v4/usage-stats", (_req, res) => res.json(cobbleStore.usageStats ?? {}));
-app.post("/v4/usage-stats", requireCobbleAuth, (req, res) => {
+cobbleRankedSyncRouter.get("/v4/usage-stats", (_req, res) => res.json(cobbleStore.usageStats ?? {}));
+cobbleRankedSyncRouter.post("/v4/usage-stats", requireCobbleAuth, (req, res) => {
   cobbleStore.usageStats = req.body;
   res.json({ ok: true });
 });
-app.get("/v4/leaderboard", (_req, res) => res.json(cobbleStore.leaderboard ?? {}));
-app.post("/v4/leaderboard", requireCobbleAuth, (req, res) => {
+cobbleRankedSyncRouter.get("/v4/leaderboard", (_req, res) => res.json(cobbleStore.leaderboard ?? {}));
+cobbleRankedSyncRouter.post("/v4/leaderboard", requireCobbleAuth, (req, res) => {
   cobbleStore.leaderboard = req.body;
   void syncWebsitePvpRanksFromLeaderboard(req.body);
   res.json({ ok: true });
 });
+cobbleRankedSyncRouter.get("/battle-replays", (req, res) => {
+  const limit = parseRankedFeedLimit(req.query.limit);
+  res.json({ items: cobbleStore.battleReplays.slice(0, limit) });
+});
+cobbleRankedSyncRouter.post("/battle-replay", requireCobbleAuth, (req, res) => {
+  pushCobbleRankedFeed("battleReplays", req.body);
+  res.json({ ok: true });
+});
+cobbleRankedSyncRouter.get("/match-results", (req, res) => {
+  const limit = parseRankedFeedLimit(req.query.limit);
+  res.json({ items: cobbleStore.matchResults.slice(0, limit) });
+});
+cobbleRankedSyncRouter.post("/match-result", requireCobbleAuth, (req, res) => {
+  pushCobbleRankedFeed("matchResults", req.body);
+  res.json({ ok: true });
+});
+cobbleRankedSyncRouter.get("/v4/battle-replays", (req, res) => {
+  const limit = parseRankedFeedLimit(req.query.limit);
+  res.json({ items: cobbleStore.battleReplays.slice(0, limit) });
+});
+cobbleRankedSyncRouter.post("/v4/battle-replay", requireCobbleAuth, (req, res) => {
+  pushCobbleRankedFeed("battleReplays", req.body);
+  res.json({ ok: true });
+});
+cobbleRankedSyncRouter.get("/v4/match-results", (req, res) => {
+  const limit = parseRankedFeedLimit(req.query.limit);
+  res.json({ items: cobbleStore.matchResults.slice(0, limit) });
+});
+cobbleRankedSyncRouter.post("/v4/match-result", requireCobbleAuth, (req, res) => {
+  pushCobbleRankedFeed("matchResults", req.body);
+  res.json({ ok: true });
+});
+app.use(cobbleRankedSyncRouter);
+app.use("/api", cobbleRankedSyncRouter);
 
 /** Public Cobble$ top 10 from Minecraft RCON (cached ~90s). No auth. */
 app.get("/minecraft/cobbledollars-leaderboard", async (_req, res) => {
@@ -4005,11 +4064,46 @@ app.get("/admin/minecraft/dashboard", requireAuth, requireAdmin, async (_req, re
         "No roster for offline tracking — add whitelist (RCON), website users, or MC_EXTRA_ROSTER_NAMES.";
     }
 
+    const claimDaysByPlayer = new Map<string, number>();
+    if (supabase && playersEnriched.length > 0) {
+      const playerNames = [...new Set(playersEnriched.map((p) => p.name))];
+      const { data: matchedUsers } = await supabase
+        .from("users")
+        .select("id, username")
+        .in("username", playerNames);
+      const userRows = (matchedUsers ?? []) as Array<{ id?: number; username?: string }>;
+      const userIds = userRows.map((r) => Number(r.id)).filter((n) => Number.isFinite(n) && n > 0);
+      if (userIds.length > 0) {
+        const byUserId = new Map<number, string>();
+        for (const row of userRows) {
+          const uid = Number(row.id);
+          const uname = String(row.username ?? "").toLowerCase();
+          if (!Number.isFinite(uid) || uid <= 0 || !uname) continue;
+          byUserId.set(uid, uname);
+          claimDaysByPlayer.set(uname, 0);
+        }
+        const { data: claimRows } = await supabase
+          .from("user_daily_login_claims")
+          .select("user_id")
+          .eq("status", "success")
+          .in("user_id", userIds);
+        for (const row of (claimRows ?? []) as Array<{ user_id?: number }>) {
+          const uid = Number(row.user_id);
+          const uname = byUserId.get(uid);
+          if (!uname) continue;
+          claimDaysByPlayer.set(uname, (claimDaysByPlayer.get(uname) ?? 0) + 1);
+        }
+      }
+    }
+
     const serverInfo = { ...data };
     delete (serverInfo as { onlinePlayerNames?: unknown }).onlinePlayerNames;
     res.json({
       ...serverInfo,
-      players: playersEnriched,
+      players: playersEnriched.map((p) => ({
+        ...p,
+        totalClaimDays: claimDaysByPlayer.get(p.name.toLowerCase()) ?? 0,
+      })),
       presenceTracking,
       rosterAccountCount: accountCount,
       rosterExtraFromEnv: extraEnvCount > 0 ? extraEnvCount : undefined,
