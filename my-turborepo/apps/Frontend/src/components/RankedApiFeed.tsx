@@ -56,19 +56,9 @@ function MatchResultCard({ m, viewerIgn }: { m: MatchResultPayload; viewerIgn?: 
           {formatTs(m.timestamp)}
         </time>
       </div>
-      <p className="text-xs text-muted m-0">
-        {m.matchId ? (
-          <>
-            Match <span className="font-mono text-[#e2e8f0]/90">{m.matchId}</span>
-            {m.durationSeconds != null ? ` · ${m.durationSeconds}s` : ''}
-          </>
-        ) : m.durationSeconds != null ? (
-          <>{m.durationSeconds}s</>
-        ) : (
-          '—'
-        )}
-        {m.serverId ? ` · ${m.serverId}` : ''}
-      </p>
+      {m.durationSeconds != null ? (
+        <p className="text-xs text-muted m-0">{m.durationSeconds}s</p>
+      ) : null}
       <ul className="list-none m-0 p-0 space-y-2">
         {players.map((p, idx) => {
           const isYou = viewerIgn && ignNamesMatch(viewerIgn, p.playerName ?? '')
@@ -131,16 +121,6 @@ function BattleReplayCard({ r, viewerIgn }: { r: BattleReplayPayload; viewerIgn?
           <span className="text-xs text-muted tabular-nums">{formatTs(r.timestamp)}</span>
         </summary>
         <div className="border-t border-border/50 px-4 py-3 space-y-3 text-sm">
-          <p className="text-xs text-muted m-0">
-            {r.matchId ? (
-              <>
-                <span className="font-mono text-[#e2e8f0]/90">{r.matchId}</span>
-                {r.serverId ? ` · ${r.serverId}` : ''}
-              </>
-            ) : (
-              r.serverId ?? '—'
-            )}
-          </p>
           <ul className="list-none m-0 p-0 space-y-1">
             {players.map((p, idx) => (
               <li
@@ -172,22 +152,12 @@ function BattleReplayCard({ r, viewerIgn }: { r: BattleReplayPayload; viewerIgn?
                     ))}
                   </ol>
                 ) : (
-                  <p className="text-xs text-muted m-0">
-                    No short summary could be built from this log format. Use the technical log below.
-                  </p>
+                  <p className="text-xs text-muted m-0">No play-by-play available for this replay.</p>
                 )}
               </div>
-              <details className="rounded-lg border border-border/40 bg-black/25">
-                <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-muted hover:text-[#e2e8f0]/90">
-                  Technical log (Showdown / Cobblemon protocol)
-                </summary>
-                <pre className="m-0 max-h-72 overflow-auto border-t border-border/40 p-3 text-[11px] leading-snug font-mono text-slate-400 whitespace-pre-wrap break-words">
-                  {log.join('\n')}
-                </pre>
-              </details>
             </>
           ) : (
-            <p className="text-xs text-muted m-0">No battle log lines in payload.</p>
+            <p className="text-xs text-muted m-0">No replay data for this match.</p>
           )}
         </div>
       </details>
@@ -244,27 +214,10 @@ export function RankedApiFeed() {
           Refresh
         </button>
       </div>
-      <p className="text-sm text-muted m-0 max-w-3xl leading-relaxed">
-        Per-match ELO and teams; battle replays include a readable play-by-play plus the raw protocol log. From
-        CobbleRanked{' '}
-        <a
-          href="https://www.gashistudios.site/docs/cobbleranked/configuration/api/"
-          className="text-accent underline-offset-2 hover:underline"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Web API
-        </a>
-        . Point <code className="text-xs text-[#e2e8f0]/90">endpoint.baseUrl</code> at this site&apos;s API base and
-        enable <code className="text-xs text-[#e2e8f0]/90">sync.dataTypes.matchResults</code> /{' '}
-        <code className="text-xs text-[#e2e8f0]/90">battleReplays</code>.
-      </p>
 
       {tab === 'matches' ? (
         matches.length === 0 ? (
-          <div className={`${panelClass} text-muted text-sm`}>
-            No match results stored yet. After the next ranked battle sync, entries appear here.
-          </div>
+          <div className={`${panelClass} text-muted text-sm`}>No match results yet.</div>
         ) : (
           <div className="space-y-3 max-w-4xl">
             {matches.map((m, i) => (
@@ -273,9 +226,7 @@ export function RankedApiFeed() {
           </div>
         )
       ) : replays.length === 0 ? (
-        <div className={`${panelClass} text-muted text-sm`}>
-          No battle replays stored yet. Turn on battle replay sync in the mod to populate this list.
-        </div>
+        <div className={`${panelClass} text-muted text-sm`}>No battle replays yet.</div>
       ) : (
         <div className="space-y-3 max-w-4xl">
           {replays.map((r, i) => (

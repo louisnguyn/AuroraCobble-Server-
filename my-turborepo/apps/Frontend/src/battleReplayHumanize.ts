@@ -1,5 +1,20 @@
 import type { BattleReplayPlayer } from './types'
 
+/** CobbleRanked may send one string per line or one blob with `\n`-separated protocol lines. */
+export function flattenBattleLogLines(raw: unknown): string[] {
+  if (raw == null) return []
+  const arr = Array.isArray(raw) ? raw : typeof raw === 'string' ? [raw] : []
+  const out: string[] = []
+  for (const item of arr) {
+    if (typeof item !== 'string') continue
+    for (const part of item.split(/\r?\n/)) {
+      const t = part.trim()
+      if (t) out.push(t)
+    }
+  }
+  return out
+}
+
 function slotSideLabel(slot: string): string {
   const s = slot.trim().toLowerCase()
   if (s.startsWith('p2')) return 'Player 2'
@@ -9,9 +24,11 @@ function slotSideLabel(slot: string): string {
 
 /** Map CobbleRanked / Showdown log lines to short English lines for casual readers. */
 export function humanizeBattleLogLines(
-  lines: string[],
+  rawLines: unknown,
   players: Pick<BattleReplayPlayer, 'playerName' | 'uuid'>[]
 ): string[] {
+  const lines = flattenBattleLogLines(rawLines)
+
   const idToName = new Map<string, string>()
   for (const p of players) {
     const name = (p.playerName ?? '').trim()
@@ -29,11 +46,11 @@ export function humanizeBattleLogLines(
   }
 
   const out: string[] = []
+  /** Showdown emits two lines after |split| (e.g. % HP vs exact); skip one duplicate. */
   let skipAfterSplit = 0
 
   for (let i = 0; i < lines.length; i++) {
-    const raw = lines[i]
-    const line = typeof raw === 'string' ? raw.trim() : ''
+    const line = lines[i].trim()
     if (!line) continue
 
     const lower = line.toLowerCase()
@@ -74,7 +91,7 @@ export function humanizeBattleLogLines(
     const cmd = parts[0] ?? ''
 
     if (cmd === 'split') {
-      skipAfterSplit = 2
+      skipAfterSplit = 1
       continue
     }
     if (skipAfterSplit > 0) {
@@ -134,13 +151,36 @@ export function humanizeBattleLogLines(
       }
       continue
     }
-    if (cmd === '-ability' || cmd === '-enditem' || cmd === '-boost' || cmd === '-singleturn') {
+    if (
+      cmd === '-ability' ||
+      cmd === '-enditem' ||
+      cmd === '-boost' ||
+      cmd === '-singleturn' ||
+      cmd === '-crit' ||
+      cmd === '-supereffective' ||
+      cmd === '-resisted' ||
+      cmd === '-immune' ||
+      cmd === '-heal' ||
+      cmd === '-weather' ||
+      cmd === '-sidestart' ||
+      cmd === '-sideend' ||
+      cmd === '-activate'
+    ) {
       const detail = parts.slice(1).join(' · ').trim()
       if (detail.length > 0 && detail.length < 100) out.push(detail)
       continue
     }
     if (cmd === 'win' && parts.length >= 2) {
       out.push(`Winner: ${resolveWinId(parts[1] ?? '')}`)
+      continue
+    }
+    if (cmd === 'tie') {
+      out.push('Tie game')
+      continue
+    }
+    if (cmd === '-message' && parts[1]) {
+      const m = parts.slice(1).join(' ').trim()
+      if (m.length < 120) out.push(m)
       continue
     }
     if (cmd === 'error' && parts[1]) {
