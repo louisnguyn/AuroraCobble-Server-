@@ -77,6 +77,23 @@ function pushCobbleRankedFeed(kind: "battleReplays" | "matchResults", body: unkn
   if (arr.length > COBBLE_RANKED_FEED_MAX) arr.length = COBBLE_RANKED_FEED_MAX;
 }
 
+function cobbleRankedPostOk(res: express.Response) {
+  /** Gashi docs use `{ success: true }`; keep `ok` for anything already relying on it. */
+  res.json({ ok: true, success: true });
+}
+
+function logCobbleRankedFeedReceipt(
+  kind: "battle-replay" | "match-result",
+  body: unknown
+): void {
+  if (process.env.COBBLE_LOG_SYNC !== "true") return;
+  const mid =
+    body && typeof body === "object" && body !== null && "matchId" in body
+      ? String((body as { matchId?: unknown }).matchId ?? "")
+      : "";
+  console.info(`[CobbleRanked] POST /${kind}${mid ? ` matchId=${mid}` : ""} stored`);
+}
+
 function parseRankedFeedLimit(raw: unknown): number {
   const n = parseInt(String(raw ?? "50"), 10);
   if (!Number.isFinite(n) || n < 1) return 50;
@@ -537,7 +554,8 @@ function requireAdmin(
   next();
 }
 
-const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT?.trim() || "12mb";
+/** Large battle-replay payloads (Showdown log lines) can exceed a few MB; override with JSON_BODY_LIMIT if needed. */
+const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT?.trim() || "32mb";
 app.use(express.json({ limit: JSON_BODY_LIMIT }));
 
 registerTournamentRoutes(app, { requireAuth, requireAdmin });
@@ -646,24 +664,24 @@ const cobbleRankedSyncRouter = express.Router();
 cobbleRankedSyncRouter.get("/usage-stats", (_req, res) => res.json(cobbleStore.usageStats ?? {}));
 cobbleRankedSyncRouter.post("/usage-stats", requireCobbleAuth, (req, res) => {
   cobbleStore.usageStats = req.body;
-  res.json({ ok: true });
+  cobbleRankedPostOk(res);
 });
 cobbleRankedSyncRouter.get("/leaderboard", (_req, res) => res.json(cobbleStore.leaderboard ?? {}));
 cobbleRankedSyncRouter.post("/leaderboard", requireCobbleAuth, (req, res) => {
   cobbleStore.leaderboard = req.body;
   void syncWebsitePvpRanksFromLeaderboard(req.body);
-  res.json({ ok: true });
+  cobbleRankedPostOk(res);
 });
 cobbleRankedSyncRouter.get("/v4/usage-stats", (_req, res) => res.json(cobbleStore.usageStats ?? {}));
 cobbleRankedSyncRouter.post("/v4/usage-stats", requireCobbleAuth, (req, res) => {
   cobbleStore.usageStats = req.body;
-  res.json({ ok: true });
+  cobbleRankedPostOk(res);
 });
 cobbleRankedSyncRouter.get("/v4/leaderboard", (_req, res) => res.json(cobbleStore.leaderboard ?? {}));
 cobbleRankedSyncRouter.post("/v4/leaderboard", requireCobbleAuth, (req, res) => {
   cobbleStore.leaderboard = req.body;
   void syncWebsitePvpRanksFromLeaderboard(req.body);
-  res.json({ ok: true });
+  cobbleRankedPostOk(res);
 });
 cobbleRankedSyncRouter.get("/battle-replays", (req, res) => {
   const limit = parseRankedFeedLimit(req.query.limit);
@@ -671,7 +689,8 @@ cobbleRankedSyncRouter.get("/battle-replays", (req, res) => {
 });
 cobbleRankedSyncRouter.post("/battle-replay", requireCobbleAuth, (req, res) => {
   pushCobbleRankedFeed("battleReplays", req.body);
-  res.json({ ok: true });
+  logCobbleRankedFeedReceipt("battle-replay", req.body);
+  cobbleRankedPostOk(res);
 });
 cobbleRankedSyncRouter.get("/match-results", (req, res) => {
   const limit = parseRankedFeedLimit(req.query.limit);
@@ -679,7 +698,8 @@ cobbleRankedSyncRouter.get("/match-results", (req, res) => {
 });
 cobbleRankedSyncRouter.post("/match-result", requireCobbleAuth, (req, res) => {
   pushCobbleRankedFeed("matchResults", req.body);
-  res.json({ ok: true });
+  logCobbleRankedFeedReceipt("match-result", req.body);
+  cobbleRankedPostOk(res);
 });
 cobbleRankedSyncRouter.get("/v4/battle-replays", (req, res) => {
   const limit = parseRankedFeedLimit(req.query.limit);
@@ -687,7 +707,8 @@ cobbleRankedSyncRouter.get("/v4/battle-replays", (req, res) => {
 });
 cobbleRankedSyncRouter.post("/v4/battle-replay", requireCobbleAuth, (req, res) => {
   pushCobbleRankedFeed("battleReplays", req.body);
-  res.json({ ok: true });
+  logCobbleRankedFeedReceipt("battle-replay", req.body);
+  cobbleRankedPostOk(res);
 });
 cobbleRankedSyncRouter.get("/v4/match-results", (req, res) => {
   const limit = parseRankedFeedLimit(req.query.limit);
@@ -695,7 +716,8 @@ cobbleRankedSyncRouter.get("/v4/match-results", (req, res) => {
 });
 cobbleRankedSyncRouter.post("/v4/match-result", requireCobbleAuth, (req, res) => {
   pushCobbleRankedFeed("matchResults", req.body);
-  res.json({ ok: true });
+  logCobbleRankedFeedReceipt("match-result", req.body);
+  cobbleRankedPostOk(res);
 });
 app.use(cobbleRankedSyncRouter);
 app.use("/api", cobbleRankedSyncRouter);

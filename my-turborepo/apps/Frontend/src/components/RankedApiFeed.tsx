@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { humanizeBattleLogLines } from '../battleReplayHumanize'
 import { fetchBattleReplays, fetchMatchResults } from '../api'
 import { useAuth } from '../contexts/AuthContext'
 import { ignNamesMatch } from '../ignMatch'
@@ -116,6 +117,7 @@ function MatchResultCard({ m, viewerIgn }: { m: MatchResultPayload; viewerIgn?: 
 function BattleReplayCard({ r, viewerIgn }: { r: BattleReplayPayload; viewerIgn?: string | null }) {
   const players = r.players ?? []
   const log = r.battleLog ?? []
+  const story = useMemo(() => humanizeBattleLogLines(log, players), [log, players])
   const summaryYou =
     viewerIgn && players.some((p) => ignNamesMatch(viewerIgn, p.playerName ?? '')) ? 'ring-2 ring-accent/40' : ''
   return (
@@ -128,7 +130,7 @@ function BattleReplayCard({ r, viewerIgn }: { r: BattleReplayPayload; viewerIgn?
           </span>
           <span className="text-xs text-muted tabular-nums">{formatTs(r.timestamp)}</span>
         </summary>
-        <div className="border-t border-border/50 px-4 py-3 space-y-2 text-sm">
+        <div className="border-t border-border/50 px-4 py-3 space-y-3 text-sm">
           <p className="text-xs text-muted m-0">
             {r.matchId ? (
               <>
@@ -156,9 +158,34 @@ function BattleReplayCard({ r, viewerIgn }: { r: BattleReplayPayload; viewerIgn?
             ))}
           </ul>
           {log.length > 0 ? (
-            <pre className="m-0 max-h-72 overflow-auto rounded-lg bg-black/40 p-3 text-[11px] leading-snug font-mono text-slate-300 whitespace-pre-wrap break-words border border-border/40">
-              {log.join('\n')}
-            </pre>
+            <>
+              <div className="rounded-lg border border-border/50 bg-surface/30 px-3 py-2">
+                <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-muted m-0 mb-2">
+                  Play-by-play
+                </p>
+                {story.length > 0 ? (
+                  <ol className="list-decimal m-0 pl-5 space-y-1.5 text-[0.8125rem] leading-snug text-[#e2e8f0]/95">
+                    {story.map((s, i) => (
+                      <li key={`${i}-${s.slice(0, 24)}`} className="marker:text-muted">
+                        {s}
+                      </li>
+                    ))}
+                  </ol>
+                ) : (
+                  <p className="text-xs text-muted m-0">
+                    No short summary could be built from this log format. Use the technical log below.
+                  </p>
+                )}
+              </div>
+              <details className="rounded-lg border border-border/40 bg-black/25">
+                <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-muted hover:text-[#e2e8f0]/90">
+                  Technical log (Showdown / Cobblemon protocol)
+                </summary>
+                <pre className="m-0 max-h-72 overflow-auto border-t border-border/40 p-3 text-[11px] leading-snug font-mono text-slate-400 whitespace-pre-wrap break-words">
+                  {log.join('\n')}
+                </pre>
+              </details>
+            </>
           ) : (
             <p className="text-xs text-muted m-0">No battle log lines in payload.</p>
           )}
@@ -218,7 +245,8 @@ export function RankedApiFeed() {
         </button>
       </div>
       <p className="text-sm text-muted m-0 max-w-3xl leading-relaxed">
-        Per-match ELO and teams, plus optional full Showdown logs, from CobbleRanked{' '}
+        Per-match ELO and teams; battle replays include a readable play-by-play plus the raw protocol log. From
+        CobbleRanked{' '}
         <a
           href="https://www.gashistudios.site/docs/cobbleranked/configuration/api/"
           className="text-accent underline-offset-2 hover:underline"
