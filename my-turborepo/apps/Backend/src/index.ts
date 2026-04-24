@@ -602,12 +602,9 @@ app.post("/team/analyze-ai", requireAuth, async (req, res) => {
   const isAdminUser = !!(urow as { is_admin?: boolean }).is_admin;
   const minecraftVerifiedAt = (urow as { minecraft_verified_at?: string | null }).minecraft_verified_at;
   if (!isAdminUser && !minecraftVerifiedAt) {
-    const wantVi = String(req.headers["x-client-locale"] ?? "").toLowerCase() === "vi";
     res.status(403).json({
       code: "team_ai_verification_required",
-      error: wantVi
-        ? "Phân tích AI chỉ dành cho tài khoản đã được quản trị viên xác minh trên trang Admin."
-        : "Team AI analysis is only available after staff mark your account as verified in the admin panel.",
+      error: "Team AI analysis is only available after staff mark your account as verified in the admin panel.",
     });
     return;
   }
@@ -619,13 +616,10 @@ app.post("/team/analyze-ai", requireAuth, async (req, res) => {
       const elapsed = Date.now() - lastMs;
       if (elapsed >= 0 && elapsed < TEAM_AI_COOLDOWN_MS) {
         const nextAllowed = new Date(lastMs + TEAM_AI_COOLDOWN_MS).toISOString();
-        const wantVi = String(req.headers["x-client-locale"] ?? "").toLowerCase() === "vi";
         res.status(429).json({
           code: "team_ai_cooldown",
           next_allowed_at: nextAllowed,
-          error: wantVi
-            ? "Bạn chỉ có thể phân tích đội bằng AI một lần mỗi 12 giờ. Quản trị viên không bị giới hạn."
-            : "You can only use Team AI analysis once every 12 hours. Administrators are not limited.",
+          error: "You can only use Team AI analysis once every 12 hours. Administrators are not limited.",
         });
         return;
       }
@@ -1947,12 +1941,9 @@ app.post("/roles/buy", requireAuth, async (req, res) => {
     return;
   }
   if (!(await userMayUseTeamAiFeatures(user.userId))) {
-    const wantVi = String(req.headers["x-client-locale"] ?? "").toLowerCase() === "vi";
     res.status(403).json({
       code: "shop_verification_required",
-      error: wantVi
-        ? "Cần tài khoản đã xác minh mới mua được rank trên shop website."
-        : "A verified account is required to purchase ranks on the website shop.",
+      error: "A verified account is required to purchase ranks on the website shop.",
     });
     return;
   }
@@ -2098,12 +2089,9 @@ app.post("/gacha/pull", requireAuth, async (req, res) => {
     return;
   }
   if (!(await userMayUseTeamAiFeatures(user.userId))) {
-    const wantVi = String(req.headers["x-client-locale"] ?? "").toLowerCase() === "vi";
     res.status(403).json({
       code: "verification_required",
-      error: wantVi
-        ? "Cần xác minh tài khoản mới quay gacha trên website."
-        : "A verified account is required to pull gacha on the website.",
+      error: "A verified account is required to pull gacha on the website.",
     });
     return;
   }
@@ -2202,12 +2190,9 @@ app.post("/gacha/pull", requireAuth, async (req, res) => {
 app.post("/gacha/pulls/:pullId/claim", requireAuth, async (req, res) => {
   const user = res.locals.user!;
   if (!(await userMayUseTeamAiFeatures(user.userId))) {
-    const wantVi = String(req.headers["x-client-locale"] ?? "").toLowerCase() === "vi";
     res.status(403).json({
       code: "verification_required",
-      error: wantVi
-        ? "Cần xác minh tài khoản mới nhận thưởng gacha trong game."
-        : "A verified account is required to claim gacha rewards in-game.",
+      error: "A verified account is required to claim gacha rewards in-game.",
     });
     return;
   }
@@ -2787,7 +2772,7 @@ const SHOP_ITEMS = [
   { itemKey: "exp_candy_xl", label: "EXP Candy XL", cost: 60_000 },
   { itemKey: "ancient_origin_ball", label: "Ancient Origin Ball", cost: 500_000 },
   { itemKey: "master_ball", label: "Master Ball", cost: 300_000 },
-  { itemKey: "gold_bottle_cap", label: "Gold Bottle Cap", cost: 3_000_000 },
+  { itemKey: "gold_bottle_cap", label: "Gold Bottle Cap", cost: 5_000_000 },
 ] as const;
 
 /** Cobble$ after integer percent-off (rank shop discount). */
@@ -3365,12 +3350,9 @@ app.post("/shop/buy", requireAuth, async (req, res) => {
     return;
   }
   if (!(await userMayUseTeamAiFeatures(user.userId))) {
-    const wantVi = String(req.headers["x-client-locale"] ?? "").toLowerCase() === "vi";
     res.status(403).json({
       code: "shop_verification_required",
-      error: wantVi
-        ? "Cần tài khoản đã xác minh mới mua được trên shop website."
-        : "A verified account is required to purchase from the website shop.",
+      error: "A verified account is required to purchase from the website shop.",
     });
     return;
   }
@@ -3522,12 +3504,9 @@ app.post("/pokemon-shop/buy", requireAuth, async (req, res) => {
     return;
   }
   if (!(await userMayUseTeamAiFeatures(user.userId))) {
-    const wantVi = String(req.headers["x-client-locale"] ?? "").toLowerCase() === "vi";
     res.status(403).json({
       code: "shop_verification_required",
-      error: wantVi
-        ? "Cần tài khoản đã xác minh mới mua được trên shop website."
-        : "A verified account is required to purchase from the website shop.",
+      error: "A verified account is required to purchase from the website shop.",
     });
     return;
   }
@@ -3981,12 +3960,9 @@ app.post("/user/exchange", requireAuth, async (req, res) => {
     return;
   }
   if (!(await userMayUseTeamAiFeatures(userId))) {
-    const wantVi = String(req.headers["x-client-locale"] ?? "").toLowerCase() === "vi";
     res.status(403).json({
       code: "verification_required",
-      error: wantVi
-        ? "Cần xác minh tài khoản mới đổi vé trên website."
-        : "A verified account is required to exchange tickets on the website.",
+      error: "A verified account is required to exchange tickets on the website.",
     });
     return;
   }

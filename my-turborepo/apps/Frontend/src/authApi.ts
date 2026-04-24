@@ -55,11 +55,8 @@ async function fetchApi<T>(
   return data as T
 }
 
-/** Backend may return Vietnamese `error` text for 403 when this is set. */
+/** Force English API responses. */
 function clientLocaleViHeaders(): HeadersInit {
-  if (typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('vi')) {
-    return { 'x-client-locale': 'vi' }
-  }
   return {}
 }
 
