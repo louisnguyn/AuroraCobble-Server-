@@ -2781,7 +2781,7 @@ const DAILY_STREAK_REWARDS = [
   { day: 4, kind: "cobbledollars", amount: 50_000, label: "Cobble$ +50,000" },
   { day: 5, kind: "cobbledollars", amount: 60_000, label: "Cobble$ +60,000" },
   { day: 6, kind: "cobbledollars", amount: 70_000, label: "Cobble$ +70,000" },
-  { day: 7, kind: "item", itemKey: "master_ball", amount: 1, label: "Master Ball x1" },
+  { day: 7, kind: "cobbledollars", amount: 100_000, label: "Cobble$ +100,000" },
 ] as const;
 const SHOP_ITEMS = [
   { itemKey: "exp_candy_xl", label: "EXP Candy XL", cost: 60_000 },
@@ -2806,11 +2806,11 @@ async function getUserMinecraftRoleForShop(userId: number): Promise<string> {
   return readMinecraftRoleField(data as { minecraft_role?: string | null });
 }
 
-const POKEMON_SHOP_REFRESH_HOURS = 4;
-const POKEMON_SHOP_OFFER_COUNT = 3;
+const POKEMON_SHOP_REFRESH_HOURS = 12;
+const POKEMON_SHOP_OFFER_COUNT = 4;
 const POKEMON_SHOP_CATEGORIES = {
   starter: {
-    price: 750_000,
+    price: 1_000_000,
     species: [
       "bulbasaur", "charmander", "squirtle", "chikorita", "cyndaquil", "totodile", "treecko",
       "torchic", "mudkip", "turtwig", "chimchar", "piplup", "snivy", "tepig", "oshawott",
@@ -2819,7 +2819,7 @@ const POKEMON_SHOP_CATEGORIES = {
     ],
   },
   mythic: {
-    price: 4_000_000,
+    price: 5_000_000,
     species: [
       "mew", "celebi", "jirachi", "deoxys", "manaphy", "phione", "darkrai", "shaymin",
       "arceus", "victini", "keldeo", "meloetta", "genesect", "diancie", "hoopa", "volcanion",
@@ -2827,14 +2827,14 @@ const POKEMON_SHOP_CATEGORIES = {
     ],
   },
   pseudo_legend: {
-    price: 1_500_000,
+    price: 2_000_000,
     species: [
       "dragonite", "tyranitar", "salamence", "metagross", "garchomp", "hydreigon",
       "goodra", "kommo-o", "dragapult", "baxcalibur",
     ],
   },
   legend: {
-    price: 8_000_000,
+    price: 10_000_000,
     species: [
       "articuno", "zapdos", "moltres", "mewtwo", "raikou", "entei", "suicune", "lugia", "hooh",
       "regirock", "regice", "registeel", "latias", "latios", "kyogre", "groudon", "rayquaza",
@@ -3757,7 +3757,7 @@ app.get("/user/daily-login/status", requireAuth, async (_req, res) => {
 
   const prevDate = (prev as { claim_date?: string } | null)?.claim_date ?? null;
   const prevStreak = Number((prev as { streak_day?: number } | null)?.streak_day ?? 0) || 0;
-  const nextDay = prevDate === yesterdayDateOnly(today) ? (prevStreak >= 7 ? 1 : prevStreak + 1) : 1;
+  const nextDay = prevDate === yesterdayDateOnly(today) ? Math.min(prevStreak + 1, 7) : 1;
   const nextReward = DAILY_STREAK_REWARDS.find((r) => r.day === nextDay) ?? DAILY_STREAK_REWARDS[0]!;
   const role = await getUserMinecraftRoleForShop(user.userId);
   const flatCobbleBonusPerClaim = getDailyLoginFlatCobbleBonusPerClaim(role);
@@ -3819,9 +3819,22 @@ app.post("/user/daily-login/claim", requireAuth, async (_req, res) => {
     .eq("user_id", user.userId)
     .eq("claim_date", today)
     .maybeSingle();
-  if (existing && (existing as { status?: string }).status === "success") {
-    res.status(400).json({ error: "Already claimed today." });
-    return;
+  if (existing) {
+    const status = (existing as { status?: string }).status ?? "";
+    if (status === "success") {
+      res.status(400).json({ error: "Already claimed today." });
+      return;
+    }
+    if (status === "pending") {
+      res.status(409).json({ error: "Claim already processing. Try again shortly." });
+      return;
+    }
+    if (status === "failed") {
+      res
+        .status(409)
+        .json({ error: "Today's claim is in a failed state. Please contact staff to resolve it." });
+      return;
+    }
   }
 
   const { data: prev } = await supabase
@@ -3835,19 +3848,16 @@ app.post("/user/daily-login/claim", requireAuth, async (_req, res) => {
     .maybeSingle();
   const prevDate = (prev as { claim_date?: string } | null)?.claim_date ?? null;
   const prevStreak = Number((prev as { streak_day?: number } | null)?.streak_day ?? 0) || 0;
-  const streakDay = prevDate === yesterdayDateOnly(today) ? (prevStreak >= 7 ? 1 : prevStreak + 1) : 1;
+  const streakDay = prevDate === yesterdayDateOnly(today) ? Math.min(prevStreak + 1, 7) : 1;
   const reward = DAILY_STREAK_REWARDS.find((r) => r.day === streakDay) ?? DAILY_STREAK_REWARDS[0]!;
   const role = await getUserMinecraftRoleForShop(user.userId);
   const flatCobbleBonus = getDailyLoginFlatCobbleBonusPerClaim(role);
   const ticketBonus = getDailyLoginTicketBonusPerClaim(role);
-  const streakCobbleTotal =
-    reward.kind === "cobbledollars" ? reward.amount + flatCobbleBonus : reward.amount;
+  const streakCobbleTotal = reward.amount + flatCobbleBonus;
   const selectedRewardLabel =
-    reward.kind === "cobbledollars" && flatCobbleBonus > 0
+    flatCobbleBonus > 0
       ? `${reward.label} + ${flatCobbleBonus.toLocaleString()} Cobble$ rank`
-      : reward.kind === "item" && flatCobbleBonus > 0
-        ? `${reward.label} + ${flatCobbleBonus.toLocaleString()} Cobble$ rank`
-        : reward.label;
+      : reward.label;
 
   if (!existing) {
     const { error: insErr } = await supabase.from("user_daily_login_claims").insert({
@@ -3856,7 +3866,7 @@ app.post("/user/daily-login/claim", requireAuth, async (_req, res) => {
       streak_day: streakDay,
       selected_reward: selectedRewardLabel,
       reward_kind: reward.kind,
-      reward_amount: reward.kind === "cobbledollars" ? streakCobbleTotal : reward.amount,
+      reward_amount: streakCobbleTotal,
       status: "pending",
       updated_at: new Date().toISOString(),
     });
@@ -3873,31 +3883,19 @@ app.post("/user/daily-login/claim", requireAuth, async (_req, res) => {
   try {
     let message = "";
     let newBalance = 0;
-    if (reward.kind === "cobbledollars") {
-      newBalance = await incrementUserCurrency(user.userId, COBBLEDOLLARS_CURRENCY, reward.amount, {
+    newBalance = await incrementUserCurrency(user.userId, COBBLEDOLLARS_CURRENCY, reward.amount, {
+      kind: "daily_login",
+      detail: `Day ${streakDay} — streak (${reward.label})`,
+    });
+    if (flatCobbleBonus > 0) {
+      newBalance = await incrementUserCurrency(user.userId, COBBLEDOLLARS_CURRENCY, flatCobbleBonus, {
         kind: "daily_login",
-        detail: `Day ${streakDay} — streak (${reward.label})`,
+        detail: `Day ${streakDay} — rank daily bonus (${role})`,
       });
-      if (flatCobbleBonus > 0) {
-        newBalance = await incrementUserCurrency(user.userId, COBBLEDOLLARS_CURRENCY, flatCobbleBonus, {
-          kind: "daily_login",
-          detail: `Day ${streakDay} — rank daily bonus (${role})`,
-        });
-      }
-      message = `Day ${streakDay}: +${(reward.amount + flatCobbleBonus).toLocaleString()} Cobble$`;
-      if (flatCobbleBonus > 0) message += ` (streak + rank)`;
-      message += ` (new balance ${newBalance.toLocaleString()})`;
-    } else {
-      const totalQty = await incrementUserInventory(user.userId, reward.itemKey, reward.amount);
-      message = `Day ${streakDay}: +${reward.amount} ${reward.itemKey} in website inventory (total ${totalQty})`;
-      if (flatCobbleBonus > 0) {
-        newBalance = await incrementUserCurrency(user.userId, COBBLEDOLLARS_CURRENCY, flatCobbleBonus, {
-          kind: "daily_login",
-          detail: `Day ${streakDay} — rank daily bonus (${role})`,
-        });
-        message += ` · +${flatCobbleBonus.toLocaleString()} Cobble$ rank bonus (balance ${newBalance.toLocaleString()})`;
-      }
     }
+    message = `Day ${streakDay}: +${(reward.amount + flatCobbleBonus).toLocaleString()} Cobble$`;
+    if (flatCobbleBonus > 0) message += ` (streak + rank)`;
+    message += ` (new balance ${newBalance.toLocaleString()})`;
 
     if (ticketBonus > 0) {
       const tb = await incrementUserCurrency(user.userId, PVP_TICKETS_CURRENCY, ticketBonus, {
@@ -3913,7 +3911,7 @@ app.post("/user/daily-login/claim", requireAuth, async (_req, res) => {
         streak_day: streakDay,
         selected_reward: selectedRewardLabel,
         reward_kind: reward.kind,
-        reward_amount: reward.kind === "cobbledollars" ? streakCobbleTotal : reward.amount,
+        reward_amount: streakCobbleTotal,
         status: "success",
         claimed_at: new Date().toISOString(),
         error_message: null,
@@ -3941,7 +3939,7 @@ app.post("/user/daily-login/claim", requireAuth, async (_req, res) => {
         streak_day: streakDay,
         selected_reward: selectedRewardLabel,
         reward_kind: reward.kind,
-        reward_amount: reward.kind === "cobbledollars" ? streakCobbleTotal : reward.amount,
+        reward_amount: streakCobbleTotal,
         status: "failed",
         error_message: msg,
         updated_at: new Date().toISOString(),
@@ -3955,10 +3953,10 @@ app.post("/user/daily-login/claim", requireAuth, async (_req, res) => {
 // Ticket exchange: spend tickets for special ticket types
 const EXCHANGE_RATES: { to_currency: string; cost_tickets: number; label: string }[] = [
   { to_currency: "mythic tickets", cost_tickets: 20, label: "Mythic Tickets" },
-  { to_currency: "shiny mythic tickets", cost_tickets: 40, label: "Shiny Mythic Tickets" },
+  { to_currency: "shiny mythic tickets", cost_tickets: 80, label: "Shiny Mythic Tickets" },
   { to_currency: "legendary tickets", cost_tickets: 30, label: "Legend Tickets" },
-  { to_currency: "shiny legendary tickets", cost_tickets: 60, label: "Shiny Legend Tickets" },
-  { to_currency: "shiny paradox tickets", cost_tickets: 40, label: "Shiny Paradox Tickets" },
+  { to_currency: "shiny legendary tickets", cost_tickets: 90, label: "Shiny Legend Tickets" },
+  { to_currency: "shiny paradox tickets", cost_tickets: 80, label: "Shiny Paradox Tickets" },
 ];
 
 app.get("/user/exchange-rates", requireAuth, (_req, res) => {
