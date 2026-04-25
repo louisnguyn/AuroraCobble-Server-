@@ -1235,7 +1235,7 @@ export function Account() {
           <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-3">Pokemon Shop (Shiny)</h2>
           <div className="mb-6 pixel-well p-4">
             <p className="text-sm text-muted m-0 mb-3">Refresh in: {pokemonCountdown}</p>
-            <div className="space-y-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {pokemonOffers.map((offer) => (
                 <div key={offer.slot} className="flex items-center justify-between gap-3 rounded-lg border border-border/70 px-3 py-2">
                   <div className="min-w-0">

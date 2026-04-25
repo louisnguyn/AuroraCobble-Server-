@@ -131,17 +131,17 @@ export function getWebsiteShopDiscountPercent(roleKey: string): number {
  */
 export function getDailyLoginFlatCobbleBonusPerClaim(roleKey: string): number {
   const k = normalizeRoleKey(roleKey);
-  if (GRANT_ONLY_FLAT_SHOP_DISCOUNT_15.has(k)) return 50_000;
+  if (GRANT_ONLY_FLAT_SHOP_DISCOUNT_15.has(k)) return 85_000;
   const byRole: Record<string, number> = {
     [DEFAULT_MINECRAFT_ROLE]: 0,
-    noob: 20_000,
-    elite: 25_000,
-    pro: 30_000,
-    master: 40_000,
-    legend: 50_000,
-    ultimate: 70_000,
-    overlord: 85_000,
-    god: 100_000,
+    noob: 25_000,
+    elite: 40_000,
+    pro: 50_000,
+    master: 75_000,
+    legend: 100_000,
+    ultimate: 150_000,
+    overlord: 200_000,
+    god: 300_000,
   };
   return byRole[k] ?? 0;
 }

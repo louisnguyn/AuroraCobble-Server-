@@ -103,9 +103,9 @@ function parseRankedFeedLimit(raw: unknown): number {
 const COBBLEDOLLARS_PUBLIC_CACHE_TTL_MS = 90_000;
 /** PVP daily payout: only top 3 on the synced leaderboard (website usernames matched). */
 const PVP_DAILY_REWARDS: Record<number, number> = {
-  1: 50_000,
-  2: 45_000,
-  3: 40_000,
+  1: 100_000,
+  2: 75_000,
+  3: 50_000,
 };
 /** Bonus website normal tickets (`user_currency` `tickets`) per rank each daily payout. */
 const PVP_DAILY_TICKETS_BY_RANK: Record<number, number> = {
@@ -2760,19 +2760,19 @@ app.post("/user/pvp-top-prediction", requireAuth, async (req, res) => {
 const COBBLEDOLLARS_CURRENCY = "cobbledollars";
 const DAILY_RESET_TIMEZONE = "Asia/Ho_Chi_Minh";
 const DAILY_STREAK_REWARDS = [
-  { day: 1, kind: "cobbledollars", amount: 25_000, label: "Cobble$ +25,000" },
-  { day: 2, kind: "cobbledollars", amount: 35_000, label: "Cobble$ +35,000" },
-  { day: 3, kind: "cobbledollars", amount: 45_000, label: "Cobble$ +45,000" },
-  { day: 4, kind: "cobbledollars", amount: 50_000, label: "Cobble$ +50,000" },
-  { day: 5, kind: "cobbledollars", amount: 60_000, label: "Cobble$ +60,000" },
-  { day: 6, kind: "cobbledollars", amount: 70_000, label: "Cobble$ +70,000" },
-  { day: 7, kind: "cobbledollars", amount: 100_000, label: "Cobble$ +100,000" },
+  { day: 1, kind: "cobbledollars", amount: 50_000, label: "Cobble$ +50,000" },
+  { day: 2, kind: "cobbledollars", amount: 60_000, label: "Cobble$ +60,000" },
+  { day: 3, kind: "cobbledollars", amount: 70_000, label: "Cobble$ +70,000" },
+  { day: 4, kind: "cobbledollars", amount: 80_000, label: "Cobble$ +80,000" },
+  { day: 5, kind: "cobbledollars", amount: 90_000, label: "Cobble$ +90,000" },
+  { day: 6, kind: "cobbledollars", amount: 100_000, label: "Cobble$ +100,000" },
+  { day: 7, kind: "cobbledollars", amount: 150_000, label: "Cobble$ +150,000" },
 ] as const;
 const SHOP_ITEMS = [
-  { itemKey: "exp_candy_xl", label: "EXP Candy XL", cost: 60_000 },
-  { itemKey: "ancient_origin_ball", label: "Ancient Origin Ball", cost: 500_000 },
-  { itemKey: "master_ball", label: "Master Ball", cost: 300_000 },
-  { itemKey: "gold_bottle_cap", label: "Gold Bottle Cap", cost: 5_000_000 },
+  { itemKey: "exp_candy_xl", label: "EXP Candy XL", cost: 70_000 },
+  { itemKey: "ancient_origin_ball", label: "Ancient Origin Ball", cost: 1_000_000 },
+  { itemKey: "master_ball", label: "Master Ball", cost: 500_000 },
+  { itemKey: "gold_bottle_cap", label: "Gold Bottle Cap", cost: 8_000_000 },
 ] as const;
 
 /** Cobble$ after integer percent-off (rank shop discount). */
@@ -2794,28 +2794,35 @@ async function getUserMinecraftRoleForShop(userId: number): Promise<string> {
 const POKEMON_SHOP_REFRESH_HOURS = 12;
 const POKEMON_SHOP_OFFER_COUNT = 4;
 const POKEMON_SHOP_CATEGORIES = {
-  starter: {
-    price: 1_000_000,
-    species: [
-      "bulbasaur", "charmander", "squirtle", "chikorita", "cyndaquil", "totodile", "treecko",
-      "torchic", "mudkip", "turtwig", "chimchar", "piplup", "snivy", "tepig", "oshawott",
-      "chespin", "fennekin", "froakie", "rowlet", "litten", "popplio", "grookey", "scorbunny",
-      "sobble", "sprigatito", "fuecoco", "quaxly",
-    ],
-  },
   mythic: {
-    price: 5_000_000,
+    price: 7_500_000,
     species: [
       "mew", "celebi", "jirachi", "deoxys", "manaphy", "phione", "darkrai", "shaymin",
       "arceus", "victini", "keldeo", "meloetta", "genesect", "diancie", "hoopa", "volcanion",
-      "magearna", "marshadow", "zeraora", "meltan", "melmetal", "zarude", "pecharunt",
+      "magearna", "marshadow", "zeraora", "meltan", "melmetal", "zarude", "pecharunt"
     ],
   },
   pseudo_legend: {
-    price: 2_000_000,
+    price: 3_000_000,
     species: [
       "dragonite", "tyranitar", "salamence", "metagross", "garchomp", "hydreigon",
-      "goodra", "kommo-o", "dragapult", "baxcalibur",
+      "goodra", "kommo-o", "dragapult", "baxcalibur"
+    ],
+  },
+  paradox: {
+    price: 4_000_000,
+    species: [
+      "greattusk", "screamtail", "brutebonnet", "fluttermane", "slitherwing", "sandyshocks",
+      "irontreads", "ironbundle", "ironhands", "ironjugulis", "ironmoth", "ironthorns",
+      "roaringmoon", "ironvaliant", "walkingwake", "ironleaves", "gougingfire", "ragingbolt",
+      "ironboulder", "ironcrown"
+    ],
+  },
+  ultra_beast: {
+    price: 5_000_000,
+    species: [
+      "nihilego", "buzzwole", "pheromosa", "xurkitree", "celesteela", "kartana", "guzzlord",
+      "poipole", "naganadel", "stakataka", "blacephalon"
     ],
   },
   legend: {
@@ -2828,7 +2835,7 @@ const POKEMON_SHOP_CATEGORIES = {
       "landorus", "kyurem", "xerneas", "yveltal", "zygarde", "tapukoko", "tapulele",
       "tapubulu", "tapufini", "cosmog", "cosmoem", "solgaleo", "lunala", "necrozma",
       "zacian", "zamazenta", "eternatus", "kubfu", "urshifu", "regieleki", "regidrago",
-      "glastrier", "spectrier", "calyrex", "koraidon", "miraidon",
+      "glastrier", "spectrier", "calyrex", "koraidon", "miraidon"
     ],
   },
 } as const;
@@ -2864,12 +2871,15 @@ function buildPokemonShopOffers(windowStartIso: string) {
   const categories = Object.keys(POKEMON_SHOP_CATEGORIES) as PokemonShopCategory[];
   const rng = mulberry32(hashString(`pokemon-shop:${windowStartIso}`));
   const categoryPool = [...categories];
-  const pickedCategories: PokemonShopCategory[] = [];
-  while (pickedCategories.length < Math.min(POKEMON_SHOP_OFFER_COUNT, categoryPool.length)) {
-    const idx = Math.floor(rng() * categoryPool.length);
-    const [cat] = categoryPool.splice(idx, 1);
-    if (cat) pickedCategories.push(cat);
+  // Fisher-Yates shuffle so category order is random but complete.
+  for (let i = categoryPool.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(rng() * (i + 1));
+    const a = categoryPool[i]!;
+    const b = categoryPool[j]!;
+    categoryPool[i] = b;
+    categoryPool[j] = a;
   }
+  const pickedCategories = categoryPool.slice(0, Math.min(POKEMON_SHOP_OFFER_COUNT, categoryPool.length));
   const offers = pickedCategories.map((category, i) => {
     const def = POKEMON_SHOP_CATEGORIES[category];
     const pickIdx = Math.floor(rng() * def.species.length);
@@ -2883,6 +2893,21 @@ function buildPokemonShopOffers(windowStartIso: string) {
       label: `Shiny ${species}`,
     };
   });
+  // Safety net: always return requested offer count (reuse random categories if needed).
+  while (offers.length < POKEMON_SHOP_OFFER_COUNT && categories.length > 0) {
+    const category = categories[Math.floor(rng() * categories.length)]!;
+    const def = POKEMON_SHOP_CATEGORIES[category];
+    const pickIdx = Math.floor(rng() * def.species.length);
+    const species = def.species[pickIdx] ?? def.species[0]!;
+    offers.push({
+      slot: offers.length + 1,
+      category,
+      species,
+      shiny: true,
+      price: def.price,
+      label: `Shiny ${species}`,
+    });
+  }
   return offers;
 }
 
