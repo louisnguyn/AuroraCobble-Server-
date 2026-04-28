@@ -192,6 +192,8 @@ export function Gacha() {
   const [exchanging, setExchanging] = useState<string | null>(null)
   const [claimingId, setClaimingId] = useState<number | null>(null)
   const [claimPending, setClaimPending] = useState<{ pullId: number; rewardLabel: string } | null>(null)
+  const [pullCooldownUntilMs, setPullCooldownUntilMs] = useState(0)
+  const [nowMs, setNowMs] = useState(Date.now())
   const pendingRewardRef = useRef<GachaRewardResult | null>(null)
   const stripViewportRef = useRef<HTMLDivElement>(null)
   const spinSettledRef = useRef(false)
@@ -333,6 +335,12 @@ export function Gacha() {
   }
 
   useEffect(() => {
+    if (pullCooldownUntilMs <= Date.now()) return
+    const id = window.setInterval(() => setNowMs(Date.now()), 250)
+    return () => window.clearInterval(id)
+  }, [pullCooldownUntilMs])
+
+  useEffect(() => {
     if (lootPhase !== 'spinning') return
     const ms = Math.ceil(GACHA_SPIN_SEC * 1000) + 600
     const t = window.setTimeout(() => completeLootSpin(), ms)
@@ -341,6 +349,11 @@ export function Gacha() {
 
   const handlePull = async () => {
     if (!selectedPool || pulling || lootPhase !== 'idle') return
+    const cooldownLeftSec = Math.max(0, Math.ceil((pullCooldownUntilMs - nowMs) / 1000))
+    if (cooldownLeftSec > 0) {
+      setError(`Please wait ${cooldownLeftSec}s before opening again.`)
+      return
+    }
     if (!canUseGacha) {
       setError('Cần xác minh tài khoản trên web để quay gacha (admin được miễn).')
       return
@@ -373,6 +386,7 @@ export function Gacha() {
       setStripItems(items)
       setWinIndex(wIdx)
       setLootPhase('spinning')
+      setPullCooldownUntilMs(Date.now() + 10_000)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Pull failed')
       setLootPhase('idle')
@@ -384,6 +398,7 @@ export function Gacha() {
   const cost = selectedPool?.config && typeof (selectedPool.config as { cost?: number }).cost === 'number'
     ? (selectedPool.config as { cost: number }).cost
     : 100
+  const cooldownLeftSec = Math.max(0, Math.ceil((pullCooldownUntilMs - nowMs) / 1000))
   const currencyType = (selectedPool?.config as { currency_type?: string } | undefined)?.currency_type ?? 'gems'
 
   if (!isAuthenticated) {
@@ -528,11 +543,18 @@ export function Gacha() {
                   !canUseGacha ||
                   pulling ||
                   lootPhase !== 'idle' ||
+                  cooldownLeftSec > 0 ||
                   (balance !== null && balance < cost)
                 }
                 className="w-full sm:w-auto min-w-[180px] py-3 px-6 pixel-btn-primary disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#1f1c18] touch-manipulation"
               >
-                {pulling ? (lootPhase === 'spinning' ? 'Spinning…' : 'Opening…') : 'Open loot'}
+                {pulling
+                  ? lootPhase === 'spinning'
+                    ? 'Spinning…'
+                    : 'Opening…'
+                  : cooldownLeftSec > 0
+                    ? `Cooldown ${cooldownLeftSec}s`
+                    : 'Open loot'}
               </button>
 
               {poolRewards.length > 0 && (
