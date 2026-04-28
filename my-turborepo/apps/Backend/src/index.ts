@@ -563,7 +563,7 @@ registerTournamentRoutes(app, { requireAuth, requireAdmin });
 
 const TEAM_AI_COOLDOWN_MS = 12 * 60 * 60 * 1000;
 const GACHA_PULL_COOLDOWN_MS = 10_000;
-const GACHA_PULL_DAILY_LIMIT = 25;
+const GACHA_PULL_DAILY_LIMIT = 30;
 const gachaPullCooldownUntilByUser = new Map<number, number>();
 
 app.post("/team/analyze-ai", requireAuth, async (req, res) => {

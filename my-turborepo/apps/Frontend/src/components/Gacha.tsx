@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import {
   fetchGachaPools,
@@ -335,10 +335,11 @@ export function Gacha() {
   }
 
   useEffect(() => {
+    if (lootPhase !== 'idle') return
     if (pullCooldownUntilMs <= Date.now()) return
-    const id = window.setInterval(() => setNowMs(Date.now()), 250)
+    const id = window.setInterval(() => setNowMs(Date.now()), 1000)
     return () => window.clearInterval(id)
-  }, [pullCooldownUntilMs])
+  }, [pullCooldownUntilMs, lootPhase])
 
   useEffect(() => {
     if (lootPhase !== 'spinning') return
@@ -399,6 +400,10 @@ export function Gacha() {
     ? (selectedPool.config as { cost: number }).cost
     : 100
   const cooldownLeftSec = Math.max(0, Math.ceil((pullCooldownUntilMs - nowMs) / 1000))
+  const resultSpriteUrls = useMemo(
+    () => (lastReward ? gachaShowdownSpriteUrls(lastReward.reward.reward_type) : null),
+    [lastReward?.reward.reward_type]
+  )
   const currencyType = (selectedPool?.config as { currency_type?: string } | undefined)?.currency_type ?? 'gems'
 
   if (!isAuthenticated) {
@@ -606,7 +611,7 @@ export function Gacha() {
                         <div className="w-[120px] h-[120px] flex items-center justify-center pixel-well rounded-sm overflow-hidden">
                           <GachaStripSprite
                             label={lastReward.reward.reward_type}
-                            urls={gachaShowdownSpriteUrls(lastReward.reward.reward_type)}
+                            urls={resultSpriteUrls}
                             imgClassName="max-h-[112px] max-w-[112px] w-auto h-auto object-contain"
                           />
                         </div>
