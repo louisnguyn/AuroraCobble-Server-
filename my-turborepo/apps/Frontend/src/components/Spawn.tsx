@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { fetchSpawnBoss, fetchSpawnPokemon } from '../api'
 import type { SpawnBossResponse, SpawnPokemonResponse } from '../types'
+import { CustomSelect } from './CustomSelect'
 
 type SpawnSection = 'pokemon' | 'boss'
 
@@ -221,32 +222,22 @@ export function Spawn() {
               placeholder="Search Pokemon..."
               className="min-w-[220px] flex-1 px-3 py-2.5 pixel-field text-base placeholder:text-muted/70"
             />
-            <select
+            <CustomSelect
               value={generation}
-              onChange={(e) => setGeneration(e.target.value)}
+              onChange={setGeneration}
               disabled={loadingFilters}
-              aria-label="Filter by generation"
-              className="min-w-[180px] pixel-field px-3 py-2.5 text-base text-[#ebe4d6] cursor-pointer"
-            >
-              {generationOptions.map((o) => (
-                <option key={o.value || '__all-gen'} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-            <select
+              options={generationOptions.map((o) => ({ value: o.value, label: o.label }))}
+              className="min-w-[180px]"
+              buttonClassName="min-w-[180px] pixel-field px-3 py-2.5 text-base text-[#ebe4d6] cursor-pointer"
+            />
+            <CustomSelect
               value={source}
-              onChange={(e) => setSource(e.target.value)}
+              onChange={setSource}
               disabled={loadingFilters}
-              aria-label="Filter by source"
-              className="min-w-[180px] pixel-field px-3 py-2.5 text-base text-[#ebe4d6] cursor-pointer"
-            >
-              {sourceOptions.map((o) => (
-                <option key={o.value || '__all-src'} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+              options={sourceOptions.map((o) => ({ value: o.value, label: o.label }))}
+              className="min-w-[180px]"
+              buttonClassName="min-w-[180px] pixel-field px-3 py-2.5 text-base text-[#ebe4d6] cursor-pointer"
+            />
           </div>
 
           {loading ? (

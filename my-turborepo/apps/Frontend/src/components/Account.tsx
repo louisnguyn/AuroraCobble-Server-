@@ -34,6 +34,7 @@ import {
 } from '../authApi'
 import { AuthModal } from './AuthModal'
 import { CobbleWebsiteWallet } from './CobbleWebsiteWallet.tsx'
+import { CustomSelect } from './CustomSelect.tsx'
 import { isAccountVerified, VerifiedAccountBadge } from './VerifiedAccountBadge.tsx'
 import { RoleBadge } from './RoleBadge.tsx'
 
@@ -1015,19 +1016,19 @@ export function Account() {
                       return (
                         <label key={label} className="block">
                           <span className="block text-xs text-muted mb-1">{label} place</span>
-                          <select
+                          <CustomSelect
                             value={value}
-                            onChange={(ev) => set(ev.target.value)}
-                            className="w-full rounded-lg border border-border bg-[#0f0a1a]/80 px-3 py-2 text-sm text-[#e2e8f0]"
+                            onChange={(v) => set(v)}
                             disabled={predictBusy}
-                          >
-                            <option value="">— Select —</option>
-                            {pvpPredict.rankedPlayers.map((p) => (
-                              <option key={`full-${label}-${p.rank}-${p.playerName}`} value={p.playerName}>
-                                #{p.rank} {p.playerName}
-                              </option>
-                            ))}
-                          </select>
+                            options={[
+                              { value: '', label: '— Select —' },
+                              ...pvpPredict.rankedPlayers.map((p) => ({
+                                value: p.playerName,
+                                label: `#${p.rank} ${p.playerName}`,
+                              })),
+                            ]}
+                            buttonClassName="w-full rounded-lg border border-border bg-[#0f0a1a]/80 px-3 py-2 text-sm text-[#e2e8f0]"
+                          />
                         </label>
                       )
                     })}
@@ -1079,19 +1080,19 @@ export function Account() {
                         </p>
                         <label className="block">
                           <span className="block text-xs text-muted mb-1">Player</span>
-                          <select
+                          <CustomSelect
                             value={pick}
-                            onChange={(ev) => setPick(ev.target.value)}
-                            className="w-full rounded-lg border border-border bg-[#0f0a1a]/80 px-3 py-2 text-sm text-[#e2e8f0]"
+                            onChange={(v) => setPick(v)}
                             disabled={predictBusy}
-                          >
-                            <option value="">— Select —</option>
-                            {pvpPredict.rankedPlayers.map((p) => (
-                              <option key={`only-${rank}-${p.rank}-${p.playerName}`} value={p.playerName}>
-                                #{p.rank} {p.playerName}
-                              </option>
-                            ))}
-                          </select>
+                            options={[
+                              { value: '', label: '— Select —' },
+                              ...pvpPredict.rankedPlayers.map((p) => ({
+                                value: p.playerName,
+                                label: `#${p.rank} ${p.playerName}`,
+                              })),
+                            ]}
+                            buttonClassName="w-full rounded-lg border border-border bg-[#0f0a1a]/80 px-3 py-2 text-sm text-[#e2e8f0]"
+                          />
                         </label>
                         <label className="block">
                           <span className="block text-xs text-muted mb-1">Stake (0 = skip)</span>
@@ -1455,18 +1456,19 @@ export function Account() {
               <form onSubmit={handleSubmitGrant} className="space-y-2">
                 <label className="block text-sm text-[#e2e8f0]">
                   Rank đã chọn
-                  <select
+                  <CustomSelect
                     value={grantRolePick}
-                    onChange={(e) => setGrantRolePick(e.target.value)}
-                    className="mt-1 block w-full rounded border border-border bg-[#0f172a] px-2 py-2 text-base text-[#e2e8f0]"
-                  >
-                    <option value="">— Chọn ở danh sách trên hoặc tại đây —</option>
-                    {(roleCat?.grantOnly ?? []).map((g) => (
-                      <option key={g.key} value={g.key}>
-                        {g.label} ({g.key})
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(v) => setGrantRolePick(v)}
+                    options={[
+                      { value: '', label: '— Chọn ở danh sách trên hoặc tại đây —' },
+                      ...(roleCat?.grantOnly ?? []).map((g) => ({
+                        value: g.key,
+                        label: `${g.label} (${g.key})`,
+                      })),
+                    ]}
+                    className="mt-1"
+                    buttonClassName="block w-full rounded border border-border bg-[#0f172a] px-2 py-2 text-base text-[#e2e8f0]"
+                  />
                 </label>
                 <label className="block text-sm text-[#e2e8f0]">
                   Lời nhắn (tuỳ chọn)
@@ -1507,9 +1509,10 @@ export function Account() {
         <>
           {isAuthenticated && (
             <div className="mb-8 pixel-well p-4 space-y-3">
-              <h2 className="text-lg font-medium text-[#e2e8f0] m-0">Xác minh tài khoản (verified)</h2>
+              <h2 className="text-lg font-medium text-[#e2e8f0] m-0">Account verification (verified)</h2>
               <p className="text-xs text-muted m-0">
-                Sau khi được duyệt, bạn có huy hiệu verified và có thể dùng phân tích AI trong Team Builder, mua item, pokemon trên website, gacha và tham gia giải đấu tournament mỗi tháng.
+                Once approved, you receive the verified badge and can use AI analysis in Team Builder, buy items and
+                Pokemon on the website, use gacha, and join the monthly tournament.
               </p>
               {vError && !vLoading && (
                 <p className="text-sm text-red-400 m-0">
@@ -1517,7 +1520,7 @@ export function Account() {
                 </p>
               )}
               {user?.is_admin ? (
-                <p className="text-sm text-emerald-200/90 m-0">Tài khoản quản trị không cần gửi yêu cầu.</p>
+                <p className="text-sm text-emerald-200/90 m-0">Admin accounts do not need to submit a request.</p>
               ) : vLoading ? (
                 <p className="text-sm text-muted m-0">Đang tải trạng thái…</p>
               ) : vStatus?.verified || isAccountVerified(user) ? (

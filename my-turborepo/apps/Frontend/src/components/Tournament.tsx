@@ -7,6 +7,7 @@ import {
   type TournamentBracketSlot,
 } from '../authApi'
 import { fetchPokemonInfo, showdownHomeSpriteUrl } from '../pokemonApi'
+import { CustomSelect } from './CustomSelect'
 
 /** Internal keys (qual-0, qf-2, …) → viewer labels (Qualifier 1, Quarter-final 3, …). */
 function formatPendingMatchLabel(matchKey: string): string {
@@ -253,28 +254,28 @@ export function Tournament({
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
           <label className="flex flex-col gap-1 text-xs text-muted min-w-[min(100%,280px)] sm:max-w-md">
             Bracket
-            <select
+            <CustomSelect
               value={slugInput.trim().toLowerCase()}
-              onChange={(e) => {
-                const s = e.target.value
+              onChange={(s) => {
                 setSlugInput(s)
                 onSlugChange?.(s)
               }}
-              className="pixel-field px-3 py-2.5 text-base w-full"
-            >
-              <option value="">Choose a tournament…</option>
-              {slugInput.trim() &&
-              !catalog.some((c) => c.slug.toLowerCase() === slugInput.trim().toLowerCase()) ? (
-                <option value={slugInput.trim().toLowerCase()}>
-                  {slugInput.trim()} (not in list — may be unpublished)
-                </option>
-              ) : null}
-              {catalog.map((t) => (
-                <option key={t.slug} value={t.slug.toLowerCase()}>
-                  {t.title}
-                </option>
-              ))}
-            </select>
+              options={[
+                { value: '', label: 'Choose a tournament…' },
+                ...(slugInput.trim() &&
+                !catalog.some((c) => c.slug.toLowerCase() === slugInput.trim().toLowerCase())
+                  ? [
+                      {
+                        value: slugInput.trim().toLowerCase(),
+                        label: `${slugInput.trim()} (not in list — may be unpublished)`,
+                      },
+                    ]
+                  : []),
+                ...catalog.map((t) => ({ value: t.slug.toLowerCase(), label: t.title })),
+              ]}
+              className="w-full"
+              buttonClassName="pixel-field px-3 py-2.5 text-base w-full"
+            />
           </label>
           <button
             type="button"

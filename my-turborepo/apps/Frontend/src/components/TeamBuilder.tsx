@@ -42,6 +42,7 @@ import {
   type MoveListEntry,
   type PokemonListEntry,
 } from '../pokemonApi'
+import { CustomSelect } from './CustomSelect'
 
 function formatSpeciesLabel(apiSlug: string): string {
   return apiSlug
@@ -134,6 +135,70 @@ function TeamBuilderItemIcon({ itemName, className = 'w-7 h-7' }: { itemName: st
   )
 }
 
+function AutoCompleteField({
+  label,
+  value,
+  onChange,
+  options,
+  placeholder,
+  className = '',
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  options: string[]
+  placeholder?: string
+  className?: string
+}) {
+  const [open, setOpen] = useState(false)
+  const q = value.trim().toLowerCase()
+  const suggestions = useMemo(() => {
+    if (!q) return options.slice(0, 10)
+    const starts = options.filter((o) => o.toLowerCase().startsWith(q))
+    const includes = options.filter((o) => !o.toLowerCase().startsWith(q) && o.toLowerCase().includes(q))
+    return [...starts, ...includes].slice(0, 10)
+  }, [options, q])
+
+  return (
+    <div className={`relative ${className}`}>
+      <label className="text-xs text-muted block mb-1">{label}</label>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value)
+          setOpen(true)
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => {
+          window.setTimeout(() => setOpen(false), 120)
+        }}
+        placeholder={placeholder}
+        className="w-full pixel-field px-2 py-2 text-sm"
+        autoComplete="off"
+      />
+      {open && suggestions.length > 0 && (
+        <div className="absolute z-40 mt-1 w-full max-h-48 overflow-y-auto rounded-[10px] border border-border/70 bg-[#121120] shadow-[0_14px_28px_rgba(3,3,10,0.6)] p-1">
+          {suggestions.map((s) => (
+            <button
+              key={s}
+              type="button"
+              className="w-full text-left px-2 py-1.5 rounded text-sm text-[#dcd8f3] hover:bg-[#2a2740] hover:text-[#f2f0ff]"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                onChange(s)
+                setOpen(false)
+              }}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function SlotFormFields({
   draft,
   setDraft,
@@ -152,11 +217,6 @@ function SlotFormFields({
   slotNumber: number
 }) {
   const [m0, m1, m2, m3] = normalizeSlotMovesForForm(draft.moves)
-  const speciesDatalistId = `tb-species-${slotNumber}`
-  const itemDatalistId = `tb-item-${slotNumber}`
-  const abilityDatalistId = `tb-ability-${slotNumber}`
-  const teraDatalistId = `tb-tera-${slotNumber}`
-  const moveDatalistId = `tb-moves-${slotNumber}`
 
   const patch = (partial: Partial<TeamBuildSlot>) =>
     setDraft((prev) => (prev ? { ...prev, ...partial } : null))
@@ -171,109 +231,72 @@ function SlotFormFields({
       <p className="text-sm font-semibold text-[#f5efe6] m-0">Edit slot {slotNumber}</p>
       <div className="grid gap-2 sm:grid-cols-2">
         <div className="sm:col-span-2">
-          <label className="text-xs text-muted block mb-1">Species</label>
-          <input
-            type="text"
+          <AutoCompleteField
+            label="Species"
             value={draft.species}
-            onChange={(e) => {
-              const species = e.target.value
+            onChange={(species) =>
               patch({
                 species,
                 speciesSlug: species.trim() ? speciesDisplayToSlug(species) : '',
               })
-            }}
-            list={speciesDatalistId}
+            }
+            options={speciesOptions.map((p) => formatSpeciesLabel(p.name))}
             placeholder="e.g. Great Tusk"
-            className="w-full pixel-field px-2 py-2 text-sm"
-            autoComplete="off"
           />
-          <datalist id={speciesDatalistId}>
-            {speciesOptions.map((p) => (
-              <option key={p.id} value={formatSpeciesLabel(p.name)} />
-            ))}
-          </datalist>
         </div>
         <div className="sm:col-span-2">
-          <label className="text-xs text-muted block mb-1">Item</label>
-          <input
-            type="text"
+          <AutoCompleteField
+            label="Item"
             value={draft.item}
-            onChange={(e) => patch({ item: e.target.value })}
-            list={itemDatalistId}
+            onChange={(item) => patch({ item })}
+            options={itemOptions.map((it) => formatSpeciesLabel(it.name))}
             placeholder="Held item"
-            className="w-full pixel-field px-2 py-2 text-sm"
-            autoComplete="off"
           />
-          <datalist id={itemDatalistId}>
-            {itemOptions.map((it) => (
-              <option key={it.name} value={formatSpeciesLabel(it.name)} />
-            ))}
-          </datalist>
         </div>
         <div>
-          <label className="text-xs text-muted block mb-1">Ability</label>
-          <input
-            type="text"
+          <AutoCompleteField
+            label="Ability"
             value={draft.ability ?? ''}
-            onChange={(e) =>
-              patch({ ability: e.target.value.trim() ? e.target.value : null })
+            onChange={(ability) =>
+              patch({ ability: ability.trim() ? ability : null })
             }
-            list={abilityDatalistId}
+            options={abilityOptions.map((a) => formatSpeciesLabel(a.name))}
             placeholder="e.g. Protosynthesis"
-            className="w-full pixel-field px-2 py-2 text-sm"
-            autoComplete="off"
           />
-          <datalist id={abilityDatalistId}>
-            {abilityOptions.map((a) => (
-              <option key={a.name} value={formatSpeciesLabel(a.name)} />
-            ))}
-          </datalist>
         </div>
         <div>
-          <label className="text-xs text-muted block mb-1">Tera Type</label>
-          <input
-            type="text"
+          <AutoCompleteField
+            label="Tera Type"
             value={draft.teraType ?? ''}
-            onChange={(e) =>
-              patch({ teraType: e.target.value.trim() ? e.target.value : null })
+            onChange={(teraType) =>
+              patch({ teraType: teraType.trim() ? teraType : null })
             }
-            list={teraDatalistId}
+            options={TERA_TYPE_OPTIONS}
             placeholder="e.g. Ground"
-            className="w-full pixel-field px-2 py-2 text-sm"
-            autoComplete="off"
           />
-          <datalist id={teraDatalistId}>
-            {TERA_TYPE_OPTIONS.map((t) => (
-              <option key={t} value={t} />
-            ))}
-          </datalist>
         </div>
       </div>
       <div>
         <p className="text-xs text-muted m-0 mb-1">Moves</p>
         <div className="grid gap-2 sm:grid-cols-2">
-          {[0, 1, 2, 3].map((idx) => (
-            <input
+          {[0, 1, 2, 3].map((idx) => {
+            const currentVal = [m0, m1, m2, m3][idx] ?? ''
+            return (
+              <AutoCompleteField
               key={idx}
-              type="text"
-              value={[m0, m1, m2, m3][idx]}
-              onChange={(e) => {
+              label={`Move ${idx + 1}`}
+              value={currentVal}
+              onChange={(nextVal) => {
                 const next = [m0, m1, m2, m3]
-                next[idx] = e.target.value
+                next[idx] = nextVal
                 setMovesFromFour(next[0]!, next[1]!, next[2]!, next[3]!)
               }}
-              list={moveDatalistId}
               placeholder={`Move ${idx + 1}`}
-              className="w-full pixel-field px-2 py-2 text-sm"
-              autoComplete="off"
+              options={moveOptions.map((m) => formatSpeciesLabel(m.name))}
             />
-          ))}
+            )
+          })}
         </div>
-        <datalist id={moveDatalistId}>
-          {moveOptions.map((m) => (
-            <option key={m.name} value={formatSpeciesLabel(m.name)} />
-          ))}
-        </datalist>
       </div>
     </div>
   )
@@ -698,35 +721,37 @@ export function TeamBuilder() {
         </p>
       </header>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <button type="button" onClick={newTeam} className="pixel-btn text-sm py-2 px-3">
+      <div className="flex flex-wrap items-end gap-3">
+        <button type="button" onClick={newTeam} className="pixel-btn text-sm h-11 px-4">
           New team
         </button>
-        <button type="button" onClick={exportPaste} className="pixel-btn text-sm py-2 px-3">
+        <button type="button" onClick={exportPaste} className="pixel-btn text-sm h-11 px-4">
           Copy current team
         </button>
         {canUseTeamAi ? (
           <>
-            <div className="flex flex-wrap items-center gap-2">
-              <label htmlFor="tb-ai-lang" className="text-xs text-muted whitespace-nowrap m-0">
+            <div className="flex flex-col gap-1 min-w-[240px] sm:min-w-[300px]">
+              <label htmlFor="tb-ai-lang" className="text-xs text-muted whitespace-nowrap m-0 px-1">
                 AI language / Ngôn ngữ
               </label>
-              <select
+              <CustomSelect
                 id="tb-ai-lang"
                 value={aiLang}
-                onChange={(e) => persistAiLang(e.target.value === 'vi' ? 'vi' : 'en')}
+                onChange={(v) => persistAiLang(v === 'vi' ? 'vi' : 'en')}
                 disabled={aiLoading}
-                className="pixel-field text-sm py-1.5 px-2 min-w-[9rem] disabled:opacity-60"
-              >
-                <option value="en">English</option>
-                <option value="vi">Tiếng Việt</option>
-              </select>
+                options={[
+                  { value: 'en', label: 'English' },
+                  { value: 'vi', label: 'Tiếng Việt' },
+                ]}
+                className="w-full"
+                buttonClassName="pixel-field text-sm h-11 px-3 w-full disabled:opacity-60"
+              />
             </div>
             <button
               type="button"
               onClick={() => void runTeamAnalyseByAi()}
               disabled={aiLoading}
-              className="pixel-btn-primary text-sm py-2 px-3 disabled:opacity-60"
+              className="pixel-btn-primary text-sm h-11 px-4 disabled:opacity-60"
             >
               {aiLoading
                 ? aiLang === 'vi'

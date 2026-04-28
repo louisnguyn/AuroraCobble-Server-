@@ -40,6 +40,81 @@ const PAGES: { id: Page; label: string }[] = [
   { id: 'tournament', label: 'Tournament' },
 ]
 
+function NavIcon({ page }: { page: Page }) {
+  const cls = 'w-[18px] h-[18px] shrink-0 opacity-90'
+  switch (page) {
+    case 'main':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={cls}>
+          <path d="M3 11.5 12 4l9 7.5" />
+          <path d="M5.5 10.5V20h13V10.5" />
+        </svg>
+      )
+    case 'leaderboard':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={cls}>
+          <path d="M7 18V9m5 9V6m5 12v-7" />
+          <path d="M4 20h16" />
+        </svg>
+      )
+    case 'usage':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={cls}>
+          <path d="M4 13h4l2-6 4 10 2-4h4" />
+        </svg>
+      )
+    case 'wiki':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={cls}>
+          <path d="M4 5h10a3 3 0 0 1 3 3v11H7a3 3 0 0 0-3 3V5z" />
+          <path d="M17 19h3V8a3 3 0 0 0-3-3" />
+        </svg>
+      )
+    case 'rules':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={cls}>
+          <path d="M8 4h10v16H8l-2-2V6l2-2Z" />
+          <path d="M10 9h6M10 13h6" />
+        </svg>
+      )
+    case 'teambuilder':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={cls}>
+          <path d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z" />
+          <path d="M4 20a8 8 0 0 1 16 0" />
+        </svg>
+      )
+    case 'gacha':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={cls}>
+          <circle cx="12" cy="12" r="8" />
+          <path d="M12 4v16M4 12h16" />
+        </svg>
+      )
+    case 'spawn':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={cls}>
+          <path d="M12 3v18M3 12h18" />
+          <circle cx="12" cy="12" r="3" />
+        </svg>
+      )
+    case 'account':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={cls}>
+          <circle cx="12" cy="8" r="4" />
+          <path d="M4 20a8 8 0 0 1 16 0" />
+        </svg>
+      )
+    case 'tournament':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={cls}>
+          <path d="M7 4h10v4a5 5 0 0 1-10 0V4Z" />
+          <path d="M9 17h6M12 13v4" />
+        </svg>
+      )
+  }
+}
+
 function AppContent() {
   const [page, setPage] = useState<Page>('main')
   const [menuOpen, setMenuOpen] = useState(false)
@@ -120,15 +195,21 @@ function AppContent() {
       <nav
         className={`fixed top-0 right-0 w-[min(280px,85vw)] max-w-full h-screen py-16 px-2 pb-6 pixel-drawer z-40 overflow-y-auto transition-transform duration-300 ease-out md:w-[260px] ${menuOpen ? 'translate-x-0' : 'translate-x-full'}`}
       >
+        <p className="sidebar-section-label px-3 mb-2">User</p>
         <ul className="list-none m-0 p-0">
           {PAGES.map(({ id, label }) => (
             <li key={id} className="m-0 mb-1.5">
               <button
                 type="button"
-                className={`block w-full py-3 px-4 text-left text-base border-none cursor-pointer pixel-pill ${page === id ? 'pixel-pill-active-gold' : 'text-muted'}`}
+                className={`sidebar-nav-item block w-full py-3 px-4 text-left text-base border-none cursor-pointer ${page === id ? 'sidebar-nav-item-active' : ''}`}
                 onClick={() => goTo(id)}
               >
-                {label}
+                <span className="inline-flex items-center gap-3">
+                  <span className="sidebar-nav-icon">
+                    <NavIcon page={id} />
+                  </span>
+                  <span>{label}</span>
+                </span>
               </button>
             </li>
           ))}

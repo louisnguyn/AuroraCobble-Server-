@@ -44,30 +44,48 @@ interface HomeProps {
 
 export function Home({ onNavigate }: HomeProps) {
   return (
-    <div className="w-full max-w-4xl mx-auto py-8 sm:py-12">
+    <div className="w-full py-8 sm:py-12">
       {/* Hero */}
-      <section className="relative text-center mb-12 sm:mb-16">
+      <section className="hero-wide-shell relative text-center mb-12 sm:mb-16 -mx-4 sm:-mx-6 px-4 sm:px-6 py-10 sm:py-14">
         <div className="absolute inset-0 -z-10 overflow-hidden pointer-events-none">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(120%,600px)] h-[min(120%,400px)] rounded-full blur-3xl bg-gradient-to-br from-amber-600/12 via-orange-900/10 to-transparent" />
-          <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-amber-600/35 to-transparent" />
+          <div className="hero-glow-orb absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(120%,640px)] h-[min(120%,420px)] rounded-full blur-3xl bg-gradient-to-br from-violet-600/18 via-cyan-500/12 to-transparent" />
+          <div className="hero-glow-orb-secondary absolute top-8 left-1/2 -translate-x-1/2 w-[min(100%,540px)] h-[240px] rounded-full blur-3xl bg-gradient-to-r from-cyan-500/8 via-violet-500/10 to-transparent" />
+          <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-500/40 to-transparent" />
         </div>
-        <div className="relative">
+        <div className="relative hero-float-wrap">
+          <div className="hero-entity hero-entity-a" aria-hidden>
+            <span className="hero-pokeball hero-ball-pokeball"><i className="hero-ball-mark mark-pokeball" /></span>
+          </div>
+          <div className="hero-entity hero-entity-b" aria-hidden>
+            <span className="hero-pokeball hero-ball-great"><i className="hero-ball-mark mark-great" /></span>
+          </div>
+          <div className="hero-entity hero-entity-c" aria-hidden>
+            <span className="hero-pokeball hero-ball-ultra"><i className="hero-ball-mark mark-ultra" /></span>
+          </div>
+          <div className="hero-entity hero-entity-d" aria-hidden>
+            <span className="hero-pokeball hero-ball-master"><i className="hero-ball-mark mark-master" /></span>
+          </div>
+          <div className="hero-entity hero-entity-e" aria-hidden>
+            <span className="hero-pokeball hero-ball-origin"><i className="hero-ball-mark mark-origin" /></span>
+          </div>
           <img
             src="/logo.png"
             alt="Aurora Cobble"
-            className="block w-full max-w-[min(480px,90vw)] h-auto mx-auto mb-6 object-contain drop-shadow-[0_0_40px_rgba(232,168,56,0.22)]"
+            className="hero-logo-motion block w-full max-w-[min(500px,90vw)] h-auto mx-auto mb-6 object-contain drop-shadow-[0_0_45px_rgba(34,211,238,0.18)]"
           />
-          <p className="text-xl sm:text-2xl text-muted font-semibold tracking-wide m-0">
-            Cobblemon ranked stats & leaderboards
+          <p className="text-xl sm:text-2xl text-[#ecebff] font-semibold tracking-wide m-0">
+            Competitive Hub for AuroraCobble Adventure Server
           </p>
-          <p className="text-base sm:text-lg text-muted/85 mt-3 m-0 max-w-md mx-auto">
-            Track rankings, usage, and format rules for your server.
+          <p className="text-base sm:text-lg text-muted/90 mt-3 m-0 max-w-4xl mx-auto">
+            Build teams, follow live ladders, open gacha rewards, climb the rankings, and dominate the
+            leaderboards. Track usage stats, join tournaments, and manage your Cobble$ journey in one place.
+            Home to 50+ dedicated trainers, ultra-rare hunts at 0.001%, no inflation, and no resets.
           </p>
         </div>
       </section>
 
       {/* Quick links */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <section className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-5xl mx-auto px-1">
         {QUICK_LINKS.map(({ id, label, description }) => (
           <button
             key={id}
@@ -90,7 +108,7 @@ export function Home({ onNavigate }: HomeProps) {
       </section>
 
       {!onNavigate && (
-        <p className="text-center text-base text-muted/80 mt-8">
+        <p className="text-center text-base text-muted/80 mt-8 max-w-5xl mx-auto">
           Use the menu to switch sections — Leaderboard, Usage, Wiki, Rules, Team Builder, Gacha, Spawn,
           Tournament, and Account.
         </p>
