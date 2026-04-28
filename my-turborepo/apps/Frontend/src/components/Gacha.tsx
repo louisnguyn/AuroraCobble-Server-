@@ -212,6 +212,9 @@ export function Gacha() {
   }, [])
 
   const dismissGachaResult = useCallback(() => {
+    const startCooldownUntil = Date.now() + 20_000
+    setPullCooldownUntilMs(startCooldownUntil)
+    setNowMs(Date.now())
     setLootPhase('idle')
     setStripItems([])
     setWinIndex(-1)
@@ -387,9 +390,18 @@ export function Gacha() {
       setStripItems(items)
       setWinIndex(wIdx)
       setLootPhase('spinning')
-      setPullCooldownUntilMs(Date.now() + 10_000)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Pull failed')
+      const msg = e instanceof Error ? e.message : 'Pull failed'
+      const m = /wait\s+(\d+)s/i.exec(msg)
+      if (m) {
+        const sec = Number.parseInt(m[1] ?? '0', 10)
+        if (Number.isFinite(sec) && sec > 0) {
+          const until = Date.now() + sec * 1000
+          setPullCooldownUntilMs(until)
+          setNowMs(Date.now())
+        }
+      }
+      setError(msg)
       setLootPhase('idle')
       setPulling(false)
       pendingRewardRef.current = null

@@ -562,8 +562,7 @@ app.use(express.json({ limit: JSON_BODY_LIMIT }));
 registerTournamentRoutes(app, { requireAuth, requireAdmin });
 
 const TEAM_AI_COOLDOWN_MS = 12 * 60 * 60 * 1000;
-const GACHA_PULL_COOLDOWN_MS = 10_000;
-const GACHA_PULL_DAILY_LIMIT = 30;
+const GACHA_PULL_COOLDOWN_MS = 20_000;
 const gachaPullCooldownUntilByUser = new Map<number, number>();
 
 app.post("/team/analyze-ai", requireAuth, async (req, res) => {
@@ -2101,29 +2100,6 @@ app.post("/gacha/pull", requireAuth, async (req, res) => {
   }
   if (!supabase) {
     res.status(503).json({ error: "Database not configured" });
-    return;
-  }
-  const dayStartUtc = new Date();
-  dayStartUtc.setUTCHours(0, 0, 0, 0);
-  const nextDayStartUtc = new Date(dayStartUtc.getTime() + 24 * 60 * 60 * 1000);
-  const { count: pullsTodayCount, error: pullsTodayErr } = await supabase
-    .from("user_gacha_pulls")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", user.userId)
-    .gte("pull_at", dayStartUtc.toISOString())
-    .lt("pull_at", nextDayStartUtc.toISOString());
-  if (pullsTodayErr) {
-    res.status(500).json({ error: pullsTodayErr.message });
-    return;
-  }
-  const pullsToday = pullsTodayCount ?? 0;
-  if (pullsToday >= GACHA_PULL_DAILY_LIMIT) {
-    res.status(429).json({
-      code: "gacha_pull_daily_limit",
-      error: `Daily pull limit reached (${GACHA_PULL_DAILY_LIMIT}/${GACHA_PULL_DAILY_LIMIT}). Try again after reset.`,
-      pulls_today: pullsToday,
-      daily_limit: GACHA_PULL_DAILY_LIMIT,
-    });
     return;
   }
   if (!(await userMayUseTeamAiFeatures(user.userId))) {
