@@ -45,6 +45,7 @@ import {
   buildGivePokemonOtherCommand,
   isGachaClaimEnabled,
   isLikelyMinecraftUsername,
+  parseCobbledollarsReward,
   parseRewardForGivePokemon,
 } from "./gachaRewardClaim.js";
 import { registerTournamentRoutes } from "./tournamentRoutes.js";
@@ -2161,14 +2162,35 @@ app.post("/gacha/pull", requireAuth, async (req, res) => {
     });
   }
 
-  const { error: historyErr } = await supabase.from("user_gacha_pulls").insert({
+  let cobbledollarsRewardAmount = 0;
+  let cobbledollarsRewardNewBalance: number | null = null;
+  const cobbleReward = parseCobbledollarsReward(chosen.reward_type);
+  if (cobbleReward) {
+    cobbledollarsRewardAmount = cobbleReward.amount;
+    cobbledollarsRewardNewBalance = await incrementUserCurrency(
+      user.userId,
+      COBBLEDOLLARS_CURRENCY,
+      cobbledollarsRewardAmount,
+      {
+        kind: "gacha_reward",
+        detail: `${poolName} — ${chosen.reward_type}`,
+      }
+    );
+  }
+
+  const fulfilledAt = cobbleReward ? new Date().toISOString() : null;
+  const historyBase = {
     user_id: user.userId,
     pool_id: id,
     reward_type: chosen.reward_type,
     pull_at: new Date().toISOString(),
+  };
+  const withFulfilled = await supabase.from("user_gacha_pulls").insert({
+    ...historyBase,
+    fulfilled_at: fulfilledAt,
   });
-  if (historyErr) {
-    // table may not exist yet; pull still succeeds
+  if (withFulfilled.error && /fulfilled_at|column/i.test(withFulfilled.error.message)) {
+    await supabase.from("user_gacha_pulls").insert(historyBase);
   }
 
   // Do not await: a slow/hanging Discord webhook fetch would block the response and leave the
@@ -2183,6 +2205,14 @@ app.post("/gacha/pull", requireAuth, async (req, res) => {
       reward_type: chosen.reward_type,
     },
     newBalance,
+    ...(cobbledollarsRewardAmount > 0
+      ? {
+          cobbledollarsReward: {
+            amount: cobbledollarsRewardAmount,
+            newBalance: cobbledollarsRewardNewBalance,
+          },
+        }
+      : {}),
   });
 });
 
@@ -3212,6 +3242,136 @@ app.post("/user/cobbledollars/deposit", requireAuth, async (req, res) => {
   );
 
   res.json({ newBalance });
+});
+
+/** Transfer website Cobble$ to another website account by username. */
+app.post("/user/cobbledollars/transfer", requireAuth, async (req, res) => {
+  const user = res.locals.user!;
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const rawRecipient = typeof req.body?.toUsername === "string" ? req.body.toUsername.trim() : "";
+  const rawAmount = req.body?.amount;
+  const amount =
+    typeof rawAmount === "number"
+      ? rawAmount
+      : typeof rawAmount === "string"
+        ? parseInt(rawAmount, 10)
+        : NaN;
+  if (!rawRecipient) {
+    res.status(400).json({ error: "toUsername is required" });
+    return;
+  }
+  if (!Number.isInteger(amount) || amount < 1) {
+    res.status(400).json({ error: "amount must be a positive whole number" });
+    return;
+  }
+  if (amount > 1_000_000_000_000) {
+    res.status(400).json({ error: "amount too large" });
+    return;
+  }
+  if (rawRecipient.toLowerCase() === user.username.toLowerCase()) {
+    res.status(400).json({ error: "You cannot transfer Cobble$ to yourself" });
+    return;
+  }
+
+  const { data: recipientRaw, error: recipientErr } = await supabase
+    .from("users")
+    .select("id, username")
+    .eq("username", rawRecipient)
+    .maybeSingle();
+  if (recipientErr) {
+    res.status(500).json({ error: recipientErr.message });
+    return;
+  }
+  const recipient = recipientRaw as { id: number; username: string } | null;
+  if (!recipient) {
+    res.status(404).json({ error: "Recipient account not found" });
+    return;
+  }
+  if (recipient.id === user.userId) {
+    res.status(400).json({ error: "You cannot transfer Cobble$ to yourself" });
+    return;
+  }
+
+  const senderWallet = await ensureUserCobbledollarsRow(user.userId);
+  if (!senderWallet) {
+    res.status(500).json({ error: "Could not open Cobble$ wallet" });
+    return;
+  }
+  if (senderWallet.balance < amount) {
+    res.status(400).json({
+      error: "Not enough website Cobble$",
+      balance: senderWallet.balance,
+      required: amount,
+    });
+    return;
+  }
+  const recipientWallet = await ensureUserCobbledollarsRow(recipient.id);
+  if (!recipientWallet) {
+    res.status(500).json({ error: "Could not open recipient Cobble$ wallet" });
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const senderNewBalance = senderWallet.balance - amount;
+  const recipientNewBalance = recipientWallet.balance + amount;
+  const { data: senderUpdated, error: senderUpdErr } = await supabase
+    .from("user_currency")
+    .update({ balance: senderNewBalance, updated_at: now })
+    .eq("id", senderWallet.id)
+    .eq("balance", senderWallet.balance)
+    .select("balance");
+  if (senderUpdErr) {
+    res.status(500).json({ error: senderUpdErr.message });
+    return;
+  }
+  if (!senderUpdated?.length) {
+    res.status(409).json({ error: "Balance changed — try again" });
+    return;
+  }
+
+  const { data: recipientUpdated, error: recipientUpdErr } = await supabase
+    .from("user_currency")
+    .update({ balance: recipientNewBalance, updated_at: now })
+    .eq("id", recipientWallet.id)
+    .eq("balance", recipientWallet.balance)
+    .select("balance");
+  if (recipientUpdErr || !recipientUpdated?.length) {
+    await supabase
+      .from("user_currency")
+      .update({ balance: senderWallet.balance, updated_at: new Date().toISOString() })
+      .eq("id", senderWallet.id);
+    if (recipientUpdErr) {
+      res.status(500).json({ error: recipientUpdErr.message });
+      return;
+    }
+    res.status(409).json({ error: "Recipient balance changed — try again" });
+    return;
+  }
+
+  await recordCobbledollarLedger(
+    user.userId,
+    -amount,
+    senderNewBalance,
+    "transfer_to_user",
+    `to ${recipient.username}`
+  );
+  await recordCobbledollarLedger(
+    recipient.id,
+    amount,
+    recipientNewBalance,
+    "transfer_from_user",
+    `from ${user.username}`
+  );
+
+  res.json({
+    ok: true,
+    toUsername: recipient.username,
+    amount,
+    newBalance: senderNewBalance,
+  });
 });
 
 app.get("/user/cobbledollars/ledger", requireAuth, async (req, res) => {

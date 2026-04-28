@@ -87,3 +87,19 @@ export function isGachaClaimEnabled(): boolean {
   const pass = process.env.MC_RCON_PASSWORD?.trim();
   return Boolean(host && pass);
 }
+
+/**
+ * Parse website Cobble$ reward labels for auto-credit.
+ * Supported format (strict): `cobbledollars:<amount>`
+ * Example: `cobbledollars:5000`
+ */
+export function parseCobbledollarsReward(
+  rewardType: string
+): { amount: number } | null {
+  const t = rewardType.trim().toLowerCase();
+  const m = /^cobbledollars\s*:\s*([0-9]{1,13})$/.exec(t);
+  if (!m) return null;
+  const amount = Number.parseInt(m[1] ?? "", 10);
+  if (!Number.isInteger(amount) || amount < 1) return null;
+  return { amount };
+}

@@ -168,6 +168,10 @@ export interface GachaPool {
 export interface GachaRewardResult {
   reward: { id: number; reward_type: string }
   newBalance: number
+  cobbledollarsReward?: {
+    amount: number
+    newBalance: number | null
+  }
 }
 
 export async function fetchGachaPools(): Promise<{ pools: GachaPool[] }> {
@@ -307,6 +311,20 @@ export async function depositCobbledollars(amount: number): Promise<{ newBalance
     method: 'POST',
     body: JSON.stringify({ amount }),
   })
+}
+
+/** Transfer website Cobble$ to another website account username. */
+export async function transferCobbledollars(
+  toUsername: string,
+  amount: number
+): Promise<{ ok: boolean; toUsername: string; amount: number; newBalance: number }> {
+  return fetchApi<{ ok: boolean; toUsername: string; amount: number; newBalance: number }>(
+    '/user/cobbledollars/transfer',
+    {
+      method: 'POST',
+      body: JSON.stringify({ toUsername, amount }),
+    }
+  )
 }
 
 export interface CobbledollarLedgerRow {

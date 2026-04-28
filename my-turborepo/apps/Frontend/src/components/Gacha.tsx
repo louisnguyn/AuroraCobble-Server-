@@ -40,6 +40,14 @@ function stripMinecraftFormatting(value: string): string {
   return value.replace(/§[0-9a-fk-or]/gi, '').trim()
 }
 
+function parseCobbledollarsRewardLabel(label: string): number | null {
+  const m = /^cobbledollars\s*:\s*([0-9]{1,13})$/i.exec(stripMinecraftFormatting(label))
+  if (!m) return null
+  const amount = parseInt(m[1] ?? '', 10)
+  if (!Number.isInteger(amount) || amount < 1) return null
+  return amount
+}
+
 /**
  * Showdown ani GIF + HOME PNG fallback + slug for PokéAPI (third fallback).
  * Shiny when the label contains the word "shiny" (case-insensitive).
@@ -589,6 +597,17 @@ export function Gacha() {
                             {lastReward.newBalance} {currencyType}
                           </span>
                         </p>
+                        {lastReward.cobbledollarsReward && (
+                          <p className="text-sm m-0 text-emerald-300">
+                            Auto credited +{lastReward.cobbledollarsReward.amount.toLocaleString()} Cobble$
+                            {lastReward.cobbledollarsReward.newBalance != null ? (
+                              <>
+                                {' '}
+                                (wallet: {lastReward.cobbledollarsReward.newBalance.toLocaleString()})
+                              </>
+                            ) : null}
+                          </p>
+                        )}
                       </div>
                       <button
                         type="button"
@@ -709,7 +728,11 @@ export function Gacha() {
                           })}
                         </span>
                         {entry.fulfilledAt && (
-                          <span className="block text-xs text-emerald-400/90 mt-1">Claimed in-game</span>
+                          <span className="block text-xs text-emerald-400/90 mt-1">
+                            {parseCobbledollarsRewardLabel(entry.rewardType) != null
+                              ? 'Auto credited to website wallet'
+                              : 'Claimed in-game'}
+                          </span>
                         )}
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
