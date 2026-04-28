@@ -72,7 +72,7 @@ export function TournamentTeamCompare({
             </section>
 
             <section className="space-y-3 min-w-0">
-              <div className="pixel-panel-soft px-4 py-3 border-t-2 border-amber-600/50">
+              <div className="pixel-panel-soft px-4 py-3 border-t-2 border-cyan-500/55">
                 <h2 className="text-lg font-semibold text-[#f5efe6] m-0">{b.participant.displayName}</h2>
                 <p className="text-sm text-muted m-0 mt-0.5">Seed #{b.participant.seedRank}</p>
               </div>

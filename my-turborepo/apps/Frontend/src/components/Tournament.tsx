@@ -76,11 +76,11 @@ function PlayerSlot({
     const label = formatPendingMatchLabel(slot.matchKey ?? '')
     return (
       <div
-        className="rounded-lg border border-amber-900/40 bg-[#1f1c18]/90 px-2 py-2 text-center leading-snug shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+        className="rounded-lg border border-violet-900/40 bg-[#171724]/90 px-2 py-2 text-center leading-snug shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
         role="status"
         aria-label={`Pending: winner of ${label}`}
       >
-        <span className="block text-[10px] font-semibold uppercase tracking-wider text-amber-500/90 mb-1">
+        <span className="block text-[10px] font-semibold uppercase tracking-wider text-cyan-300/90 mb-1">
           Pending
         </span>
         <span className="text-xs text-[#f0ebe3]/90">Winner of {label}</span>
@@ -91,11 +91,11 @@ function PlayerSlot({
     const label = formatPendingMatchLabel(slot.matchKey ?? '')
     return (
       <div
-        className="rounded-lg border border-amber-900/40 bg-[#1f1c18]/90 px-2 py-2 text-center leading-snug shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+        className="rounded-lg border border-violet-900/40 bg-[#171724]/90 px-2 py-2 text-center leading-snug shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
         role="status"
         aria-label={`Pending: loser of ${label}`}
       >
-        <span className="block text-[10px] font-semibold uppercase tracking-wider text-amber-500/90 mb-1">
+        <span className="block text-[10px] font-semibold uppercase tracking-wider text-cyan-300/90 mb-1">
           Pending
         </span>
         <span className="text-xs text-[#f0ebe3]/90">Loser of {label}</span>
@@ -113,7 +113,7 @@ function PlayerSlot({
         won ? 'border-emerald-500/60 bg-emerald-500/10 ring-1 ring-emerald-500/30' : 'border-border bg-surface/80'
       }`}
     >
-      <div className={`text-xs font-semibold truncate mb-1 ${won ? 'text-emerald-200' : 'text-amber-200/90'}`}>
+      <div className={`text-xs font-semibold truncate mb-1 ${won ? 'text-emerald-200' : 'text-cyan-200/90'}`}>
         {slot.name}
       </div>
       <div className="flex w-full min-w-0 flex-nowrap items-center justify-between">
@@ -142,8 +142,8 @@ function MatchCard({
     m.right.id != null
 
   return (
-    <div className="rounded-xl border border-amber-800/30 bg-[#1a1814]/70 p-2 space-y-1 w-full min-w-0">
-      <p className="text-[10px] uppercase tracking-wider text-[#c4b8a5]/85 font-semibold m-0 text-center">{m.label}</p>
+    <div className="rounded-xl border border-violet-800/30 bg-[#141426]/70 p-2 space-y-1 w-full min-w-0">
+      <p className="text-[10px] uppercase tracking-wider text-[#c8c3e6]/85 font-semibold m-0 text-center">{m.label}</p>
       <PlayerSlot slot={m.left} winnerId={m.winnerParticipantId} onOpen={onOpenPlayer} />
       <PlayerSlot slot={m.right} winnerId={m.winnerParticipantId} onOpen={onOpenPlayer} />
       {canCompare ? (
@@ -286,7 +286,7 @@ export function Tournament({
             Refresh
           </button>
         </div>
-        {catalogErr ? <p className="text-xs text-amber-400 m-0">Tournament list: {catalogErr}</p> : null}
+        {catalogErr ? <p className="text-xs text-cyan-400 m-0">Tournament list: {catalogErr}</p> : null}
         {catalog.length === 0 && !catalogErr ? (
           <p className="text-xs text-muted m-0">No published tournaments yet — admins can publish one from the admin app.</p>
         ) : null}
@@ -299,9 +299,9 @@ export function Tournament({
       ) : err ? (
         <p className="text-error text-sm">{err}</p>
       ) : data ? (
-        <div className="relative rounded-3xl border border-amber-900/35 overflow-hidden bg-gradient-to-br from-[#1f1c18]/95 via-[#2a2218]/55 to-[#0f0d0b] p-4 sm:p-6">
+        <div className="relative rounded-3xl border border-violet-900/35 overflow-hidden bg-gradient-to-br from-[#17172a]/95 via-[#1d1a36]/55 to-[#0b0b12] p-4 sm:p-6">
           <div
-            className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-[0.07] text-4xl sm:text-6xl font-black text-[#f5efe6] tracking-widest select-none"
+            className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-[0.09] text-6xl sm:text-8xl md:text-9xl font-black text-cyan-300 tracking-widest select-none -rotate-[18deg]"
             aria-hidden
           >
             AURORA COBBLE
@@ -313,14 +313,14 @@ export function Tournament({
                 {data.tournament.subtitle ? (
                   <p className="text-sm text-[#d9cec0]/85 m-0 mt-1">{data.tournament.subtitle}</p>
                 ) : null}
-                <p className="text-xs text-[#b8a995]/75 m-0 mt-2">
+                <p className="text-xs text-[#a29ac5]/75 m-0 mt-2">
                   Updated {new Date(data.tournament.updatedAt).toLocaleString()} · auto-refresh ~20s
                 </p>
               </div>
               {prizes.length > 0 ? (
-                <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-sm shrink-0">
-                  <p className="text-xs font-semibold text-amber-200 m-0 mb-2">Prizes</p>
-                  <ul className="m-0 pl-4 space-y-1 text-amber-100/90">
+                <div className="rounded-xl border border-cyan-500/30 bg-cyan-950/20 px-4 py-3 text-sm shrink-0">
+                  <p className="text-xs font-semibold text-cyan-200 m-0 mb-2">Prizes</p>
+                  <ul className="m-0 pl-4 space-y-1 text-cyan-100/90">
                     {prizes.map((p: unknown, i: number) => (
                       <li key={i}>{typeof p === 'string' ? p : JSON.stringify(p)}</li>
                     ))}
@@ -365,7 +365,7 @@ export function Tournament({
             <section className="w-full min-w-0">
               <div className="flex flex-wrap gap-6 sm:gap-8 items-start justify-center">
                 <div className="w-full max-w-md min-w-0">
-                  <h3 className="text-sm font-semibold text-amber-200 m-0 mb-3 flex items-center justify-center gap-2">
+                  <h3 className="text-sm font-semibold text-cyan-200 m-0 mb-3 flex items-center justify-center gap-2">
                     <span aria-hidden>🏆</span> Final
                   </h3>
                   <div className="grid grid-cols-1 gap-2 sm:gap-3 w-full min-w-0">

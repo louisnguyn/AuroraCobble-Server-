@@ -82,8 +82,8 @@ export function VerificationRequestsAdmin() {
     <div className="space-y-6">
       <h1 className="text-xl font-bold text-[#f5efe6] m-0">Verification requests</h1>
       <p className="text-sm text-muted m-0 -mt-2">
-        Users can submit a request from Account. Approve to grant the same verified badge / Team AI access as
-        &quot;Mark as verified&quot;, or reject with an optional note.
+        Users can submit a request from Account. Approve to grant the same verified badge and Team AI access as
+        &quot;Mark as verified&quot;, or reject with an optional note. Admin accounts do not need to submit requests.
       </p>
       {error && (
         <div className="p-3 rounded-lg bg-error/15 border border-error/30 text-error text-sm">{error}</div>

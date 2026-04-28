@@ -92,7 +92,7 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
       {/* Header (mobile) */}
-      <header className="md:hidden sticky top-0 z-20 flex items-center justify-between px-4 py-3 bg-surface/95 backdrop-blur border-b border-border">
+      <header className="md:hidden admin-header sticky top-0 z-20 flex items-center justify-between px-4 py-3">
         <span className="font-semibold">Admin</span>
         <button
           type="button"
@@ -115,7 +115,7 @@ export default function App() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed md:sticky top-0 left-0 z-40 w-56 min-h-screen py-6 px-3 bg-surface/95 backdrop-blur border-r border-border md:translate-x-0 transition-transform ${
+        className={`fixed md:sticky top-0 left-0 z-40 w-56 min-h-screen py-6 px-3 admin-sidebar md:translate-x-0 transition-transform ${
           menuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -154,7 +154,8 @@ export default function App() {
               Sign out
             </button>
           </div>
-          <nav className="space-y-0.5">
+          <p className="sidebar-section-label px-2 mb-2">Admin</p>
+          <nav className="space-y-1">
             {SECTIONS.map(({ id, label }) => (
               <button
                 key={id}
@@ -163,10 +164,10 @@ export default function App() {
                   setSection(id)
                   setMenuOpen(false)
                 }}
-                className={`block w-full text-left py-2.5 px-3 rounded-lg text-sm transition-colors ${
+                className={`sidebar-nav-item block w-full text-left py-2.5 px-3 text-sm transition-colors ${
                   section === id
-                    ? 'bg-accent/20 text-accent font-medium'
-                    : 'text-muted hover:bg-surface-hover hover:text-[#f5efe6]'
+                    ? 'sidebar-nav-item-active font-medium'
+                    : 'text-muted'
                 }`}
               >
                 {label}
