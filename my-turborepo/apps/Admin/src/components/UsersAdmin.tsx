@@ -52,6 +52,7 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
   const [bulkIds, setBulkIds] = useState<number[]>([])
   const [bulkAmount, setBulkAmount] = useState('')
   const [bulkNote, setBulkNote] = useState('')
+  const [bulkAllUsers, setBulkAllUsers] = useState(false)
   const [bulkBusy, setBulkBusy] = useState(false)
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false)
   const [grantableItems, setGrantableItems] = useState<{ key: string; label: string }[]>([])
@@ -158,15 +159,25 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
 
   const clearBulkSelection = () => setBulkIds([])
 
+  const bulkCobbleTargetIds = useMemo(
+    () => (bulkAllUsers ? [...new Set(users.map((u) => u.id))] : [...new Set(bulkIds)]),
+    [bulkAllUsers, users, bulkIds]
+  )
+
   const openBulkConfirm = () => {
     setError(null)
     setSuccessMessage(null)
     const n = Number(bulkAmount)
-    if (bulkIds.length === 0) {
-      setError('Select at least one user in the list (use the checkboxes).')
+    const targetCount = bulkCobbleTargetIds.length
+    if (targetCount === 0) {
+      setError(
+        bulkAllUsers
+          ? 'No users available to receive this grant.'
+          : 'Select at least one user in the list (use the checkboxes).'
+      )
       return
     }
-    if (bulkIds.length > 500) {
+    if (targetCount > 500) {
       setError('At most 500 users per request. Clear some selections or run multiple batches.')
       return
     }
@@ -185,7 +196,7 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
     setSuccessMessage(null)
     try {
       const res = await bulkGrantCobbledollars({
-        user_ids: [...new Set(bulkIds)],
+        user_ids: bulkCobbleTargetIds,
         amount,
         ...(bulkNote.trim() ? { note: bulkNote.trim() } : {}),
       })
@@ -197,7 +208,7 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
       setSuccessMessage(
         `Added ${res.amount_per_user.toLocaleString()} Cobble$ to ${res.granted} of ${res.requested} accounts.${failMsg}`
       )
-      if (selectedUser && bulkIds.includes(selectedUser.id)) {
+      if (selectedUser && bulkCobbleTargetIds.includes(selectedUser.id)) {
         const { currencies: c } = await fetchAdminUserCurrency(selectedUser.id)
         setCurrencies(c)
       }
@@ -493,6 +504,7 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
                 <button
                   type="button"
                   onClick={selectBulkFiltered}
+                  disabled={tab === 'bulkCobble' && bulkAllUsers}
                   className="px-2 py-1 rounded-md text-xs font-medium bg-accent/15 text-accent border border-accent/35 hover:bg-accent/25"
                 >
                   Select visible ({filteredUsers.length})
@@ -510,7 +522,11 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
             <p className="text-[11px] text-muted m-0">
               {tab === 'bulkCobble' || tab === 'bulkItems' ? (
                 <>
-                  <span className="text-accent font-semibold">{bulkIds.length}</span> selected ·{' '}
+                  <span className="text-accent font-semibold">
+                    {tab === 'bulkCobble' && bulkAllUsers ? users.length : bulkIds.length}
+                  </span>{' '}
+                  selected
+                  {tab === 'bulkCobble' && bulkAllUsers ? ' (all users)' : ''} ·{' '}
                   {filteredUsers.length === users.length
                     ? `${users.length} user${users.length === 1 ? '' : 's'}`
                     : `${filteredUsers.length} of ${users.length} shown`}
@@ -532,8 +548,9 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
                     <div className="flex items-center pl-3 pr-0 shrink-0">
                       <input
                         type="checkbox"
-                        checked={bulkIds.includes(u.id)}
+                        checked={tab === 'bulkCobble' && bulkAllUsers ? true : bulkIds.includes(u.id)}
                         onChange={() => toggleBulkId(u.id)}
+                        disabled={tab === 'bulkCobble' && bulkAllUsers}
                         className="rounded border-border"
                         aria-label={`Include ${u.username} in bulk grant`}
                       />
@@ -641,6 +658,15 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
                   receives the same balance increase. Entries appear in the Cobble$ ledger like single-user grants.
                 </p>
               </div>
+              <label className="inline-flex items-center gap-2 text-xs text-muted">
+                <input
+                  type="checkbox"
+                  checked={bulkAllUsers}
+                  onChange={(e) => setBulkAllUsers(e.target.checked)}
+                  className="rounded border-border"
+                />
+                Grant to all users ({users.length})
+              </label>
               <div className="flex flex-wrap items-end gap-3">
                 <div>
                   <label htmlFor="bulk-cobble-amt" className="block text-xs text-muted mb-1">
@@ -679,8 +705,8 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
                 </button>
               </div>
               <p className="text-xs text-muted m-0">
-                Selected: <span className="text-[#f5efe6] font-medium">{bulkIds.length}</span> users · max 500 per
-                request.
+                Selected: <span className="text-[#f5efe6] font-medium">{bulkCobbleTargetIds.length}</span> users
+                {bulkAllUsers ? ' (all users)' : ''} · max 500 per request.
               </p>
             </div>
           )}
@@ -1167,7 +1193,7 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
             onClick={(e) => e.stopPropagation()}
           >
             <h3 id="bulk-cobble-title" className="text-lg font-semibold text-[#f5efe6] m-0 mb-2">
-              Grant Cobble$ to {bulkIds.length} accounts?
+              Grant Cobble$ to {bulkCobbleTargetIds.length} accounts{bulkAllUsers ? ' (all users)' : ''}?
             </h3>
             <p className="text-sm text-muted m-0 mb-4">
               Each account will receive{' '}
@@ -1176,7 +1202,7 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
               </span>
               . Total credits:{' '}
               <span className="text-[#f5efe6] font-medium">
-                {(Number(bulkAmount) * bulkIds.length).toLocaleString()} Cobble$
+                {(Number(bulkAmount) * bulkCobbleTargetIds.length).toLocaleString()} Cobble$
               </span>
               .
               {bulkNote.trim() ? (
