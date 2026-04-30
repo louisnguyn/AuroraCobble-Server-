@@ -562,7 +562,7 @@ app.use(express.json({ limit: JSON_BODY_LIMIT }));
 registerTournamentRoutes(app, { requireAuth, requireAdmin });
 
 const TEAM_AI_COOLDOWN_MS = 12 * 60 * 60 * 1000;
-const GACHA_PULL_COOLDOWN_MS = 20_000;
+const GACHA_PULL_COOLDOWN_MS = 5_000;
 const gachaPullCooldownUntilByUser = new Map<number, number>();
 
 app.post("/team/analyze-ai", requireAuth, async (req, res) => {
@@ -4134,6 +4134,7 @@ const EXCHANGE_RATES: { to_currency: string; cost_tickets: number; label: string
   { to_currency: "mythic tickets", cost_tickets: 20, label: "Mythic Tickets" },
   { to_currency: "shiny mythic tickets", cost_tickets: 80, label: "Shiny Mythic Tickets" },
   { to_currency: "legendary tickets", cost_tickets: 30, label: "Legend Tickets" },
+  { to_currency: "paradox tickets", cost_tickets: 20, label: "Paradox Tickets" },
   { to_currency: "shiny legendary tickets", cost_tickets: 90, label: "Shiny Legend Tickets" },
   { to_currency: "shiny paradox tickets", cost_tickets: 80, label: "Shiny Paradox Tickets" },
 ];

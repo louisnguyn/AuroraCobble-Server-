@@ -212,7 +212,7 @@ export function Gacha() {
   }, [])
 
   const dismissGachaResult = useCallback(() => {
-    const startCooldownUntil = Date.now() + 20_000
+    const startCooldownUntil = Date.now() + 5_000
     setPullCooldownUntilMs(startCooldownUntil)
     setNowMs(Date.now())
     setLootPhase('idle')
