@@ -103,3 +103,57 @@ export interface BattleTowerLeaderboardResponse {
   error: string | null
   updatedAt: string | null
 }
+
+export interface MatchResultPokemon {
+  species: string
+  ability?: string
+  item?: string
+  moves?: string[]
+  nature?: string
+  evSpread?: string
+}
+
+export interface MatchResultPlayer {
+  uuid?: string
+  playerName?: string
+  eloBefore?: number
+  eloAfter?: number
+  eloChange?: number
+  isWinner?: boolean
+  faintedCount?: number
+  team?: MatchResultPokemon[]
+}
+
+export interface MatchResultPayload {
+  matchId?: string
+  serverId?: string
+  seasonName?: string
+  format?: string
+  matchType?: string
+  timestamp?: string
+  durationSeconds?: number
+  endReason?: string
+  turnCount?: number
+  players?: MatchResultPlayer[]
+  [key: string]: unknown
+}
+
+export interface BattleReplayPlayer {
+  uuid?: string
+  playerName?: string
+  team?: string[]
+  isWinner?: boolean
+}
+
+export interface BattleReplayPayload {
+  matchId?: string
+  serverId?: string
+  seasonName?: string
+  format?: string
+  timestamp?: string
+  turnCount?: number
+  players?: BattleReplayPlayer[]
+  battleLog?: string[]
+  endReason?: string
+  [key: string]: unknown
+}

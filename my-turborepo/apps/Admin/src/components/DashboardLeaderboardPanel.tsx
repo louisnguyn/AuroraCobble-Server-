@@ -14,6 +14,7 @@ import type {
   LeaderboardPlayer,
   LeaderboardResponse,
 } from '../types'
+import { normalizePvpTierSlugForAssets, PvPTierBadge } from './PvPTierBadge.tsx'
 
 type MainSection = 'ranks' | 'economy' | 'battle'
 type RankFormatId = 'singles' | 'doubles'
@@ -40,7 +41,7 @@ const BATTLE_MODES: { id: BattleModeId; label: string; apiMode: string }[] = [
 
 const TIER_COLOR_CLASS: Record<string, string> = {
   copper: 'text-amber-600',
-  silver: 'text-slate-300',
+  iron: 'text-slate-300',
   gold: 'text-amber-300',
   emerald: 'text-emerald-300',
   diamond: 'text-cyan-300',
@@ -61,7 +62,7 @@ const RANK_TIERS_BY_ELO: { minElo: number; displayName: string; slug: string }[]
   { minElo: 1250, displayName: 'Diamond', slug: 'diamond' },
   { minElo: 1175, displayName: 'Emerald', slug: 'emerald' },
   { minElo: 1100, displayName: 'Gold', slug: 'gold' },
-  { minElo: 1050, displayName: 'Silver', slug: 'silver' },
+  { minElo: 1050, displayName: 'Iron', slug: 'iron' },
   { minElo: 0, displayName: 'Copper', slug: 'copper' },
 ]
 
@@ -319,6 +320,8 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
     return rankPlayers.find((p) => ignNamesMatch(viewerIgn, p.playerName))
   }, [rankPlayers, viewerIgn])
 
+  const yourRankTier = useMemo(() => (yourRankPlayer ? getTier(yourRankPlayer.elo) : null), [yourRankPlayer])
+
   useEffect(() => {
     if (mainSection !== 'ranks' || !yourRankPlayer) return
     scrollElementIntoViewCentered(rankYouRef.current)
@@ -423,9 +426,15 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
                         <span className="font-mono font-semibold">{yourRankPlayer.playerName}</span> —{' '}
                         <strong className="text-amber-200 tabular-nums">#{yourRankPlayer.rank}</strong> in{' '}
                         {getFormatDisplayName(rankFormatId)} · {yourRankPlayer.elo} ELO ·{' '}
-                        <span className={TIER_COLOR_CLASS[getTier(yourRankPlayer.elo).slug] ?? 'text-slate-400'}>
-                          {getTier(yourRankPlayer.elo).displayName}
-                        </span>
+                        {yourRankTier ? (
+                          <PvPTierBadge
+                            slug={normalizePvpTierSlugForAssets(yourRankTier.slug)}
+                            displayName={yourRankTier.displayName}
+                            fallbackTextClassName={TIER_COLOR_CLASS[yourRankTier.slug] ?? 'text-slate-400'}
+                            imgHeightClass="h-6"
+                            className="align-middle ml-1"
+                          />
+                        ) : null}
                       </p>
                     </div>
                   ) : viewerIgn ? (
@@ -488,10 +497,12 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
                               {p.playerName}
                             </td>
                             <td className="py-2.5 px-3 w-16 border-b border-white/5">{p.elo}</td>
-                            <td
-                              className={`py-2.5 px-3 text-xs font-semibold border-b border-white/5 ${TIER_COLOR_CLASS[tier.slug] ?? 'text-slate-400'}`}
-                            >
-                              {tier.displayName}
+                            <td className="py-2.5 px-3 border-b border-white/5 align-middle">
+                              <PvPTierBadge
+                                slug={normalizePvpTierSlugForAssets(tier.slug)}
+                                displayName={tier.displayName}
+                                fallbackTextClassName={TIER_COLOR_CLASS[tier.slug] ?? 'text-slate-400'}
+                              />
                             </td>
                             <td className="py-2.5 px-3 w-16 border-b border-white/5">{p.wins}</td>
                             <td className="py-2.5 px-3 w-16 border-b border-white/5">{p.losses}</td>

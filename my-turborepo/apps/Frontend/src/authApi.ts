@@ -1,4 +1,5 @@
 import type { TeamBuildSlot } from './pokepasteParse'
+import type { BattleReplayPayload, MatchResultPayload } from './types'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? '/api'
 
@@ -241,6 +242,18 @@ export interface UserPvpRank {
 
 export async function fetchUserPvpRank(): Promise<UserPvpRank> {
   return fetchApi<UserPvpRank>('/user/pvp-rank')
+}
+
+export async function fetchUserRankedHistory(params?: { limit?: number }): Promise<{
+  matchResults: MatchResultPayload[]
+  battleReplays: BattleReplayPayload[]
+}> {
+  const sp = new URLSearchParams()
+  if (params?.limit != null) sp.set('limit', String(params.limit))
+  const q = sp.toString()
+  return fetchApi<{ matchResults: MatchResultPayload[]; battleReplays: BattleReplayPayload[] }>(
+    `/user/ranked-history${q ? `?${q}` : ''}`
+  )
 }
 
 export interface PvpTopPredictionPlayer {

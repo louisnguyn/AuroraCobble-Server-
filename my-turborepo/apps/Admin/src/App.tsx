@@ -8,6 +8,7 @@ import { MinecraftDashboard } from './components/MinecraftDashboard.tsx'
 import { TournamentAdmin } from './components/TournamentAdmin.tsx'
 import { VerificationRequestsAdmin } from './components/VerificationRequestsAdmin.tsx'
 import { RoleRequestsAdmin } from './components/RoleRequestsAdmin.tsx'
+import { CobbleRankedAdmin } from './components/CobbleRankedAdmin.tsx'
 import { RoleBadge } from './components/RoleBadge.tsx'
 
 type Section =
@@ -17,12 +18,14 @@ type Section =
   | 'role_requests'
   | 'minecraft'
   | 'tournament'
+  | 'cobble_ranked'
   | 'settings'
   | 'bans'
 
 const SECTIONS: { id: Section; label: string }[] = [
   { id: 'minecraft', label: 'Server Dashboard' },
   { id: 'tournament', label: 'Tournaments' },
+  { id: 'cobble_ranked', label: 'CobbleRanked' },
   { id: 'usage', label: 'Usage stats' },
   { id: 'users', label: 'Website users' },
   { id: 'verifications', label: 'Verification requests' },
@@ -181,7 +184,9 @@ export default function App() {
       <main className="flex-1 p-4 sm:p-6 min-w-0">
         <div
           className={
-            section === 'minecraft' || section === 'tournament' ? 'max-w-6xl mx-auto' : 'max-w-5xl mx-auto'
+            section === 'minecraft' || section === 'tournament' || section === 'cobble_ranked'
+              ? 'max-w-6xl mx-auto'
+              : 'max-w-5xl mx-auto'
           }
         >
           {section === 'usage' && <UsageStatsAdmin />}
@@ -190,6 +195,7 @@ export default function App() {
           {section === 'role_requests' && <RoleRequestsAdmin />}
           {section === 'minecraft' && <MinecraftDashboard viewerUsername={user.username} />}
           {section === 'tournament' && <TournamentAdmin />}
+          {section === 'cobble_ranked' && <CobbleRankedAdmin />}
           {section === 'settings' && <Placeholder title="Settings" />}
           {section === 'bans' && <Placeholder title="Bans" />}
         </div>

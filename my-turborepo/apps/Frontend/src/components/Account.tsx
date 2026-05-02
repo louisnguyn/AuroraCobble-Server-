@@ -37,6 +37,8 @@ import { CobbleWebsiteWallet } from './CobbleWebsiteWallet.tsx'
 import { CustomSelect } from './CustomSelect.tsx'
 import { isAccountVerified, VerifiedAccountBadge } from './VerifiedAccountBadge.tsx'
 import { RoleBadge } from './RoleBadge.tsx'
+import { AccountRankHistory } from './AccountRankHistory.tsx'
+import { normalizePvpTierSlugForAssets, pvpTierHumanName, PvPTierBadge } from './PvPTierBadge.tsx'
 
 function perksForMinecraftRole(
   cat: {
@@ -95,7 +97,7 @@ function RolePerksSummary({ perks }: { perks: RoleWebsitePerks }) {
 }
 
 export function Account() {
-  type AccountTab = 'account' | 'daily' | 'predict' | 'shop' | 'ranks' | 'inventory' | 'cobble'
+  type AccountTab = 'account' | 'daily' | 'predict' | 'shop' | 'ranks' | 'inventory' | 'cobble' | 'history'
   const { isAuthenticated, user, refreshUser } = useAuth()
   const canUseWebsiteShop = Boolean(user?.is_admin) || isAccountVerified(user)
   const [showAuth, setShowAuth] = useState(false)
@@ -630,6 +632,7 @@ export function Account() {
         {(
           [
             ['daily', 'Daily'],
+            ['history', 'Rank history'],
             ['predict', 'PVP predict'],
             ['shop', 'Shop'],
             ['ranks', 'Ranks'],
@@ -653,16 +656,41 @@ export function Account() {
 
       {activeTab === 'cobble' && <CobbleWebsiteWallet onBalanceUpdated={refreshWebsiteCobbleBalance} />}
 
+      {activeTab === 'history' &&
+        (isAuthenticated && user?.username?.trim() ? (
+          <>
+            <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-3">Rank history</h2>
+            <AccountRankHistory viewerIgn={user.username.trim()} />
+          </>
+        ) : (
+          <p className="text-sm text-muted m-0">Sign in to see your ranked match results and battle replays.</p>
+        ))}
+
       {activeTab === 'daily' && (
         <>
           <div className="mb-4 rounded-lg border border-amber-500/30 bg-[#0a1020] px-4 py-3 shadow-[inset_0_1px_0_0_rgba(251,191,36,0.08)]">
             <h3 className="text-sm font-semibold text-amber-200/95 m-0 mb-2 tracking-tight">PVP leaderboard</h3>
             <p className="text-sm text-[#e2e8f0] m-0">
               Current rank:{' '}
-              <span className="text-[#fbbf24] font-medium">
-                {userPvpRank?.rank != null
-                  ? `#${userPvpRank.rank}${userPvpRank.tier ? ` (${displayItemName(userPvpRank.tier)})` : ''}`
-                  : 'Unranked'}
+              <span className="text-[#fbbf24] font-medium inline-flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                {userPvpRank?.rank != null ? (
+                  <>
+                    <span className="tabular-nums">#{userPvpRank.rank}</span>
+                    {userPvpRank.tier ? (
+                      <>
+                        <span className="text-slate-500 font-normal">·</span>
+                        <PvPTierBadge
+                          slug={normalizePvpTierSlugForAssets(userPvpRank.tier)}
+                          displayName={pvpTierHumanName(userPvpRank.tier)}
+                          fallbackTextClassName="text-[#fbbf24]"
+                          imgHeightClass="h-5"
+                        />
+                      </>
+                    ) : null}
+                  </>
+                ) : (
+                  'Unranked'
+                )}
               </span>
             </p>
             <p className="text-sm m-0 mt-2">

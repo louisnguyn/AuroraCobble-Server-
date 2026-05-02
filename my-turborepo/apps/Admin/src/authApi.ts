@@ -1,3 +1,5 @@
+import type { BattleReplayPayload, MatchResultPayload } from './types'
+
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
 export interface AuthUser {
@@ -461,4 +463,45 @@ export async function adminClearMatchWinner(tournamentId: number, matchKey: stri
     `/admin/tournaments/${tournamentId}/matches/${encodeURIComponent(matchKey)}/winner`,
     { method: 'DELETE' }
   )
+}
+
+export type CobbleRankedFeedEnvelope<T> = {
+  key: string
+  needsAttention: boolean
+  attentionReasons: string[]
+  item: T
+}
+
+export async function fetchAdminCobbleRankedFeed(params?: { limit?: number }): Promise<{
+  matches: CobbleRankedFeedEnvelope<MatchResultPayload>[]
+  replays: CobbleRankedFeedEnvelope<BattleReplayPayload>[]
+  reviewedKeys: string[]
+}> {
+  const sp = new URLSearchParams()
+  if (params?.limit != null) sp.set('limit', String(params.limit))
+  const q = sp.toString()
+  return fetchJson(`/admin/cobble-ranked/feed${q ? `?${q}` : ''}`)
+}
+
+export async function setAdminCobbleRankedReview(body: {
+  item_key: string
+  feed_kind: 'match_result' | 'battle_replay'
+  reviewed: boolean
+}): Promise<{ ok: boolean; item_key: string; reviewed: boolean }> {
+  return fetchJson(`/admin/cobble-ranked/review`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function adminMinecraftRankedadminElo(body: {
+  action: 'add' | 'remove'
+  amount: number
+  minecraft_username: string
+  format: 'singles' | 'doubles'
+}): Promise<{ ok: boolean; command?: string; output?: string; error?: string }> {
+  return fetchJson(`/admin/minecraft/rankedadmin-elo`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
 }

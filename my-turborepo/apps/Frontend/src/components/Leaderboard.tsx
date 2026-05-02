@@ -10,6 +10,7 @@ import type {
   LeaderboardPlayer,
 } from '../types'
 import { CobbleDollars } from './CobbleDollars.tsx'
+import { normalizePvpTierSlugForAssets, PvPTierBadge } from './PvPTierBadge.tsx'
 import { RankedApiFeed } from './RankedApiFeed.tsx'
 
 type MainSection = 'ranks' | 'economy' | 'battle' | 'ranked'
@@ -28,7 +29,7 @@ const MAIN_SECTIONS: { id: MainSection; label: string; description: string }[] =
   {
     id: 'ranked',
     label: 'Ranked feed',
-    description: 'CobbleRanked match results & battle replays (API sync)',
+    description: 'CobbleRanked match results summary (teams hidden)',
   },
 ]
 
@@ -46,7 +47,7 @@ const BATTLE_MODES: { id: BattleModeId; label: string; apiMode: string }[] = [
 
 const TIER_COLOR_CLASS: Record<string, string> = {
   copper: 'text-copper',
-  silver: 'text-silver',
+  iron: 'text-iron',
   gold: 'text-gold',
   emerald: 'text-emerald',
   diamond: 'text-diamond',
@@ -67,7 +68,7 @@ const RANK_TIERS_BY_ELO: { minElo: number; displayName: string; slug: string }[]
   { minElo: 1250, displayName: 'Diamond', slug: 'diamond' },
   { minElo: 1175, displayName: 'Emerald', slug: 'emerald' },
   { minElo: 1100, displayName: 'Gold', slug: 'gold' },
-  { minElo: 1050, displayName: 'Silver', slug: 'silver' },
+  { minElo: 1050, displayName: 'Iron', slug: 'iron' },
   { minElo: 0, displayName: 'Copper', slug: 'copper' },
 ]
 
@@ -292,6 +293,8 @@ export function Leaderboard() {
     return rankPlayers.find((p) => ignNamesMatch(viewerIgn, p.playerName))
   }, [rankPlayers, viewerIgn])
 
+  const yourRankTier = useMemo(() => (yourRankPlayer ? getTier(yourRankPlayer.elo) : null), [yourRankPlayer])
+
   useEffect(() => {
     if (mainSection !== 'ranks' || !yourRankPlayer) return
     scrollElementIntoViewCentered(rankYouRef.current)
@@ -320,7 +323,7 @@ export function Leaderboard() {
       <header className="space-y-2 border-b border-border/50 pb-6">
         <h1 className="text-2xl font-semibold m-0 text-[#e2e8f0] tracking-tight">Leaderboard</h1>
         <p className="text-sm text-muted m-0 max-w-2xl leading-relaxed">
-          PvP ranks, in-game Cobble$ or PCO top 10, Battle Tower, and CobbleRanked match results / replays. When you are
+          PvP ranks, in-game Cobble$ or PCO top 10, Battle Tower, and CobbleRanked match summaries. When you are
           signed in, your row is highlighted if your site username matches your in-game name.
         </p>
         {!isAuthenticated ? (
@@ -400,9 +403,15 @@ export function Leaderboard() {
                         <span className="font-mono font-semibold">{yourRankPlayer.playerName}</span> —{' '}
                         <strong className="text-accent tabular-nums">#{yourRankPlayer.rank}</strong> in{' '}
                         {getFormatDisplayName(rankFormatId)} · {yourRankPlayer.elo} ELO ·{' '}
-                        <span className={TIER_COLOR_CLASS[getTier(yourRankPlayer.elo).slug] ?? 'text-muted'}>
-                          {getTier(yourRankPlayer.elo).displayName}
-                        </span>
+                        {yourRankTier ? (
+                          <PvPTierBadge
+                            slug={normalizePvpTierSlugForAssets(yourRankTier.slug)}
+                            displayName={yourRankTier.displayName}
+                            fallbackTextClassName={TIER_COLOR_CLASS[yourRankTier.slug] ?? 'text-muted'}
+                            imgHeightClass="h-6"
+                            className="align-middle ml-1"
+                          />
+                        ) : null}
                       </p>
                     </div>
                   ) : viewerIgn ? (
@@ -468,10 +477,12 @@ export function Leaderboard() {
                               {p.playerName}
                             </td>
                             <td className="py-2.5 px-3 w-16 border-b border-border">{p.elo}</td>
-                            <td
-                              className={`py-2.5 px-3 text-xs font-semibold border-b border-border ${TIER_COLOR_CLASS[tier.slug] ?? 'text-muted'}`}
-                            >
-                              {tier.displayName}
+                            <td className="py-2.5 px-3 border-b border-border align-middle">
+                              <PvPTierBadge
+                                slug={normalizePvpTierSlugForAssets(tier.slug)}
+                                displayName={tier.displayName}
+                                fallbackTextClassName={TIER_COLOR_CLASS[tier.slug] ?? 'text-muted'}
+                              />
                             </td>
                             <td className="py-2.5 px-3 w-16 border-b border-border">{p.wins}</td>
                             <td className="py-2.5 px-3 w-16 border-b border-border">{p.losses}</td>

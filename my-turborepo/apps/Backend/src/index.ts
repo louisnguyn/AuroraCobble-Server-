@@ -54,6 +54,23 @@ import {
   buildCobbledollarsDepositCommand,
   isCobbledollarsDepositEnabled,
 } from "./minecraftCobbledollarsDeposit.js";
+import {
+  COBBLE_RANKED_SNAPSHOT_LEADERBOARD,
+  COBBLE_RANKED_SNAPSHOT_USAGE,
+  hydrateCobbleRankedStore,
+  persistCobbleBattleReplay,
+  persistCobbleMatchResult,
+  persistCobbleRankedSnapshot,
+  type CobbleRankedMemoryStore,
+} from "./cobbleRankedPersistence.js";
+import {
+  rankedFeedAttentionReasons,
+  rankedFeedNeedsAttention,
+  stableRankedFeedItemKey,
+  type RankedFeedKind,
+} from "./cobbleRankedFeedAdmin.js";
+import { fetchReviewedKeySet, upsertFeedReview } from "./cobbleRankedFeedReviewsDb.js";
+import { runRankedAdminEloRcon, type RankedFormatArg } from "./minecraftRankedAdminElo.js";
 
 function readMinecraftRoleField(row: { minecraft_role?: string | null } | null | undefined): string {
   const r = row?.minecraft_role?.trim();
@@ -163,6 +180,21 @@ const COBBLE_RANKED_FEED_MAX = (() => {
   if (!Number.isFinite(n) || n < 1) return 200;
   return Math.min(n, 2000);
 })();
+
+function rememberBattleReplaySynced(body: unknown): void {
+  pushCobbleRankedFeed("battleReplays", body);
+  void persistCobbleBattleReplay(body, COBBLE_RANKED_FEED_MAX).catch((err) =>
+    console.error("[cobble-ranked-db] battle replay:", err instanceof Error ? err.message : err)
+  );
+}
+
+function rememberMatchResultSynced(body: unknown): void {
+  pushCobbleRankedFeed("matchResults", body);
+  void persistCobbleMatchResult(body, COBBLE_RANKED_FEED_MAX).catch((err) =>
+    console.error("[cobble-ranked-db] match result:", err instanceof Error ? err.message : err)
+  );
+}
+
 const CORS_ORIGIN = process.env.CORS_ORIGIN ?? "*";
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL?.trim() || null;
 console.log("[Discord] webhook configured:", DISCORD_WEBHOOK_URL ? "yes" : "no");
@@ -180,7 +212,7 @@ function pvpTierFromElo(elo: number | null): string {
   if (n >= 1250) return "diamond";
   if (n >= 1175) return "emerald";
   if (n >= 1100) return "gold";
-  if (n >= 1050) return "silver";
+  if (n >= 1050) return "iron";
   return "copper";
 }
 
@@ -661,22 +693,34 @@ const cobbleRankedSyncRouter = express.Router();
 cobbleRankedSyncRouter.get("/usage-stats", (_req, res) => res.json(cobbleStore.usageStats ?? {}));
 cobbleRankedSyncRouter.post("/usage-stats", requireCobbleAuth, (req, res) => {
   cobbleStore.usageStats = req.body;
+  void persistCobbleRankedSnapshot(COBBLE_RANKED_SNAPSHOT_USAGE, req.body).catch((err) =>
+    console.error("[cobble-ranked-db] persist usage_stats:", err instanceof Error ? err.message : err)
+  );
   cobbleRankedPostOk(res);
 });
 cobbleRankedSyncRouter.get("/leaderboard", (_req, res) => res.json(cobbleStore.leaderboard ?? {}));
 cobbleRankedSyncRouter.post("/leaderboard", requireCobbleAuth, (req, res) => {
   cobbleStore.leaderboard = req.body;
+  void persistCobbleRankedSnapshot(COBBLE_RANKED_SNAPSHOT_LEADERBOARD, req.body).catch((err) =>
+    console.error("[cobble-ranked-db] persist leaderboard:", err instanceof Error ? err.message : err)
+  );
   void syncWebsitePvpRanksFromLeaderboard(req.body);
   cobbleRankedPostOk(res);
 });
 cobbleRankedSyncRouter.get("/v4/usage-stats", (_req, res) => res.json(cobbleStore.usageStats ?? {}));
 cobbleRankedSyncRouter.post("/v4/usage-stats", requireCobbleAuth, (req, res) => {
   cobbleStore.usageStats = req.body;
+  void persistCobbleRankedSnapshot(COBBLE_RANKED_SNAPSHOT_USAGE, req.body).catch((err) =>
+    console.error("[cobble-ranked-db] persist usage_stats:", err instanceof Error ? err.message : err)
+  );
   cobbleRankedPostOk(res);
 });
 cobbleRankedSyncRouter.get("/v4/leaderboard", (_req, res) => res.json(cobbleStore.leaderboard ?? {}));
 cobbleRankedSyncRouter.post("/v4/leaderboard", requireCobbleAuth, (req, res) => {
   cobbleStore.leaderboard = req.body;
+  void persistCobbleRankedSnapshot(COBBLE_RANKED_SNAPSHOT_LEADERBOARD, req.body).catch((err) =>
+    console.error("[cobble-ranked-db] persist leaderboard:", err instanceof Error ? err.message : err)
+  );
   void syncWebsitePvpRanksFromLeaderboard(req.body);
   cobbleRankedPostOk(res);
 });
@@ -685,7 +729,7 @@ cobbleRankedSyncRouter.get("/battle-replays", (req, res) => {
   res.json({ items: cobbleStore.battleReplays.slice(0, limit) });
 });
 cobbleRankedSyncRouter.post("/battle-replay", requireCobbleAuth, (req, res) => {
-  pushCobbleRankedFeed("battleReplays", req.body);
+  rememberBattleReplaySynced(req.body);
   logCobbleRankedFeedReceipt("battle-replay", req.body);
   cobbleRankedPostOk(res);
 });
@@ -694,7 +738,7 @@ cobbleRankedSyncRouter.get("/match-results", (req, res) => {
   res.json({ items: cobbleStore.matchResults.slice(0, limit) });
 });
 cobbleRankedSyncRouter.post("/match-result", requireCobbleAuth, (req, res) => {
-  pushCobbleRankedFeed("matchResults", req.body);
+  rememberMatchResultSynced(req.body);
   logCobbleRankedFeedReceipt("match-result", req.body);
   cobbleRankedPostOk(res);
 });
@@ -703,7 +747,7 @@ cobbleRankedSyncRouter.get("/v4/battle-replays", (req, res) => {
   res.json({ items: cobbleStore.battleReplays.slice(0, limit) });
 });
 cobbleRankedSyncRouter.post("/v4/battle-replay", requireCobbleAuth, (req, res) => {
-  pushCobbleRankedFeed("battleReplays", req.body);
+  rememberBattleReplaySynced(req.body);
   logCobbleRankedFeedReceipt("battle-replay", req.body);
   cobbleRankedPostOk(res);
 });
@@ -712,7 +756,7 @@ cobbleRankedSyncRouter.get("/v4/match-results", (req, res) => {
   res.json({ items: cobbleStore.matchResults.slice(0, limit) });
 });
 cobbleRankedSyncRouter.post("/v4/match-result", requireCobbleAuth, (req, res) => {
-  pushCobbleRankedFeed("matchResults", req.body);
+  rememberMatchResultSynced(req.body);
   logCobbleRankedFeedReceipt("match-result", req.body);
   cobbleRankedPostOk(res);
 });
@@ -2485,6 +2529,37 @@ app.get("/user/pvp-rank", requireAuth, async (_req, res) => {
     tier: pvpTierFromElo(mine.elo),
     updatedAt: now,
     fromLiveLeaderboard: true,
+  });
+});
+
+function rankedPayloadInvolvesUsername(payload: unknown, username: string): boolean {
+  if (!payload || typeof payload !== "object") return false;
+  const players = (payload as { players?: unknown }).players;
+  if (!Array.isArray(players)) return false;
+  const want = normalizeName(username);
+  if (!want) return false;
+  for (const p of players) {
+    if (!p || typeof p !== "object") continue;
+    const name = (p as { playerName?: unknown }).playerName;
+    if (typeof name === "string" && normalizeName(name) === want) return true;
+  }
+  return false;
+}
+
+/** Match results / replays involving the authenticated user's website username (same as IGN for matching). */
+app.get("/user/ranked-history", requireAuth, (req, res) => {
+  const user = res.locals.user!;
+  const limit = parseRankedFeedLimit(req.query.limit);
+  const uname = user.username ?? "";
+  const matchResults = (cobbleStore.matchResults as unknown[]).filter((m) =>
+    rankedPayloadInvolvesUsername(m, uname)
+  );
+  const battleReplays = (cobbleStore.battleReplays as unknown[]).filter((r) =>
+    rankedPayloadInvolvesUsername(r, uname)
+  );
+  res.json({
+    matchResults: matchResults.slice(0, limit),
+    battleReplays: battleReplays.slice(0, limit),
   });
 });
 
@@ -4334,6 +4409,106 @@ app.get("/admin/minecraft-roles", requireAuth, requireAdmin, (_req, res) => {
   res.json({ keys: listAllKnownRoleKeys() });
 });
 
+app.get("/admin/cobble-ranked/feed", requireAuth, requireAdmin, async (req, res) => {
+  const limit = parseRankedFeedLimit(req.query.limit);
+  const rawMatches = (cobbleStore.matchResults as unknown[]).slice(0, limit);
+  const rawReplays = (cobbleStore.battleReplays as unknown[]).slice(0, limit);
+
+  const matches = rawMatches.map((item) => {
+    const key = stableRankedFeedItemKey("match_result", item);
+    return {
+      key,
+      needsAttention: rankedFeedNeedsAttention("match_result", item),
+      attentionReasons: rankedFeedAttentionReasons("match_result", item),
+      item,
+    };
+  });
+  const replays = rawReplays.map((item) => {
+    const key = stableRankedFeedItemKey("battle_replay", item);
+    return {
+      key,
+      needsAttention: rankedFeedNeedsAttention("battle_replay", item),
+      attentionReasons: rankedFeedAttentionReasons("battle_replay", item),
+      item,
+    };
+  });
+
+  const keys = [...matches.map((m) => m.key), ...replays.map((r) => r.key)];
+  let reviewedKeys: string[] = [];
+  if (supabase && keys.length > 0) {
+    try {
+      const set = await fetchReviewedKeySet(supabase, keys);
+      reviewedKeys = [...set];
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn("[admin/cobble-ranked/feed] reviewed keys:", msg);
+    }
+  }
+
+  res.json({ matches, replays, reviewedKeys });
+});
+
+app.post("/admin/cobble-ranked/review", requireAuth, requireAdmin, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const staff = res.locals.user!;
+  const body = req.body ?? {};
+  const itemKey = typeof body.item_key === "string" ? body.item_key.trim() : "";
+  const feedKind: RankedFeedKind =
+    body.feed_kind === "battle_replay" ? "battle_replay" : "match_result";
+  const reviewed = Boolean(body.reviewed);
+  if (!itemKey) {
+    res.status(400).json({ error: "item_key required" });
+    return;
+  }
+  try {
+    await upsertFeedReview(supabase, {
+      itemKey,
+      feedKind,
+      reviewed,
+      reviewedByUserId: staff.userId,
+    });
+    res.json({ ok: true, item_key: itemKey, reviewed });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.status(500).json({ error: msg });
+  }
+});
+
+app.post("/admin/minecraft/rankedadmin-elo", requireAuth, requireAdmin, async (req, res) => {
+  const body = req.body ?? {};
+  const action = body.action === "remove" ? "remove" : "add";
+  const amount = Number(body.amount);
+  const minecraftUsername = typeof body.minecraft_username === "string" ? body.minecraft_username.trim() : "";
+  const fmtIn = typeof body.format === "string" ? body.format.trim().toLowerCase() : "singles";
+  const format: RankedFormatArg = fmtIn === "doubles" ? "doubles" : "singles";
+
+  if (!minecraftUsername) {
+    res.status(400).json({ error: "minecraft_username required" });
+    return;
+  }
+  if (!Number.isFinite(amount) || !Number.isInteger(amount) || amount <= 0) {
+    res.status(400).json({ error: "amount must be a positive whole number" });
+    return;
+  }
+  const maxAmt = 10_000;
+  if (amount > maxAmt) {
+    res.status(400).json({ error: `amount must be at most ${maxAmt}` });
+    return;
+  }
+
+  const exec = await runRankedAdminEloRcon(action, amount, minecraftUsername, format);
+  if (exec.ok) {
+    console.info(`[admin] rankedadmin ${action}elo ${amount} ${minecraftUsername} ${format}: ok`);
+    res.json({ ok: true, command: exec.command, output: exec.output });
+    return;
+  }
+  console.warn(`[admin] rankedadmin ${action}elo failed`, exec.command, exec.error);
+  res.status(502).json({ ok: false, command: exec.command, error: exec.error });
+});
+
 app.post("/admin/users/:userId/minecraft-role", requireAuth, requireAdmin, async (req, res) => {
   if (!supabase) {
     res.status(503).json({ error: "Database not configured" });
@@ -5159,5 +5334,10 @@ function startDailyPvpAutoPayoutScheduler(): void {
 
 app.listen(port, () => {
   console.log(`Backend http://localhost:${port}`);
+  if (supabase) {
+    void hydrateCobbleRankedStore(cobbleStore as CobbleRankedMemoryStore, COBBLE_RANKED_FEED_MAX).then(() => {
+      if (cobbleStore.leaderboard) void syncWebsitePvpRanksFromLeaderboard(cobbleStore.leaderboard);
+    });
+  }
   startDailyPvpAutoPayoutScheduler();
 });
