@@ -505,3 +505,89 @@ export async function adminMinecraftRankedadminElo(body: {
     body: JSON.stringify(body),
   })
 }
+
+/** Public-profile achievement badges (definitions + grants). */
+export type ProfileAchievementDefinition = {
+  id: number
+  slug: string
+  title: string
+  description: string
+  tier: 'gold' | 'violet' | 'cyan'
+  sort_order: number
+  active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export type ProfileAchievementGrantRow = {
+  grant_id: number
+  achievement_id: number
+  granted_at: string
+  slug: string
+  title: string
+  tier: string
+  definition_active: boolean
+}
+
+export async function adminFetchAchievementDefinitions(): Promise<{ definitions: ProfileAchievementDefinition[] }> {
+  return fetchJson('/admin/profile-achievement-definitions')
+}
+
+export async function adminCreateAchievementDefinition(body: {
+  title: string
+  description: string
+  tier: 'gold' | 'violet' | 'cyan'
+  slug?: string
+  sort_order?: number
+  active?: boolean
+}): Promise<{ definition: ProfileAchievementDefinition }> {
+  return fetchJson('/admin/profile-achievement-definitions', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function adminPatchAchievementDefinition(
+  id: number,
+  body: Partial<{
+    title: string
+    description: string
+    tier: 'gold' | 'violet' | 'cyan'
+    sort_order: number
+    active: boolean
+  }>
+): Promise<{ definition: ProfileAchievementDefinition }> {
+  return fetchJson(`/admin/profile-achievement-definitions/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function adminFetchAchievementGrants(params: {
+  user_id?: number
+  username?: string
+}): Promise<{ user_id: number; grants: ProfileAchievementGrantRow[] }> {
+  const sp = new URLSearchParams()
+  if (params.user_id != null) sp.set('user_id', String(params.user_id))
+  if (params.username?.trim()) sp.set('username', params.username.trim())
+  const qs = sp.toString()
+  return fetchJson(`/admin/profile-achievement-grants${qs ? `?${qs}` : ''}`)
+}
+
+export async function adminGrantProfileAchievement(body: {
+  username?: string
+  target_user_id?: number
+  achievement_id?: number
+  slug?: string
+}): Promise<{ ok: boolean }> {
+  return fetchJson('/admin/profile-achievement-grants', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function adminRevokeProfileAchievementGrant(grantId: number): Promise<{ ok: boolean }> {
+  return fetchJson(`/admin/profile-achievement-grants/${grantId}`, {
+    method: 'DELETE',
+  })
+}

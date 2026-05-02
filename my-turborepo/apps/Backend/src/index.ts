@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import multer from "multer";
 import {
   adminResetPassword,
   createUser,
@@ -71,6 +72,13 @@ import {
 } from "./cobbleRankedFeedAdmin.js";
 import { fetchReviewedKeySet, upsertFeedReview } from "./cobbleRankedFeedReviewsDb.js";
 import { runRankedAdminEloRcon, type RankedFormatArg } from "./minecraftRankedAdminElo.js";
+import {
+  fetchPublicProfileByUsername,
+  sanitizeProfileBio,
+  sanitizeAvatarUrl,
+} from "./publicProfile.js";
+import { uploadProfileAvatarToStorage } from "./profileAvatarUpload.js";
+import { normalizeAchievementSlug, parseAchievementTier } from "./profileAchievements.js";
 
 function readMinecraftRoleField(row: { minecraft_role?: string | null } | null | undefined): string {
   const r = row?.minecraft_role?.trim();
@@ -1119,6 +1127,234 @@ app.post("/auth/change-password", requireAuth, async (req, res) => {
   }
   res.json({ ok: true });
 });
+
+app.get("/public/profile/:username", async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const param = decodeURIComponent(String(req.params.username ?? "").trim());
+  if (!param || param.length > 64) {
+    res.status(400).json({ error: "Invalid username" });
+    return;
+  }
+  try {
+    const profile = await fetchPublicProfileByUsername(supabase, param, readMinecraftRoleField, pvpTierFromElo);
+    if (!profile) {
+      res.status(404).json({ error: "Profile not found" });
+      return;
+    }
+    res.json({ profile });
+  } catch (e: unknown) {
+    res.status(500).json({ error: String((e as Error)?.message ?? e) });
+  }
+});
+
+app.get("/user/my-public-profile", requireAuth, async (_req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const tokenUser = res.locals.user!;
+  try {
+    const profile = await fetchPublicProfileByUsername(
+      supabase,
+      tokenUser.username.trim(),
+      readMinecraftRoleField,
+      pvpTierFromElo
+    );
+    if (!profile) {
+      res.status(404).json({ error: "Profile not found" });
+      return;
+    }
+    res.json({ profile });
+  } catch (e: unknown) {
+    res.status(500).json({ error: String((e as Error)?.message ?? e) });
+  }
+});
+
+app.patch("/user/my-public-profile", requireAuth, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const userId = res.locals.user!.userId;
+  const body = req.body as { bio?: unknown; avatar_url?: unknown } | null | undefined;
+  let nextBio: string | null | undefined = undefined;
+  let nextAvatar: string | null | undefined = undefined;
+  if (body && typeof body === "object" && "bio" in body) {
+    const cleaned = sanitizeProfileBio(body.bio);
+    nextBio = cleaned.length > 0 ? cleaned : null;
+  }
+  if (body && typeof body === "object" && "avatar_url" in body) {
+    const v = body.avatar_url;
+    if (v === null || v === "") {
+      nextAvatar = null;
+    } else if (typeof v !== "string") {
+      res.status(400).json({ error: "avatar_url must be a string or null" });
+      return;
+    } else if (!sanitizeAvatarUrl(v)) {
+      res.status(400).json({ error: "avatar_url must be a valid https URL" });
+      return;
+    } else {
+      nextAvatar = sanitizeAvatarUrl(v);
+    }
+  }
+  let mergedBio: string | null = null;
+  let mergedAvatar: string | null = null;
+  if (nextBio !== undefined || nextAvatar !== undefined) {
+    const { data: existing, error: selErr } = await supabase
+      .from("user_public_profiles")
+      .select("bio, avatar_url")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (selErr && !/user_public_profiles|relation|does not exist|schema cache/i.test(selErr.message)) {
+      res.status(500).json({ error: selErr.message });
+      return;
+    }
+    const ex = existing as { bio?: string | null; avatar_url?: string | null } | null;
+    mergedBio = nextBio !== undefined ? nextBio : (typeof ex?.bio === "string" ? ex.bio : null);
+    mergedAvatar =
+      nextAvatar !== undefined ? nextAvatar : (typeof ex?.avatar_url === "string" ? sanitizeAvatarUrl(ex.avatar_url) : null);
+    if (mergedAvatar && !sanitizeAvatarUrl(mergedAvatar)) mergedAvatar = null;
+    const now = new Date().toISOString();
+    const { error: upErr } = await supabase.from("user_public_profiles").upsert(
+      {
+        user_id: userId,
+        bio: mergedBio && mergedBio.trim() ? mergedBio.trim().slice(0, 800) : null,
+        avatar_url: mergedAvatar,
+        updated_at: now,
+      },
+      { onConflict: "user_id" }
+    );
+    if (upErr) {
+      const missing = /user_public_profiles|relation|does not exist|schema cache/i.test(upErr.message);
+      if (missing) {
+        res.status(503).json({ error: "Profile table not migrated (user_public_profiles)" });
+      } else {
+        res.status(500).json({ error: upErr.message });
+      }
+      return;
+    }
+  }
+
+  try {
+    const profile = await fetchPublicProfileByUsername(
+      supabase,
+      res.locals.user!.username.trim(),
+      readMinecraftRoleField,
+      pvpTierFromElo
+    );
+    if (!profile) {
+      res.status(404).json({ error: "Profile not found" });
+      return;
+    }
+    res.json({ profile });
+  } catch (e: unknown) {
+    res.status(500).json({ error: String((e as Error)?.message ?? e) });
+  }
+});
+
+const PROFILE_AVATAR_UPLOAD = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    cb(null, /^image\/(png|jpeg|jpg|webp|gif)$/i.test(file.mimetype));
+  },
+});
+
+app.post(
+  "/user/profile-avatar",
+  requireAuth,
+  (req, res, next) => {
+    PROFILE_AVATAR_UPLOAD.single("avatar")(req, res, (err: unknown) => {
+      if (err instanceof multer.MulterError) {
+        if (err.code === "LIMIT_FILE_SIZE") {
+          res.status(400).json({ error: "Avatar image must be 2 MB or smaller." });
+          return;
+        }
+        res.status(400).json({ error: err.message });
+        return;
+      }
+      if (err) {
+        res.status(400).json({ error: String((err as Error).message ?? err) });
+        return;
+      }
+      next();
+    });
+  },
+  async (req, res) => {
+    if (!supabase) {
+      res.status(503).json({ error: "Database not configured" });
+      return;
+    }
+    const userId = res.locals.user!.userId;
+    const buf = req.file?.buffer;
+    if (!Buffer.isBuffer(buf)) {
+      res.status(400).json({ error: "Choose an image file (PNG, JPEG, WebP, or GIF)." });
+      return;
+    }
+    const up = await uploadProfileAvatarToStorage(supabase, userId, buf);
+    if ("error" in up) {
+      res.status(400).json({ error: up.error });
+      return;
+    }
+
+    const { data: existing, error: selErr } = await supabase
+      .from("user_public_profiles")
+      .select("bio")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (selErr && !/user_public_profiles|relation|does not exist|schema cache/i.test(selErr.message)) {
+      res.status(500).json({ error: selErr.message });
+      return;
+    }
+    const ex = existing as { bio?: string | null } | null;
+    const mergedBio =
+      typeof ex?.bio === "string" && ex.bio.trim() ? ex.bio.trim().slice(0, 800) : null;
+
+    const now = new Date().toISOString();
+    const avatarUrlStored = sanitizeAvatarUrl(up.publicUrl);
+    if (!avatarUrlStored) {
+      res.status(500).json({ error: "Uploaded file URL rejected by avatar policy." });
+      return;
+    }
+    const { error: upsertErr } = await supabase.from("user_public_profiles").upsert(
+      {
+        user_id: userId,
+        bio: mergedBio,
+        avatar_url: avatarUrlStored,
+        updated_at: now,
+      },
+      { onConflict: "user_id" }
+    );
+    if (upsertErr) {
+      const missing = /user_public_profiles|relation|does not exist|schema cache/i.test(upsertErr.message);
+      if (missing) {
+        res.status(503).json({ error: "Profile table not migrated (user_public_profiles)" });
+      } else {
+        res.status(500).json({ error: upsertErr.message });
+      }
+      return;
+    }
+
+    try {
+      const profile = await fetchPublicProfileByUsername(
+        supabase,
+        res.locals.user!.username.trim(),
+        readMinecraftRoleField,
+        pvpTierFromElo
+      );
+      if (!profile) {
+        res.status(404).json({ error: "Profile not found" });
+        return;
+      }
+      res.json({ profile });
+    } catch (e: unknown) {
+      res.status(500).json({ error: String((e as Error)?.message ?? e) });
+    }
+  }
+);
 
 type SavedTeamSlotJson = {
   species: string;
@@ -4403,6 +4639,344 @@ app.get("/admin/users", requireAuth, requireAdmin, async (_req, res) => {
     return;
   }
   res.json({ users: data ?? [] });
+});
+
+app.get("/admin/profile-achievement-definitions", requireAuth, requireAdmin, async (_req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const { data, error } = await supabase
+    .from("profile_achievement_definitions")
+    .select("id, slug, title, description, tier, sort_order, active, created_at, updated_at")
+    .order("sort_order", { ascending: true })
+    .order("id", { ascending: true });
+  if (error) {
+    const missing = /profile_achievement_definitions|relation|does not exist|schema cache/i.test(error.message);
+    res.status(missing ? 503 : 500).json({
+      error: missing
+        ? "Run supabase/profile_achievements.sql (tables missing)."
+        : error.message,
+    });
+    return;
+  }
+  res.json({ definitions: data ?? [] });
+});
+
+app.post("/admin/profile-achievement-definitions", requireAuth, requireAdmin, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const body = req.body ?? {};
+  const title = typeof body.title === "string" ? body.title.trim().slice(0, 120) : "";
+  const description = typeof body.description === "string" ? body.description.trim().slice(0, 600) : "";
+  const tier = parseAchievementTier(body.tier);
+  const sortOrderIn = body.sort_order;
+  const sortOrder =
+    typeof sortOrderIn === "number" && Number.isFinite(sortOrderIn) ? Math.trunc(sortOrderIn) : 0;
+  if (!title || !description || !tier) {
+    res.status(400).json({ error: "title, description, and tier (gold|violet|cyan) are required" });
+    return;
+  }
+  let slug =
+    typeof body.slug === "string" && body.slug.trim()
+      ? normalizeAchievementSlug(body.slug)
+      : normalizeAchievementSlug(title.replace(/\s+/g, "-"));
+  if (!slug) slug = `badge-${Date.now()}`;
+  const now = new Date().toISOString();
+  const { data: row, error } = await supabase
+    .from("profile_achievement_definitions")
+    .insert({
+      slug,
+      title,
+      description,
+      tier,
+      sort_order: sortOrder,
+      active: body.active === false ? false : true,
+      updated_at: now,
+    })
+    .select("id, slug, title, description, tier, sort_order, active, created_at, updated_at")
+    .maybeSingle();
+  if (error) {
+    if (/duplicate key|unique/i.test(error.message)) {
+      res.status(409).json({ error: "Slug already exists — pick another slug or title." });
+      return;
+    }
+    const missing = /profile_achievement_definitions|relation|does not exist|schema cache/i.test(error.message);
+    res.status(missing ? 503 : 500).json({
+      error: missing ? "Run supabase/profile_achievements.sql." : error.message,
+    });
+    return;
+  }
+  res.status(201).json({ definition: row });
+});
+
+app.patch("/admin/profile-achievement-definitions/:id", requireAuth, requireAdmin, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const id = parseInt(String(req.params.id), 10);
+  if (!Number.isFinite(id) || id < 1) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+  const body = req.body ?? {};
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if ("title" in body && typeof body.title === "string") patch.title = body.title.trim().slice(0, 120);
+  if ("description" in body && typeof body.description === "string") {
+    patch.description = body.description.trim().slice(0, 600);
+  }
+  if ("tier" in body) {
+    const t = parseAchievementTier(body.tier);
+    if (!t) {
+      res.status(400).json({ error: "tier must be gold, violet, or cyan" });
+      return;
+    }
+    patch.tier = t;
+  }
+  if ("sort_order" in body) {
+    const n = Number(body.sort_order);
+    if (Number.isFinite(n)) patch.sort_order = Math.trunc(n);
+  }
+  if ("active" in body) patch.active = Boolean(body.active);
+  const { data, error } = await supabase
+    .from("profile_achievement_definitions")
+    .update(patch)
+    .eq("id", id)
+    .select("id, slug, title, description, tier, sort_order, active, created_at, updated_at")
+    .maybeSingle();
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+  if (!data) {
+    res.status(404).json({ error: "Definition not found" });
+    return;
+  }
+  res.json({ definition: data });
+});
+
+app.get("/admin/profile-achievement-grants", requireAuth, requireAdmin, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const qUid = req.query.user_id ?? req.query.target_user_id;
+  const uid =
+    typeof qUid === "string" && qUid.trim() !== ""
+      ? parseInt(qUid, 10)
+      : typeof qUid === "number"
+        ? qUid
+        : NaN;
+  let userId = Number.isFinite(uid) ? Math.trunc(uid) : NaN;
+  const qName = typeof req.query.username === "string" ? req.query.username.trim() : "";
+  if (!Number.isFinite(userId)) {
+    if (!qName) {
+      res.status(400).json({ error: "Provide user_id or username query parameter" });
+      return;
+    }
+    const { data: ur, error: uerr } = await supabase
+      .from("users")
+      .select("id")
+      .ilike("username", qName)
+      .limit(1)
+      .maybeSingle();
+    if (uerr || !ur) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+    userId = Number((ur as { id: number }).id);
+  }
+
+  const { data: grants, error: gerr } = await supabase
+    .from("profile_achievement_grants")
+    .select("id, achievement_id, granted_at")
+    .eq("user_id", userId)
+    .order("granted_at", { ascending: false });
+  if (gerr) {
+    const missing = /profile_achievement_grants|relation|does not exist|schema cache/i.test(gerr.message);
+    res.status(missing ? 503 : 500).json({
+      error: missing ? "Run supabase/profile_achievements.sql." : gerr.message,
+    });
+    return;
+  }
+
+  const gRows = (grants ?? []) as { id: number; achievement_id: number; granted_at: string }[];
+  const ids = [...new Set(gRows.map((g) => g.achievement_id))];
+  if (ids.length === 0) {
+    res.json({ user_id: userId, grants: [] });
+    return;
+  }
+
+  const { data: defs, error: derr } = await supabase
+    .from("profile_achievement_definitions")
+    .select("id, slug, title, tier, active")
+    .in("id", ids);
+  if (derr) {
+    res.status(500).json({ error: derr.message });
+    return;
+  }
+  const defById = new Map(
+    ((defs ?? []) as { id: number; slug: string; title: string; tier: string; active: boolean }[]).map((d) => [
+      d.id,
+      d,
+    ])
+  );
+  res.json({
+    user_id: userId,
+    grants: gRows.map((g) => {
+      const d = defById.get(g.achievement_id);
+      return {
+        grant_id: g.id,
+        achievement_id: g.achievement_id,
+        granted_at: g.granted_at,
+        slug: d?.slug ?? "",
+        title: d?.title ?? "(deleted badge)",
+        tier: d?.tier ?? "cyan",
+        definition_active: d?.active ?? false,
+      };
+    }),
+  });
+});
+
+app.post("/admin/profile-achievement-grants", requireAuth, requireAdmin, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const staff = res.locals.user!;
+  const body = req.body ?? {};
+  let userId =
+    typeof body.target_user_id === "number"
+      ? body.target_user_id
+      : typeof body.user_id === "number"
+        ? body.user_id
+        : NaN;
+  const sid = typeof body.target_user_id === "string" ? body.target_user_id : typeof body.user_id === "string" ? body.user_id : "";
+  if (!Number.isFinite(userId) && sid) userId = parseInt(String(sid), 10);
+
+  const uname =
+    typeof body.username === "string"
+      ? body.username.trim()
+      : typeof body.target_username === "string"
+        ? body.target_username.trim()
+        : "";
+  if (!Number.isFinite(userId) && uname) {
+    const { data: ur } = await supabase.from("users").select("id").ilike("username", uname).limit(1).maybeSingle();
+    if (ur) userId = Number((ur as { id: number }).id);
+  }
+  if (!Number.isFinite(userId) || userId < 1) {
+    res.status(400).json({ error: "target user: provide target_user_id, user_id (number), or username" });
+    return;
+  }
+
+  let achievementId =
+    typeof body.achievement_id === "number"
+      ? body.achievement_id
+      : typeof body.achievement_definition_id === "number"
+        ? body.achievement_definition_id
+        : NaN;
+  const aidRaw = typeof body.achievement_id === "string" ? body.achievement_id : "";
+  if (!Number.isFinite(achievementId) && aidRaw) achievementId = parseInt(aidRaw, 10);
+  const slug = typeof body.slug === "string" ? normalizeAchievementSlug(body.slug) : "";
+  if (!Number.isFinite(achievementId)) {
+    if (!slug) {
+      res.status(400).json({ error: "Provide achievement_id or slug" });
+      return;
+    }
+    const { data: def } = await supabase
+      .from("profile_achievement_definitions")
+      .select("id")
+      .eq("slug", slug)
+      .maybeSingle();
+    if (!def) {
+      res.status(404).json({ error: "Achievement definition not found for slug" });
+      return;
+    }
+    achievementId = Number((def as { id: number }).id);
+  }
+
+  const { data: exists } = await supabase
+    .from("profile_achievement_definitions")
+    .select("id, active")
+    .eq("id", achievementId)
+    .maybeSingle();
+  if (!exists) {
+    res.status(404).json({ error: "Achievement definition not found" });
+    return;
+  }
+  const defActive = (exists as { active?: boolean }).active !== false;
+  if (!defActive) {
+    res.status(400).json({ error: "Badge type is hidden — activate it before granting." });
+    return;
+  }
+  const { error: insErr } = await supabase.from("profile_achievement_grants").insert({
+    user_id: userId,
+    achievement_id: achievementId,
+    granted_by: staff.userId,
+  });
+  if (insErr) {
+    if (/duplicate key|unique/i.test(insErr.message)) {
+      res.status(409).json({ error: "User already has this badge." });
+      return;
+    }
+    res.status(500).json({ error: insErr.message });
+    return;
+  }
+
+  const { data: urow } = await supabase.from("users").select("username").eq("id", userId).maybeSingle();
+  const un = String((urow as { username?: string } | null)?.username ?? "").trim();
+  if (!un) {
+    res.json({ ok: true, granted: true, user_id: userId, achievement_id: achievementId });
+    return;
+  }
+  try {
+    const profile = await fetchPublicProfileByUsername(supabase, un, readMinecraftRoleField, pvpTierFromElo);
+    res.status(201).json({ ok: true, profile });
+  } catch {
+    res.status(201).json({ ok: true });
+  }
+});
+
+app.delete("/admin/profile-achievement-grants/:grantId", requireAuth, requireAdmin, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const grantId = parseInt(String(req.params.grantId ?? ""), 10);
+  if (!Number.isFinite(grantId) || grantId < 1) {
+    res.status(400).json({ error: "Invalid grant id" });
+    return;
+  }
+  const { data: gr, error: findErr } = await supabase
+    .from("profile_achievement_grants")
+    .select("user_id")
+    .eq("id", grantId)
+    .maybeSingle();
+  if (findErr || !gr) {
+    res.status(findErr ? 500 : 404).json({ error: findErr?.message ?? "Grant not found" });
+    return;
+  }
+  const targetUserId = Number((gr as { user_id: number }).user_id);
+  const { error: delErr } = await supabase.from("profile_achievement_grants").delete().eq("id", grantId);
+  if (delErr) {
+    res.status(500).json({ error: delErr.message });
+    return;
+  }
+  const { data: urow } = await supabase.from("users").select("username").eq("id", targetUserId).maybeSingle();
+  const un = String((urow as { username?: string } | null)?.username ?? "").trim();
+  if (!un) {
+    res.json({ ok: true });
+    return;
+  }
+  try {
+    const profile = await fetchPublicProfileByUsername(supabase, un, readMinecraftRoleField, pvpTierFromElo);
+    res.json({ ok: true, profile });
+  } catch {
+    res.json({ ok: true });
+  }
 });
 
 app.get("/admin/minecraft-roles", requireAuth, requireAdmin, (_req, res) => {

@@ -639,7 +639,7 @@ export function Account() {
             ['inventory', 'Inventory'],
             ['cobble', 'C$ balance'],
             ['account', 'Account'],
-          ] as const
+          ] as const satisfies readonly [AccountTab, string][]
         ).map(([id, label]) => (
           <button
             key={id}

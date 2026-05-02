@@ -9,6 +9,7 @@ import { TournamentAdmin } from './components/TournamentAdmin.tsx'
 import { VerificationRequestsAdmin } from './components/VerificationRequestsAdmin.tsx'
 import { RoleRequestsAdmin } from './components/RoleRequestsAdmin.tsx'
 import { CobbleRankedAdmin } from './components/CobbleRankedAdmin.tsx'
+import { ProfileAchievementsAdmin } from './components/ProfileAchievementsAdmin.tsx'
 import { RoleBadge } from './components/RoleBadge.tsx'
 
 type Section =
@@ -19,6 +20,7 @@ type Section =
   | 'minecraft'
   | 'tournament'
   | 'cobble_ranked'
+  | 'profile_badges'
   | 'settings'
   | 'bans'
 
@@ -28,6 +30,7 @@ const SECTIONS: { id: Section; label: string }[] = [
   { id: 'cobble_ranked', label: 'CobbleRanked' },
   { id: 'usage', label: 'Usage stats' },
   { id: 'users', label: 'Website users' },
+  { id: 'profile_badges', label: 'Profile badges' },
   { id: 'verifications', label: 'Verification requests' },
   { id: 'role_requests', label: 'Rank requests' },
   { id: 'settings', label: 'Settings' },
@@ -184,13 +187,17 @@ export default function App() {
       <main className="flex-1 p-4 sm:p-6 min-w-0">
         <div
           className={
-            section === 'minecraft' || section === 'tournament' || section === 'cobble_ranked'
+            section === 'minecraft' ||
+            section === 'tournament' ||
+            section === 'cobble_ranked' ||
+            section === 'profile_badges'
               ? 'max-w-6xl mx-auto'
               : 'max-w-5xl mx-auto'
           }
         >
           {section === 'usage' && <UsageStatsAdmin />}
           {section === 'users' && <UsersAdmin currentAdminId={user.id} />}
+          {section === 'profile_badges' && <ProfileAchievementsAdmin />}
           {section === 'verifications' && <VerificationRequestsAdmin />}
           {section === 'role_requests' && <RoleRequestsAdmin />}
           {section === 'minecraft' && <MinecraftDashboard viewerUsername={user.username} />}

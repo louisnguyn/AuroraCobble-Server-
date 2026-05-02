@@ -713,6 +713,62 @@ export async function fetchPublicTournament(slug: string): Promise<{
   return data as Awaited<ReturnType<typeof fetchPublicTournament>>
 }
 
+export type PublicProfileAchievement = {
+  id: string
+  title: string
+  description: string
+  tier: 'gold' | 'violet' | 'cyan'
+}
+
+export type PublicProfile = {
+  username: string
+  bio: string | null
+  avatarUrl: string | null
+  minecraftRole: string
+  memberSince: string
+  achievements: PublicProfileAchievement[]
+  pvp: {
+    rank: number | null
+    tier: string | null
+    elo: number | null
+    format: string | null
+  }
+}
+
+export async function fetchPublicProfile(username: string): Promise<{ profile: PublicProfile }> {
+  const seg = encodeURIComponent(username.trim())
+  return fetchApi<{ profile: PublicProfile }>(`/public/profile/${seg}`, { skipAuth: true })
+}
+
+export async function patchMyPublicProfile(patch: {
+  bio?: string | null
+  avatar_url?: string | null
+}): Promise<{ profile: PublicProfile }> {
+  return fetchApi<{ profile: PublicProfile }>('/user/my-public-profile', {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  })
+}
+
+/** Upload PNG/JPEG/WebP/GIF (max ~2 MB) to site storage; server sets profile avatar URL. */
+export async function uploadProfileAvatar(file: File): Promise<{ profile: PublicProfile }> {
+  const token = getToken()
+  if (!token) throw new Error('Login required')
+  const form = new FormData()
+  form.append('avatar', file)
+  const base = API_BASE.replace(/\/$/, '')
+  const res = await fetch(`${base}/user/profile-avatar`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    throw new Error((data as { error?: string }).error ?? `Upload failed: ${res.status}`)
+  }
+  return data as { profile: PublicProfile }
+}
+
 export async function fetchTournamentParticipantTeam(
   slug: string,
   participantId: number

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Analytics } from '@vercel/analytics/react'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { Home } from './components/Home.tsx'
@@ -14,6 +14,7 @@ import { Tournament } from './components/Tournament.tsx'
 import { TournamentTeamCompare } from './components/TournamentTeamCompare.tsx'
 import { TournamentTeamDetail } from './components/TournamentTeamDetail.tsx'
 import { TeamBuilder } from './components/TeamBuilder.tsx'
+import { parseProfileSlugFromHash, Profile } from './components/Profile.tsx'
 import { isAccountVerified, VerifiedAccountBadge } from './components/VerifiedAccountBadge.tsx'
 type Page =
   | 'main'
@@ -26,6 +27,7 @@ type Page =
   | 'account'
   | 'tournament'
   | 'teambuilder'
+  | 'profile'
 
 const PAGES: { id: Page; label: string }[] = [
   { id: 'main', label: 'Main' },
@@ -37,6 +39,7 @@ const PAGES: { id: Page; label: string }[] = [
   { id: 'gacha', label: 'Gacha' },
   { id: 'spawn', label: 'Spawn' },
   { id: 'account', label: 'Account' },
+  { id: 'profile', label: 'Profile' },
   { id: 'tournament', label: 'Tournament' },
 ]
 
@@ -112,14 +115,30 @@ function NavIcon({ page }: { page: Page }) {
           <path d="M9 17h6M12 13v4" />
         </svg>
       )
+    case 'profile':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={cls}>
+          <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" />
+          <path d="M4 21a8 8 0 0 1 16 0" />
+          <path d="M19 8h2M21 10v4M21 14h-2M19 14h2M19 17h2M17 21h4" opacity="0.85" strokeLinecap="round" />
+        </svg>
+      )
   }
 }
 
+function initialPageFromHash(): Page {
+  if (typeof window === 'undefined') return 'main'
+  return parseProfileSlugFromHash() ? 'profile' : 'main'
+}
+
 function AppContent() {
-  const [page, setPage] = useState<Page>('main')
+  const [page, setPage] = useState<Page>(initialPageFromHash)
   const [menuOpen, setMenuOpen] = useState(false)
   const [showAuth, setShowAuth] = useState(false)
   const { isAuthenticated, user, logout } = useAuth()
+  const [hashProfileSlug, setHashProfileSlug] = useState<string | null>(() =>
+    typeof window !== 'undefined' ? parseProfileSlugFromHash() : null
+  )
   const [tournamentNav, setTournamentNav] = useState<{
     slug: string
     participantId?: number
@@ -127,7 +146,30 @@ function AppContent() {
     comparePickFirst?: number
   }>({ slug: '' })
 
+  useEffect(() => {
+    const sync = () => {
+      const slug = parseProfileSlugFromHash()
+      setHashProfileSlug(slug)
+      if (slug) setPage('profile')
+    }
+    sync()
+    window.addEventListener('hashchange', sync)
+    return () => window.removeEventListener('hashchange', sync)
+  }, [])
+
   const goTo = (p: Page) => {
+    if (typeof window !== 'undefined') {
+      const isProfileHash = window.location.hash.startsWith('#profile/')
+      if (isProfileHash && p !== 'profile') {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search)
+        setHashProfileSlug(null)
+      } else if (p === 'profile' && isProfileHash) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search)
+        setHashProfileSlug(null)
+      } else if (p === 'profile' && !isProfileHash) {
+        setHashProfileSlug(null)
+      }
+    }
     setPage(p)
     setMenuOpen(false)
   }
@@ -227,6 +269,7 @@ function AppContent() {
         {page === 'gacha' && <Gacha />}
         {page === 'spawn' && <Spawn />}
         {page === 'account' && <Account />}
+        {page === 'profile' && <Profile slugFromHashOrNav={hashProfileSlug} />}
         {page === 'tournament' &&
           (tournamentNav.participantId != null && tournamentNav.compareWithId != null ? (
             <TournamentTeamCompare
