@@ -348,6 +348,140 @@
     color: #d7d4f0;
   }
 
+  /* PvP leaderboard — esports table */
+  .lb-esports-wrap {
+    border-radius: var(--radius-lg);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    background-color: rgba(8, 8, 12, 0.88);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 12px 40px rgba(0, 0, 0, 0.45);
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+    background-size: 26px 26px;
+    background-position: center -1px;
+  }
+
+  table.lb-esports-table {
+    border-collapse: separate;
+    border-spacing: 0 12px;
+    width: 100%;
+  }
+
+  .lb-esports-table thead th {
+    padding: 0 0.75rem 0.25rem;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgb(155 150 186 / 0.75);
+    border: none;
+    vertical-align: bottom;
+  }
+
+  .lb-esports-table tbody td {
+    vertical-align: middle;
+    padding: 0.85rem 0.75rem;
+    background: rgba(16, 15, 24, 0.92);
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+  }
+
+  .lb-esports-table tbody td:first-child {
+    border-left: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 12px 0 0 12px;
+  }
+
+  .lb-esports-table tbody td:last-child {
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 0 12px 12px 0;
+  }
+
+  .lb-esports-table tbody tr:hover td {
+    background: rgba(22, 21, 34, 0.95);
+  }
+
+  .lb-esports-table tbody tr.lb-esports-highlight td {
+    background: rgba(19, 33, 42, 0.55);
+    border-color: rgba(34, 211, 238, 0.12);
+  }
+
+  .lb-rank-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.75rem;
+    height: 2.35rem;
+    padding: 0 0.35rem;
+    border-radius: 10px;
+    font-weight: 800;
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+
+  .lb-rank-pill--gold {
+    color: #fef3c7;
+    background: linear-gradient(180deg, rgba(146, 64, 14, 0.45) 0%, rgba(69, 26, 3, 0.75) 100%);
+    border: 1px solid rgba(251, 191, 36, 0.45);
+    box-shadow:
+      0 0 22px rgba(251, 191, 36, 0.28),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+
+  .lb-rank-pill--silver {
+    color: #e8e4ec;
+    background: linear-gradient(180deg, rgba(82, 82, 94, 0.5) 0%, rgba(36, 36, 44, 0.82) 100%);
+    border: 1px solid rgba(203, 213, 225, 0.35);
+    box-shadow:
+      0 0 18px rgba(226, 232, 240, 0.14),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+
+  .lb-rank-pill--bronze {
+    color: #fed7aa;
+    background: linear-gradient(180deg, rgba(154, 52, 18, 0.4) 0%, rgba(67, 20, 7, 0.75) 100%);
+    border: 1px solid rgba(251, 146, 60, 0.38);
+    box-shadow:
+      0 0 16px rgba(249, 115, 22, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+
+  .lb-rank-pill--muted {
+    color: #c4bed8;
+    background: rgba(12, 11, 18, 0.9);
+    border: 1px solid rgba(120, 113, 154, 0.28);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+
+  .lb-pvp-namebadge {
+    display: inline-flex;
+    align-items: center;
+    max-width: min(12rem, 32vw);
+    padding: 0.28rem 0.55rem 0.3rem;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    font-family: ui-monospace, monospace;
+    color: #fecdd3;
+    background: rgba(69, 10, 26, 0.55);
+    border: 1px solid rgba(244, 63, 94, 0.38);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .lb-tier-frame {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.2rem 0.45rem;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(244, 63, 94, 0.35);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+
   .custom-select {
     position: relative;
     width: 100%;

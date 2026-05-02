@@ -77,6 +77,13 @@ function getTier(elo: number): { displayName: string; slug: string } {
   return tier ?? { displayName: 'Copper', slug: 'copper' }
 }
 
+function pvpRankPillClass(rank: number): string {
+  if (rank === 1) return 'lb-rank-pill lb-rank-pill--gold'
+  if (rank === 2) return 'lb-rank-pill lb-rank-pill--silver'
+  if (rank === 3) return 'lb-rank-pill lb-rank-pill--bronze'
+  return 'lb-rank-pill lb-rank-pill--muted'
+}
+
 /** Primary section tabs (Ranks / Economy / Battle Tower) */
 function MainTab({
   active,
@@ -392,27 +399,34 @@ export function Leaderboard() {
                 <>
                   {yourRankPlayer ? (
                     <div
-                      className="pixel-panel-soft px-4 py-3 ring-2 ring-accent/40"
+                      className="lb-esports-wrap px-4 py-3 ring-1 ring-accent/35"
                       role="status"
                       aria-live="polite"
                     >
-                      <p className="text-xs font-semibold uppercase tracking-wide text-accent m-0 mb-1">
+                      <p className="text-[0.62rem] font-bold uppercase tracking-[0.12em] text-muted m-0 mb-2">
                         Your current rank
                       </p>
-                      <p className="text-sm text-[#e2e8f0] m-0">
-                        <span className="font-mono font-semibold">{yourRankPlayer.playerName}</span> —{' '}
-                        <strong className="text-accent tabular-nums">#{yourRankPlayer.rank}</strong> in{' '}
-                        {getFormatDisplayName(rankFormatId)} · {yourRankPlayer.elo} ELO ·{' '}
+                      <div className="flex flex-wrap items-center gap-3">
+                        <span className={pvpRankPillClass(yourRankPlayer.rank)}>#{yourRankPlayer.rank}</span>
+                        <span className="lb-pvp-namebadge min-w-0" title={yourRankPlayer.playerName}>
+                          {yourRankPlayer.playerName}
+                        </span>
+                        <span className="tabular-nums text-base font-bold text-[#ecebff]">
+                          {yourRankPlayer.elo} <span className="text-xs font-semibold text-muted">ELO</span>
+                        </span>
                         {yourRankTier ? (
-                          <PvPTierBadge
-                            slug={normalizePvpTierSlugForAssets(yourRankTier.slug)}
-                            displayName={yourRankTier.displayName}
-                            fallbackTextClassName={TIER_COLOR_CLASS[yourRankTier.slug] ?? 'text-muted'}
-                            imgHeightClass="h-6"
-                            className="align-middle ml-1"
-                          />
+                          <span className="lb-tier-frame ml-auto sm:ml-0">
+                            <PvPTierBadge
+                              slug={normalizePvpTierSlugForAssets(yourRankTier.slug)}
+                              displayName={yourRankTier.displayName}
+                              fallbackTextClassName={TIER_COLOR_CLASS[yourRankTier.slug] ?? 'text-muted'}
+                              imgHeightClass="h-7"
+                              className="align-middle"
+                            />
+                          </span>
                         ) : null}
-                      </p>
+                      </div>
+                      <p className="text-xs text-muted m-0 mt-2">{getFormatDisplayName(rankFormatId)}</p>
                     </div>
                   ) : viewerIgn ? (
                     <p className="text-sm text-muted m-0 pixel-well px-3 py-2">
@@ -420,38 +434,32 @@ export function Leaderboard() {
                       may be unranked or use a different in-game name.
                     </p>
                   ) : null}
-                <div className="overflow-x-auto pixel-well">
-                  <table className="w-full border-collapse text-sm min-w-[640px]">
+                <div className="overflow-x-auto lb-esports-wrap p-4 sm:p-5">
+                  <table className="lb-esports-table min-w-[760px]" role="table" aria-label="PvP leaderboard">
                     <thead>
                       <tr>
-                        <th className="text-left py-2.5 px-3 font-semibold text-muted border-b border-border">
+                        <th scope="col" className="text-left w-[5.5rem]">
                           Rank
                         </th>
-                        <th className="text-left py-2.5 px-3 font-semibold text-muted border-b border-border">
+                        <th scope="col" className="text-left min-w-[12rem]">
                           Player
                         </th>
-                        <th className="text-left py-2.5 px-3 font-semibold text-muted border-b border-border">
+                        <th scope="col" className="text-left w-[4.25rem]">
                           ELO
                         </th>
-                        <th className="text-left py-2.5 px-3 font-semibold text-muted border-b border-border">
+                        <th scope="col" className="text-left w-[7rem]">
                           Tier
                         </th>
-                        <th className="text-left py-2.5 px-3 font-semibold text-muted border-b border-border">
-                          W
+                        <th scope="col" className="text-center w-[4.75rem]">
+                          W / L
                         </th>
-                        <th className="text-left py-2.5 px-3 font-semibold text-muted border-b border-border">
-                          L
+                        <th scope="col" className="text-left w-[5.75rem]">
+                          Win rate
                         </th>
-                        <th className="text-left py-2.5 px-3 font-semibold text-muted border-b border-border">
-                          Matches
-                        </th>
-                        <th className="text-left py-2.5 px-3 font-semibold text-muted border-b border-border">
-                          Win %
-                        </th>
-                        <th className="text-left py-2.5 px-3 font-semibold text-muted border-b border-border">
+                        <th scope="col" className="text-center w-[4rem]">
                           Streak
                         </th>
-                        <th className="text-left py-2.5 px-3 font-semibold text-muted border-b border-border">
+                        <th scope="col" className="text-center w-[3.25rem]">
                           Best
                         </th>
                       </tr>
@@ -460,40 +468,75 @@ export function Leaderboard() {
                       {rankPlayers.map((p) => {
                         const tier = getTier(p.elo)
                         const isYou = yourRankPlayer?.uuid === p.uuid
+                        const streak = p.currentStreak
+                        const streakStr = streak > 0 ? `+${streak}` : String(streak)
+                        const winPct = Math.min(100, Math.max(0, p.winRate))
                         return (
                           <tr
                             key={p.uuid}
                             ref={isYou ? rankYouRef : undefined}
-                            className={`scroll-mt-24 transition-colors ${
-                              isYou
-                                ? 'bg-accent/[0.1] ring-1 ring-inset ring-accent/35 hover:bg-accent/[0.14]'
-                                : 'hover:bg-surface-hover/50'
-                            }`}
+                            className={`scroll-mt-24 ${isYou ? 'lb-esports-highlight' : ''}`}
                           >
-                            <td className="py-2.5 px-3 w-16 text-muted border-b border-border">
-                              {p.rank}
+                            <td>
+                              <span className={pvpRankPillClass(p.rank)}>#{p.rank}</span>
                             </td>
-                            <td className="py-2.5 px-3 font-medium border-b border-border">
-                              {p.playerName}
+                            <td className="min-w-0">
+                              <span className="lb-pvp-namebadge max-w-[14rem]" title={p.playerName}>
+                                {p.playerName}
+                              </span>
                             </td>
-                            <td className="py-2.5 px-3 w-16 border-b border-border">{p.elo}</td>
-                            <td className="py-2.5 px-3 border-b border-border align-middle">
-                              <PvPTierBadge
-                                slug={normalizePvpTierSlugForAssets(tier.slug)}
-                                displayName={tier.displayName}
-                                fallbackTextClassName={TIER_COLOR_CLASS[tier.slug] ?? 'text-muted'}
-                              />
+                            <td>
+                              <span className="text-base font-bold tabular-nums text-[#f4f4ff]">{p.elo}</span>
                             </td>
-                            <td className="py-2.5 px-3 w-16 border-b border-border">{p.wins}</td>
-                            <td className="py-2.5 px-3 w-16 border-b border-border">{p.losses}</td>
-                            <td className="py-2.5 px-3 w-16 border-b border-border">{p.matches}</td>
-                            <td className="py-2.5 px-3 w-16 border-b border-border">
-                              {p.winRate.toFixed(1)}%
+                            <td>
+                              <span className="lb-tier-frame align-middle inline-flex">
+                                <PvPTierBadge
+                                  slug={normalizePvpTierSlugForAssets(tier.slug)}
+                                  displayName={tier.displayName}
+                                  fallbackTextClassName={TIER_COLOR_CLASS[tier.slug] ?? 'text-muted'}
+                                  imgHeightClass="h-8"
+                                />
+                              </span>
                             </td>
-                            <td className="py-2.5 px-3 w-16 border-b border-border">
-                              {p.currentStreak}
+                            <td
+                              className="text-center tabular-nums font-semibold text-sm"
+                              title={`${p.matches} matches`}
+                            >
+                              <span className="text-emerald-400">{p.wins}</span>
+                              <span className="text-slate-500 font-normal px-1">/</span>
+                              <span className="text-rose-400/90">{p.losses}</span>
                             </td>
-                            <td className="py-2.5 px-3 w-16 border-b border-border">{p.bestStreak}</td>
+                            <td>
+                              <div className="w-[4.85rem] max-w-full">
+                                <div className="text-[0.8rem] font-bold tabular-nums text-[#ecebff]">
+                                  {p.winRate.toFixed(1)}%
+                                </div>
+                                <div className="mt-1.5 h-1 rounded-full bg-white/[0.08] overflow-hidden">
+                                  <div
+                                    className="h-full rounded-full bg-emerald-400/90 shadow-[0_0_10px_rgba(52,211,153,0.35)]"
+                                    style={{ width: `${winPct}%` }}
+                                  />
+                                </div>
+                              </div>
+                            </td>
+                            <td className="text-center">
+                              <span
+                                className={`tabular-nums text-sm font-bold ${
+                                  streak > 0
+                                    ? 'text-emerald-400'
+                                    : streak < 0
+                                      ? 'text-rose-400/90'
+                                      : 'text-amber-300/85'
+                                }`}
+                              >
+                                {streakStr}
+                              </span>
+                            </td>
+                            <td className="text-center">
+                              <span className="tabular-nums text-sm font-semibold text-amber-200/85">
+                                {p.bestStreak}
+                              </span>
+                            </td>
                           </tr>
                         )
                       })}
