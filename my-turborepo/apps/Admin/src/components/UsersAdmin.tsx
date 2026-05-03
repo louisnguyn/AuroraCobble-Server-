@@ -6,6 +6,7 @@ import {
   grantCurrency,
   setPullFulfilled,
   deleteAdminPull,
+  deleteAllAdminUserGachaHistory,
   patchAdminUser,
   adminResetUserPassword,
   deleteAdminUser,
@@ -37,6 +38,8 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
   const [granting, setGranting] = useState(false)
   const [deleteConfirmEntry, setDeleteConfirmEntry] = useState<AdminHistoryEntry | null>(null)
   const [deleteConfirmBusy, setDeleteConfirmBusy] = useState(false)
+  const [deleteAllHistoryOpen, setDeleteAllHistoryOpen] = useState(false)
+  const [deleteAllHistoryBusy, setDeleteAllHistoryBusy] = useState(false)
 
   const [tab, setTab] = useState<UsersTab>('account')
   const [editEmail, setEditEmail] = useState('')
@@ -443,6 +446,30 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
       // ignore
     } finally {
       setDeleteConfirmBusy(false)
+    }
+  }
+
+  const closeDeleteAllHistory = () => {
+    if (!deleteAllHistoryBusy) setDeleteAllHistoryOpen(false)
+  }
+
+  const confirmDeleteAllHistory = async () => {
+    if (!selectedUser) return
+    setDeleteAllHistoryBusy(true)
+    setError(null)
+    try {
+      const { deleted } = await deleteAllAdminUserGachaHistory(selectedUser.id)
+      setHistory([])
+      setDeleteAllHistoryOpen(false)
+      setSuccessMessage(
+        deleted === 0
+          ? 'No gacha history rows were found for this user.'
+          : `Removed ${deleted} gacha ${deleted === 1 ? 'pull' : 'pulls'} from this account.`,
+      )
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to delete history')
+    } finally {
+      setDeleteAllHistoryBusy(false)
     }
   }
 
@@ -1062,7 +1089,19 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
               </div>
 
               <div className="rounded-lg bg-surface border border-border p-4">
-                <h2 className="text-sm font-semibold text-[#f5efe6] mb-3">Gacha history · Given in-game</h2>
+                <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
+                  <h2 className="text-sm font-semibold text-[#f5efe6] m-0">Gacha history · Given in-game</h2>
+                  {!historyError ? (
+                    <button
+                      type="button"
+                      onClick={() => setDeleteAllHistoryOpen(true)}
+                      className="shrink-0 text-xs py-1.5 px-2.5 rounded border border-error/50 text-error hover:bg-error/15 font-medium"
+                      title="Remove every gacha pull for this user from the database"
+                    >
+                      Delete all history
+                    </button>
+                  ) : null}
+                </div>
                 <p className="text-xs text-muted mb-3">
                   Tick when you have given this reward to the user in-game. Use Delete to remove a row from history (e.g. after it’s been handled).
                 </p>
@@ -1315,6 +1354,49 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
                 className="px-4 py-2 rounded-lg text-sm bg-error/20 border border-error/40 text-error hover:bg-error/30 disabled:opacity-50"
               >
                 {deleteConfirmBusy ? 'Removing…' : 'Remove'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteAllHistoryOpen && selectedUser && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-all-history-title"
+          onClick={() => closeDeleteAllHistory()}
+        >
+          <div
+            className="w-full max-w-md rounded-xl bg-surface border border-border shadow-xl p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="delete-all-history-title" className="text-lg font-semibold text-[#f5efe6] m-0 mb-2">
+              Delete all gacha history?
+            </h3>
+            <p className="text-sm text-muted m-0 mb-4">
+              This removes <strong className="text-[#f5efe6]">every</strong> logged gacha pull for{' '}
+              <strong className="text-[#f5efe6]">{selectedUser.username}</strong> from the database—including
+              pulls that are not shown in this truncated list. The user&apos;s Gacha page will show no history. You
+              can&apos;t undo this.
+            </p>
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeDeleteAllHistory}
+                disabled={deleteAllHistoryBusy}
+                className="px-4 py-2 rounded-lg text-sm border border-border text-muted hover:bg-surface-hover hover:text-[#f5efe6] disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmDeleteAllHistory()}
+                disabled={deleteAllHistoryBusy}
+                className="px-4 py-2 rounded-lg text-sm bg-error/20 border border-error/40 text-error hover:bg-error/30 disabled:opacity-50"
+              >
+                {deleteAllHistoryBusy ? 'Deleting…' : 'Delete all'}
               </button>
             </div>
           </div>

@@ -192,6 +192,7 @@ export function Gacha() {
   const [exchanging, setExchanging] = useState<string | null>(null)
   const [claimingId, setClaimingId] = useState<number | null>(null)
   const [claimPending, setClaimPending] = useState<{ pullId: number; rewardLabel: string } | null>(null)
+  const [historyTab, setHistoryTab] = useState<'pokemon' | 'money'>('pokemon')
   const [pullCooldownUntilMs, setPullCooldownUntilMs] = useState(0)
   const [nowMs, setNowMs] = useState(Date.now())
   const pendingRewardRef = useRef<GachaRewardResult | null>(null)
@@ -417,6 +418,16 @@ export function Gacha() {
     [lastReward?.reward.reward_type]
   )
   const currencyType = (selectedPool?.config as { currency_type?: string } | undefined)?.currency_type ?? 'gems'
+
+  const historyMoneyCount = useMemo(
+    () => history.filter((e) => parseCobbledollarsRewardLabel(e.rewardType) != null).length,
+    [history],
+  )
+  const historyPokemonCount = history.length - historyMoneyCount
+  const filteredHistory = useMemo(() => {
+    const isMoney = (e: GachaHistoryEntry) => parseCobbledollarsRewardLabel(e.rewardType) != null
+    return historyTab === 'money' ? history.filter(isMoney) : history.filter((e) => !isMoney(e))
+  }, [history, historyTab])
 
   if (!isAuthenticated) {
     return (
@@ -741,54 +752,106 @@ export function Gacha() {
           {isAuthenticated && (
             <div className="mt-8 pixel-panel-soft p-4 sm:p-6">
               <h3 className="text-lg font-semibold text-[#f5efe6] mb-1">Your pull history</h3>
-              <p className="text-xs text-muted mb-3 m-0">
-                Claim sends the Pokémon to your in-game party via the server. You must be{' '}
-                <strong className="text-[#f5efe6]">online</strong> on the server, and your{' '}
-                <strong className="text-[#f5efe6]">Minecraft name must match</strong> your website username.
-              </p>
               {history.length === 0 ? (
-                <p className="text-muted text-sm">No pulls yet. Open loot to see your rewards here.</p>
+                <>
+                  <p className="text-xs text-muted mb-3 m-0">
+                    Claim sends the Pokémon to your in-game party via the server when you pull a Pokémon
+                    reward. You must be <strong className="text-[#f5efe6]">online</strong> on the server, and
+                    your <strong className="text-[#f5efe6]">Minecraft name must match</strong> your website
+                    username. Cobble$ drops credit your website wallet automatically.
+                  </p>
+                  <p className="text-muted text-sm m-0">No pulls yet. Open loot to see your rewards here.</p>
+                </>
               ) : (
-                <ul className="space-y-2 max-h-64 overflow-y-auto">
-                  {history.map((entry) => (
-                    <li
-                      key={entry.id}
-                      className="flex flex-wrap items-center justify-between gap-2 py-2 px-3 pixel-well text-base"
+                <>
+                  <div role="tablist" aria-label="Reward type" className="flex flex-wrap gap-2 mb-3">
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={historyTab === 'pokemon'}
+                      onClick={() => setHistoryTab('pokemon')}
+                      className={`py-2.5 px-4 text-base font-semibold transition-[filter] duration-150 ${
+                        historyTab === 'pokemon' ? 'pixel-pill pixel-pill-active-accent' : 'pixel-pill'
+                      }`}
                     >
-                      <div className="min-w-0 flex-1">
-                        <span className="text-[#f5efe6] block">{entry.rewardType}</span>
-                        <span className="text-muted text-xs">
-                          {entry.poolName} ·{' '}
-                          {new Date(entry.pulledAt).toLocaleDateString(undefined, {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </span>
-                        {entry.fulfilledAt && (
-                          <span className="block text-xs text-emerald-400/90 mt-1">
-                            {parseCobbledollarsRewardLabel(entry.rewardType) != null
-                              ? 'Auto credited to website wallet'
-                              : 'Claimed in-game'}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        {entry.claimable && !entry.fulfilledAt && (
-                          <button
-                            type="button"
-                            onClick={() => setClaimPending({ pullId: entry.id, rewardLabel: entry.rewardType })}
-                            disabled={!canUseGacha || claimingId !== null}
-                            className="px-3 py-2 pixel-btn-gold disabled:opacity-50 touch-manipulation text-sm"
-                          >
-                            {claimingId === entry.id ? '…' : 'Claim'}
-                          </button>
-                        )}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+                      Pokémon ({historyPokemonCount})
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={historyTab === 'money'}
+                      onClick={() => setHistoryTab('money')}
+                      className={`py-2.5 px-4 text-base font-semibold transition-[filter] duration-150 ${
+                        historyTab === 'money' ? 'pixel-pill pixel-pill-active-accent' : 'pixel-pill'
+                      }`}
+                    >
+                      Money ({historyMoneyCount})
+                    </button>
+                  </div>
+                  {historyTab === 'pokemon' ? (
+                    <p className="text-xs text-muted mb-3 m-0">
+                      Claim sends the Pokémon to your in-game party via the server. You must be{' '}
+                      <strong className="text-[#f5efe6]">online</strong> on the server, and your{' '}
+                      <strong className="text-[#f5efe6]">Minecraft name must match</strong> your website username.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted mb-3 m-0">
+                      These pulls are Cobble dollars (
+                      <code className="text-[11px] text-[#f5efe6]/90">cobbledollars: …</code>) credited automatically
+                      to your website wallet — no in-game claim.
+                    </p>
+                  )}
+                  {filteredHistory.length === 0 ? (
+                    <p className="text-muted text-sm m-0">
+                      {historyTab === 'money'
+                        ? 'No Cobble$ drops in recent pulls.'
+                        : 'No Pokémon rewards in recent pulls.'}
+                    </p>
+                  ) : (
+                    <ul className="space-y-2 max-h-64 overflow-y-auto">
+                      {filteredHistory.map((entry) => (
+                        <li
+                          key={entry.id}
+                          className="flex flex-wrap items-center justify-between gap-2 py-2 px-3 pixel-well text-base"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[#f5efe6] block">{entry.rewardType}</span>
+                            <span className="text-muted text-xs">
+                              {entry.poolName} ·{' '}
+                              {new Date(entry.pulledAt).toLocaleDateString(undefined, {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </span>
+                            {entry.fulfilledAt && (
+                              <span className="block text-xs text-emerald-400/90 mt-1">
+                                {parseCobbledollarsRewardLabel(entry.rewardType) != null
+                                  ? 'Auto credited to website wallet'
+                                  : 'Claimed in-game'}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            {entry.claimable && !entry.fulfilledAt && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setClaimPending({ pullId: entry.id, rewardLabel: entry.rewardType })
+                                }
+                                disabled={!canUseGacha || claimingId !== null}
+                                className="px-3 py-2 pixel-btn-gold disabled:opacity-50 touch-manipulation text-sm"
+                              >
+                                {claimingId === entry.id ? '…' : 'Claim'}
+                              </button>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
               )}
             </div>
           )}

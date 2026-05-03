@@ -6077,6 +6077,29 @@ app.get("/admin/users/:userId/history", requireAuth, requireAdmin, async (req, r
   res.json({ history });
 });
 
+app.delete("/admin/users/:userId/history", requireAuth, requireAdmin, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const userId = Number(req.params.userId);
+  if (!Number.isFinite(userId)) {
+    res.status(400).json({ error: "Invalid user id" });
+    return;
+  }
+  const { data, error } = await supabase
+    .from("user_gacha_pulls")
+    .delete()
+    .eq("user_id", userId)
+    .select("id");
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+  const deleted = Array.isArray(data) ? data.length : 0;
+  res.json({ ok: true, deleted });
+});
+
 app.patch("/admin/pulls/:pullId/fulfilled", requireAuth, requireAdmin, async (req, res) => {
   if (!supabase) {
     res.status(503).json({ error: "Database not configured" });

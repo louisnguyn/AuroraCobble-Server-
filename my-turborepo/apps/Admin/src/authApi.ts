@@ -307,6 +307,14 @@ export async function deleteAdminPull(pullId: number): Promise<{ ok: boolean; id
   })
 }
 
+export async function deleteAllAdminUserGachaHistory(
+  userId: number
+): Promise<{ ok: boolean; deleted: number }> {
+  return fetchJson<{ ok: boolean; deleted: number }>(`/admin/users/${userId}/history`, {
+    method: 'DELETE',
+  })
+}
+
 export type MinecraftDashboardResponse = {
   ok: true
   source: 'query' | 'status'
