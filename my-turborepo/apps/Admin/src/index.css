@@ -405,11 +405,11 @@
     position: absolute;
     left: 50%;
     top: 50%;
-    width: 126%;
-    height: 126%;
+    width: 118%;
+    height: 118%;
     z-index: -1;
     pointer-events: none;
-    border-radius: 38%;
+    border-radius: 40%;
     background: conic-gradient(
       from 0deg at 50% 50%,
       rgba(40, 28, 8, 0.95) 0deg,
@@ -423,8 +423,8 @@
       rgba(40, 28, 8, 0.95) 360deg
     );
     transform: translate(-50%, -50%);
-    opacity: 0.38;
-    filter: blur(8px) saturate(1.22) brightness(1.06);
+    opacity: 0.28;
+    filter: blur(6px) saturate(1.1) brightness(1.03);
   }
   .admin-ac-gold::after {
     content: "";
@@ -460,7 +460,7 @@
     border: 2px solid rgba(88, 7, 18, 0.65);
     box-shadow:
       0 0 0 1px rgba(30, 27, 75, 0.45),
-      0 0 14px rgba(88, 28, 135, 0.18),
+      0 0 8px rgba(88, 28, 135, 0.1),
       inset 0 0 0 1px rgba(127, 29, 29, 0.25),
       inset 0 -10px 24px rgba(15, 23, 42, 0.35);
   }
@@ -473,11 +473,11 @@
     position: absolute;
     left: 50%;
     top: 50%;
-    width: 130%;
-    height: 130%;
+    width: 114%;
+    height: 122%;
     z-index: -1;
     pointer-events: none;
-    border-radius: 42%;
+    border-radius: 48%;
     background: conic-gradient(
       from 0deg at 50% 50%,
       rgba(18, 4, 14, 0.98) 0deg,
@@ -492,8 +492,8 @@
       rgba(18, 4, 14, 0.98) 360deg
     );
     transform: translate(-50%, -50%);
-    opacity: 0.46;
-    filter: blur(8px) contrast(1.16) saturate(1.38);
+    opacity: 0.32;
+    filter: blur(6px) contrast(1.08) saturate(1.22);
   }
   .admin-ac-crimson::after {
     content: "";
@@ -785,9 +785,9 @@
     content: "";
     position: absolute;
     left: 50%;
-    bottom: -10px;
-    width: 106%;
-    height: 2rem;
+    bottom: -8px;
+    width: 102%;
+    height: 1.75rem;
     border-radius: 50%;
     pointer-events: none;
     z-index: 0;
@@ -799,7 +799,7 @@
   }
   .admin-ac-mythic > .admin-ac-mythic-ring {
     position: absolute;
-    inset: -4px;
+    inset: -3px;
     border-radius: 14px;
     z-index: 1;
     pointer-events: none;
@@ -816,7 +816,7 @@
   .admin-ac-mythic > .admin-ac-mythic-ring::before {
     content: "";
     position: absolute;
-    inset: -9px;
+    inset: -6px;
     border-radius: inherit;
     z-index: -1;
     pointer-events: none;
@@ -842,8 +842,8 @@
     position: absolute;
     left: 50%;
     top: 50%;
-    width: 150%;
-    height: 150%;
+    width: 132%;
+    height: 132%;
     z-index: 0;
     pointer-events: none;
     border-radius: 42%;

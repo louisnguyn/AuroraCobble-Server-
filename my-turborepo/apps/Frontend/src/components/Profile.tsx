@@ -288,7 +288,7 @@ export function Profile({ slugFromHashOrNav }: ProfileProps) {
                 add these themselves).
               </p>
             ) : (
-              <div className="grid gap-3 sm:grid-cols-2 profile-achievements-grid">
+              <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 profile-achievements-grid">
                 {profile.achievements.map((a) =>
                   a.tier === 'mythic' ? (
                     <div key={a.id} className={achievementCardClass(a.tier)}>

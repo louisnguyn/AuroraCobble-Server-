@@ -1822,6 +1822,50 @@
     transform: translateY(-1px);
   }
 
+  /* Dense 2-column grid: pull halos inward so Crimson / Mythic / Gold don’t pool in gutters */
+  .profile-achievements-grid .profile-ac-crimson {
+    box-shadow:
+      0 0 0 1px rgba(30, 27, 75, 0.45),
+      0 0 8px rgba(88, 28, 135, 0.1),
+      inset 0 0 0 1px rgba(127, 29, 29, 0.25),
+      inset 0 -10px 24px rgba(15, 23, 42, 0.35);
+  }
+
+  .profile-achievements-grid .profile-ac-crimson::before {
+    width: 114%;
+    height: 122%;
+    border-radius: 48%;
+    opacity: 0.32;
+    filter: blur(6px) contrast(1.08) saturate(1.22);
+  }
+
+  .profile-achievements-grid .profile-ac-gold::before {
+    width: 118%;
+    height: 118%;
+    border-radius: 40%;
+    opacity: 0.28;
+    filter: blur(6px) saturate(1.1) brightness(1.03);
+  }
+
+  .profile-achievements-grid .profile-ac-mythic::before {
+    width: 102%;
+    height: 1.75rem;
+    bottom: -8px;
+  }
+
+  .profile-achievements-grid .profile-ac-mythic > .profile-ac-mythic-ring {
+    inset: -3px;
+  }
+
+  .profile-achievements-grid .profile-ac-mythic > .profile-ac-mythic-ring::before {
+    inset: -6px;
+  }
+
+  .profile-achievements-grid .profile-ac-mythic > .profile-ac-mythic-fill::before {
+    width: 132%;
+    height: 132%;
+  }
+
   .profile-rank-strip {
     background:
       radial-gradient(ellipse 120% 80% at 100% 0%, rgba(34, 211, 238, 0.1), transparent 55%),
