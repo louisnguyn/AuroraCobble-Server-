@@ -1,14 +1,55 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   adminMinecraftRankedadminElo,
   fetchAdminCobbleRankedFeed,
+  fetchAdminUsers,
+  fetchRankedBattleStaffHistory,
   setAdminCobbleRankedReview,
+  type AdminUser,
   type CobbleRankedFeedEnvelope,
+  type RankedBattleStaffEvent,
 } from '../authApi'
 import type { BattleReplayPayload, MatchResultPayload } from '../types'
 import { AdminBattleReplayCard, AdminMatchResultCard, AdminSubTab } from './AdminRankedFeedCards.tsx'
 
-type Tab = 'matches' | 'replays'
+type Tab = 'matches' | 'replays' | 'staff'
+
+function formatTs(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+  } catch {
+    return iso
+  }
+}
+
+function truncateKey(key: string, max = 48): string {
+  if (key.length <= max) return key
+  return `${key.slice(0, max)}…`
+}
+
+function staffEventSummary(ev: RankedBattleStaffEvent): { action: string; details: string } {
+  if (ev.event_kind === 'feed_review') {
+    const kindLabel =
+      ev.review_feed_kind === 'battle_replay'
+        ? 'Battle replay'
+        : ev.review_feed_kind === 'match_result'
+          ? 'Match result'
+          : 'Feed item'
+    const flag = ev.review_reviewed ? 'Marked reviewed' : 'Cleared reviewed'
+    const key = ev.review_item_key ? truncateKey(ev.review_item_key) : '—'
+    return { action: flag, details: `${kindLabel} · ${key}` }
+  }
+  const verb = ev.event_kind === 'elo_add' ? 'Added' : 'Removed'
+  const player = ev.minecraft_username ?? '—'
+  const amt = ev.elo_amount != null ? String(ev.elo_amount) : '—'
+  const fmt = ev.elo_format ?? '—'
+  const ok = ev.elo_ok === true ? 'Succeeded' : ev.elo_ok === false ? 'Failed' : ''
+  const err = ev.elo_error ? ` · ${ev.elo_error}` : ''
+  return {
+    action: `${verb} ELO`,
+    details: `${player} · ${amt} pts · ${fmt}${ok ? ` · ${ok}` : ''}${err}`,
+  }
+}
 
 export function CobbleRankedAdmin() {
   const [tab, setTab] = useState<Tab>('matches')
@@ -21,11 +62,22 @@ export function CobbleRankedAdmin() {
   const [reviewBusyKey, setReviewBusyKey] = useState<string | null>(null)
 
   const [eloAmount, setEloAmount] = useState('30')
-  const [eloIgn, setEloIgn] = useState('')
+  const [pickQuery, setPickQuery] = useState('')
+  const [debouncedPick, setDebouncedPick] = useState('')
+  const [pickOpen, setPickOpen] = useState(false)
+  const [pickSuggestions, setPickSuggestions] = useState<AdminUser[]>([])
+  const [pickLoading, setPickLoading] = useState(false)
+  const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null)
+  const pickWrapRef = useRef<HTMLDivElement>(null)
+
   const [eloFormat, setEloFormat] = useState<'singles' | 'doubles'>('singles')
   const [eloBusy, setEloBusy] = useState<'add' | 'remove' | null>(null)
   const [eloMessage, setEloMessage] = useState<string | null>(null)
   const [eloError, setEloError] = useState<string | null>(null)
+
+  const [staffEvents, setStaffEvents] = useState<RankedBattleStaffEvent[]>([])
+  const [staffLoading, setStaffLoading] = useState(false)
+  const [staffError, setStaffError] = useState<string | null>(null)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -40,9 +92,59 @@ export function CobbleRankedAdmin() {
       .finally(() => setLoading(false))
   }, [])
 
+  const loadStaff = useCallback(() => {
+    setStaffLoading(true)
+    setStaffError(null)
+    return fetchRankedBattleStaffHistory({ limit: 120 })
+      .then((d) => setStaffEvents(d.events ?? []))
+      .catch((e) => setStaffError(e instanceof Error ? e.message : 'Failed to load staff history'))
+      .finally(() => setStaffLoading(false))
+  }, [])
+
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    if (tab === 'staff') void loadStaff()
+  }, [tab, loadStaff])
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedPick(pickQuery.trim()), 250)
+    return () => window.clearTimeout(t)
+  }, [pickQuery])
+
+  useEffect(() => {
+    if (debouncedPick.length < 1) {
+      setPickSuggestions([])
+      return
+    }
+    let cancelled = false
+    setPickLoading(true)
+    fetchAdminUsers(debouncedPick)
+      .then((r) => {
+        if (!cancelled) setPickSuggestions(r.users)
+      })
+      .catch(() => {
+        if (!cancelled) setPickSuggestions([])
+      })
+      .finally(() => {
+        if (!cancelled) setPickLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [debouncedPick])
+
+  useEffect(() => {
+    if (!pickOpen) return
+    const onDown = (e: MouseEvent) => {
+      const el = pickWrapRef.current
+      if (el && e.target instanceof Node && !el.contains(e.target)) setPickOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [pickOpen])
 
   const isReviewed = useCallback((k: string) => reviewedKeys.has(k), [reviewedKeys])
 
@@ -56,6 +158,7 @@ export function CobbleRankedAdmin() {
         else n.delete(itemKey)
         return n
       })
+      if (tab === 'staff') void loadStaff()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Review save failed')
     } finally {
@@ -73,13 +176,15 @@ export function CobbleRankedAdmin() {
     return replays.filter((r) => r.needsAttention)
   }, [replays, attentionOnly])
 
+  const ign = selectedUser?.username.trim() ?? ''
+  const userId = selectedUser?.id
+
   const runElo = async (action: 'add' | 'remove') => {
     setEloError(null)
     setEloMessage(null)
     const amount = Number.parseInt(eloAmount, 10)
-    const user = eloIgn.trim()
-    if (!user) {
-      setEloError('Enter Minecraft username (IGN).')
+    if (!ign || userId == null) {
+      setEloError('Search and pick a website account (username = in-game name).')
       return
     }
     if (!Number.isFinite(amount) || amount < 1) {
@@ -91,15 +196,19 @@ export function CobbleRankedAdmin() {
       const out = await adminMinecraftRankedadminElo({
         action,
         amount,
-        minecraft_username: user,
+        minecraft_username: ign,
         format: eloFormat,
+        user_id: userId,
       })
       if (out.ok) {
         setEloMessage(
-          `${action === 'add' ? 'Add' : 'Remove'} ELO sent. Command: ${out.command ?? ''}\n${out.output ?? ''}`.trim()
+          action === 'add'
+            ? `Added ${amount} ELO (${eloFormat}) for ${ign}.`
+            : `Removed ${amount} ELO (${eloFormat}) for ${ign}.`
         )
+        if (tab === 'staff') void loadStaff()
       } else {
-        setEloError((out.error ?? 'RCON failed') + (out.command ? ` (${out.command})` : ''))
+        setEloError(out.error ?? 'Could not update the server.')
       }
     } catch (e) {
       setEloError(e instanceof Error ? e.message : 'Request failed')
@@ -111,20 +220,17 @@ export function CobbleRankedAdmin() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-xl font-semibold text-white m-0 mb-2">CobbleRanked · Admin</h1>
+        <h1 className="text-xl font-semibold text-white m-0 mb-2">Ranked Battle</h1>
         <p className="text-sm text-slate-500 m-0 max-w-2xl">
-          Full feed from the synced CobbleRanked mirror. Flag suspicious rows, mark when reviewed (stored in the
-          database). ELO adjustments run via RCON using <code className="text-sky-300">rankedadmin</code> commands.
+          Synced match feed from the game mirror. Flag suspicious rows and mark them reviewed. ELO changes apply on the
+          Minecraft server; staff actions are listed under Staff history (after the database migration is applied).
         </p>
       </div>
 
       <section className="rounded-2xl border border-white/10 bg-black/25 p-5 space-y-4">
-        <h2 className="text-sm font-semibold text-white m-0">Rankedadmin ELO (RCON)</h2>
-        <p className="text-xs text-slate-500 m-0">
-          Sends <code className="text-sky-300/90">rankedadmin addelo …</code> or{' '}
-          <code className="text-sky-300/90">removeelo …</code> without a leading slash. Format is sent as{' '}
-          <code className="text-sky-300/90">SINGLES</code>/<code className="text-sky-300/90">DOUBLES</code> — set backend{' '}
-          <code className="text-sky-300/90">MC_RANKEDADMIN_ELO_FORMAT_LOWERCASE=true</code> if your mod needs lowercase.
+        <h2 className="text-sm font-semibold text-white m-0">ELO adjustment</h2>
+        <p className="text-xs text-slate-500 m-0 max-w-2xl">
+          Pick the player’s website account, choose singles or doubles, then add or remove ELO.
         </p>
         <div className="flex flex-wrap items-end gap-3">
           <div>
@@ -140,18 +246,73 @@ export function CobbleRankedAdmin() {
               className="w-28 px-2 py-1.5 rounded-lg bg-black/40 border border-white/15 text-sm text-slate-100"
             />
           </div>
-          <div className="min-w-[10rem] flex-1">
-            <label className="block text-xs text-slate-500 mb-1" htmlFor="elo-ign">
-              Minecraft username (IGN)
+          <div ref={pickWrapRef} className="min-w-[12rem] flex-1 max-w-md relative space-y-1">
+            <label className="block text-xs text-slate-500 mb-1" htmlFor="elo-user-search">
+              Website account
             </label>
             <input
-              id="elo-ign"
+              id="elo-user-search"
               type="text"
-              value={eloIgn}
-              onChange={(e) => setEloIgn(e.target.value)}
-              placeholder="Player name"
+              value={selectedUser ? selectedUser.username : pickQuery}
+              onChange={(e) => {
+                if (selectedUser) {
+                  setSelectedUser(null)
+                  setPickQuery(e.target.value)
+                } else {
+                  setPickQuery(e.target.value)
+                }
+                setPickOpen(true)
+              }}
+              onFocus={() => setPickOpen(true)}
+              placeholder="Type to search…"
+              autoComplete="off"
+              spellCheck={false}
               className="w-full px-2 py-1.5 rounded-lg bg-black/40 border border-white/15 text-sm text-slate-100"
             />
+            {pickOpen && !selectedUser && pickQuery.trim().length > 0 ? (
+              <ul className="absolute z-20 mt-1 w-full max-h-52 overflow-y-auto rounded-lg border border-white/15 bg-[#141218] shadow-xl text-sm">
+                {pickLoading ? (
+                  <li className="px-3 py-2 text-slate-500">Searching…</li>
+                ) : pickSuggestions.length === 0 ? (
+                  <li className="px-3 py-2 text-slate-500">No matching accounts.</li>
+                ) : (
+                  pickSuggestions.map((u) => (
+                    <li key={u.id}>
+                      <button
+                        type="button"
+                        className="w-full text-left px-3 py-2 hover:bg-white/10 text-slate-200"
+                        onClick={() => {
+                          setSelectedUser(u)
+                          setPickQuery('')
+                          setPickOpen(false)
+                          setPickSuggestions([])
+                        }}
+                      >
+                        <span className="font-medium text-white">{u.username}</span>
+                        <span className="text-slate-500 text-xs block truncate">{u.email}</span>
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+            ) : null}
+            {selectedUser ? (
+              <p className="text-xs text-slate-500 m-0">
+                In-game name: <span className="font-mono text-slate-300">{selectedUser.username}</span>
+                {' · '}
+                <button
+                  type="button"
+                  className="text-amber-200/90 hover:underline"
+                  onClick={() => {
+                    setSelectedUser(null)
+                    setPickQuery('')
+                    setPickOpen(false)
+                  }}
+                >
+                  Change
+                </button>
+              </p>
+            ) : null}
           </div>
           <div>
             <label className="block text-xs text-slate-500 mb-1" htmlFor="elo-format">
@@ -173,7 +334,7 @@ export function CobbleRankedAdmin() {
             onClick={() => void runElo('add')}
             className="px-4 py-2 rounded-xl text-sm font-medium bg-emerald-600/25 border border-emerald-500/40 text-emerald-200 hover:bg-emerald-600/35 disabled:opacity-50"
           >
-            {eloBusy === 'add' ? 'Sending…' : 'Add ELO'}
+            {eloBusy === 'add' ? 'Applying…' : 'Add ELO'}
           </button>
           <button
             type="button"
@@ -181,15 +342,11 @@ export function CobbleRankedAdmin() {
             onClick={() => void runElo('remove')}
             className="px-4 py-2 rounded-xl text-sm font-medium bg-rose-600/20 border border-rose-500/35 text-rose-200 hover:bg-rose-600/30 disabled:opacity-50"
           >
-            {eloBusy === 'remove' ? 'Sending…' : 'Remove ELO'}
+            {eloBusy === 'remove' ? 'Applying…' : 'Remove ELO'}
           </button>
         </div>
         {eloError ? <p className="text-sm text-rose-400 m-0">{eloError}</p> : null}
-        {eloMessage ? (
-          <pre className="text-xs text-slate-400 m-0 whitespace-pre-wrap rounded-lg bg-black/40 border border-white/10 p-3 overflow-x-auto">
-            {eloMessage}
-          </pre>
-        ) : null}
+        {eloMessage ? <p className="text-sm text-emerald-300/95 m-0">{eloMessage}</p> : null}
       </section>
 
       <section className="space-y-4">
@@ -201,28 +358,70 @@ export function CobbleRankedAdmin() {
             <AdminSubTab active={tab === 'replays'} onClick={() => setTab('replays')}>
               Battle replays ({replays.length})
             </AdminSubTab>
+            <AdminSubTab active={tab === 'staff'} onClick={() => setTab('staff')}>
+              Staff history
+            </AdminSubTab>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <label className="inline-flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={attentionOnly}
-                onChange={(e) => setAttentionOnly(e.target.checked)}
-                className="rounded border-white/20"
-              />
-              Need attention only
-            </label>
+            {tab !== 'staff' ? (
+              <label className="inline-flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={attentionOnly}
+                  onChange={(e) => setAttentionOnly(e.target.checked)}
+                  className="rounded border-white/20"
+                />
+                Need attention only
+              </label>
+            ) : null}
             <button
               type="button"
-              onClick={() => void load()}
+              onClick={() => {
+                if (tab === 'staff') void loadStaff()
+                else void load()
+              }}
               className="py-2 px-4 rounded-xl text-sm font-medium border border-amber-400/35 text-amber-100 bg-amber-600/15"
             >
-              Refresh feed
+              {tab === 'staff' ? 'Refresh history' : 'Refresh feed'}
             </button>
           </div>
         </div>
 
-        {loading ? (
+        {tab === 'staff' ? (
+          staffLoading ? (
+            <p className="text-slate-500 text-center py-12">Loading…</p>
+          ) : staffError ? (
+            <p className="text-rose-400 text-center py-8">{staffError}</p>
+          ) : staffEvents.length === 0 ? (
+            <p className="text-slate-500 text-center py-8">No staff actions recorded yet.</p>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-white/10">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-black/40 text-xs uppercase text-slate-500">
+                  <tr>
+                    <th className="px-3 py-2 font-semibold">When</th>
+                    <th className="px-3 py-2 font-semibold">Staff</th>
+                    <th className="px-3 py-2 font-semibold">Action</th>
+                    <th className="px-3 py-2 font-semibold">Details</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {staffEvents.map((ev) => {
+                    const { action, details } = staffEventSummary(ev)
+                    return (
+                      <tr key={ev.id} className="border-t border-white/10 hover:bg-white/[0.03]">
+                        <td className="px-3 py-2 text-slate-400 whitespace-nowrap">{formatTs(ev.created_at)}</td>
+                        <td className="px-3 py-2 text-slate-200">{ev.staff_username ?? `#${ev.staff_user_id}`}</td>
+                        <td className="px-3 py-2 text-slate-200">{action}</td>
+                        <td className="px-3 py-2 text-slate-400 max-w-xl">{details}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )
+        ) : loading ? (
           <p className="text-slate-500 text-center py-12">Loading…</p>
         ) : error ? (
           <p className="text-rose-400 text-center py-8">{error}</p>
@@ -260,9 +459,7 @@ export function CobbleRankedAdmin() {
                           type="checkbox"
                           checked={reviewed}
                           disabled={reviewBusyKey === row.key}
-                          onChange={(e) =>
-                            void toggleReview(row.key, 'match_result', e.target.checked)
-                          }
+                          onChange={(e) => void toggleReview(row.key, 'match_result', e.target.checked)}
                           className="rounded border-white/20"
                         />
                         Reviewed
@@ -307,9 +504,7 @@ export function CobbleRankedAdmin() {
                         type="checkbox"
                         checked={reviewed}
                         disabled={reviewBusyKey === row.key}
-                        onChange={(e) =>
-                          void toggleReview(row.key, 'battle_replay', e.target.checked)
-                        }
+                        onChange={(e) => void toggleReview(row.key, 'battle_replay', e.target.checked)}
                         className="rounded border-white/20"
                       />
                       Reviewed

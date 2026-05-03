@@ -72,13 +72,26 @@ import {
 } from "./cobbleRankedFeedAdmin.js";
 import { fetchReviewedKeySet, upsertFeedReview } from "./cobbleRankedFeedReviewsDb.js";
 import { runRankedAdminEloRcon, type RankedFormatArg } from "./minecraftRankedAdminElo.js";
+import { runBattlePassLuckpermsCommand } from "./minecraftBattlePassLp.js";
+import {
+  listActiveBattlePassGrants,
+  persistBattlePassGrantMirror,
+} from "./battlepassLpGrantsDb.js";
+import {
+  insertRankedBattleStaffEvent,
+  listRankedBattleStaffEvents,
+} from "./rankedBattleStaffEventsDb.js";
 import {
   fetchPublicProfileByUsername,
   sanitizeProfileBio,
   sanitizeAvatarUrl,
 } from "./publicProfile.js";
 import { uploadProfileAvatarToStorage } from "./profileAvatarUpload.js";
-import { normalizeAchievementSlug, parseAchievementTier } from "./profileAchievements.js";
+import {
+  achievementTierRank,
+  normalizeAchievementSlug,
+  parseAchievementTier,
+} from "./profileAchievements.js";
 
 function readMinecraftRoleField(row: { minecraft_role?: string | null } | null | undefined): string {
   const r = row?.minecraft_role?.trim();
@@ -4625,15 +4638,28 @@ app.get("/admin/minecraft/dashboard", requireAuth, requireAdmin, async (_req, re
   }
 });
 
-app.get("/admin/users", requireAuth, requireAdmin, async (_req, res) => {
+app.get("/admin/users", requireAuth, requireAdmin, async (req, res) => {
   if (!supabase) {
     res.status(503).json({ error: "Database not configured" });
     return;
   }
-  const { data, error } = await supabase
+  const qRaw = typeof req.query.q === "string" ? req.query.q.trim() : "";
+  const searchMode = typeof req.query.q === "string";
+  let qb = supabase
     .from("users")
-    .select("id, email, username, is_admin, created_at, minecraft_verified_at, minecraft_role")
-    .order("created_at", { ascending: false });
+    .select("id, email, username, is_admin, created_at, minecraft_verified_at, minecraft_role");
+  if (searchMode) {
+    if (qRaw.length < 1) {
+      res.json({ users: [] });
+      return;
+    }
+    const safe = qRaw.replace(/%/g, "").slice(0, 80);
+    const pattern = `%${safe}%`;
+    qb = qb.ilike("username", pattern).limit(50).order("username", { ascending: true });
+  } else {
+    qb = qb.order("created_at", { ascending: false });
+  }
+  const { data, error } = await qb;
   if (error) {
     res.status(500).json({ error: error.message });
     return;
@@ -4649,7 +4675,6 @@ app.get("/admin/profile-achievement-definitions", requireAuth, requireAdmin, asy
   const { data, error } = await supabase
     .from("profile_achievement_definitions")
     .select("id, slug, title, description, tier, sort_order, active, created_at, updated_at")
-    .order("sort_order", { ascending: true })
     .order("id", { ascending: true });
   if (error) {
     const missing = /profile_achievement_definitions|relation|does not exist|schema cache/i.test(error.message);
@@ -4660,7 +4685,24 @@ app.get("/admin/profile-achievement-definitions", requireAuth, requireAdmin, asy
     });
     return;
   }
-  res.json({ definitions: data ?? [] });
+  type DefListRow = {
+    id: number;
+    slug: string;
+    title: string;
+    description: string;
+    tier: string;
+    sort_order: number;
+    active: boolean;
+    created_at: string;
+    updated_at: string;
+  };
+  const definitions = ((data ?? []) as DefListRow[]).slice().sort((a, b) => {
+    const tr = achievementTierRank(a.tier) - achievementTierRank(b.tier);
+    if (tr !== 0) return tr;
+    if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order;
+    return a.id - b.id;
+  });
+  res.json({ definitions });
 });
 
 app.post("/admin/profile-achievement-definitions", requireAuth, requireAdmin, async (req, res) => {
@@ -4676,7 +4718,10 @@ app.post("/admin/profile-achievement-definitions", requireAuth, requireAdmin, as
   const sortOrder =
     typeof sortOrderIn === "number" && Number.isFinite(sortOrderIn) ? Math.trunc(sortOrderIn) : 0;
   if (!title || !description || !tier) {
-    res.status(400).json({ error: "title, description, and tier (gold|violet|cyan) are required" });
+    res.status(400).json({
+      error:
+        "title, description, and a valid tier are required (silver|cyan|emerald|violet|rose|gold|crimson|mythic).",
+    });
     return;
   }
   let slug =
@@ -4731,7 +4776,10 @@ app.patch("/admin/profile-achievement-definitions/:id", requireAuth, requireAdmi
   if ("tier" in body) {
     const t = parseAchievementTier(body.tier);
     if (!t) {
-      res.status(400).json({ error: "tier must be gold, violet, or cyan" });
+      res.status(400).json({
+        error:
+          "tier must be silver, cyan, emerald, violet, rose, gold, crimson, or mythic (run profile_achievement_tiers_expand.sql if the DB rejects new tiers).",
+      });
       return;
     }
     patch.tier = t;
@@ -4812,21 +4860,33 @@ app.get("/admin/profile-achievement-grants", requireAuth, requireAdmin, async (r
 
   const { data: defs, error: derr } = await supabase
     .from("profile_achievement_definitions")
-    .select("id, slug, title, tier, active")
+    .select("id, slug, title, tier, active, sort_order")
     .in("id", ids);
   if (derr) {
     res.status(500).json({ error: derr.message });
     return;
   }
-  const defById = new Map(
-    ((defs ?? []) as { id: number; slug: string; title: string; tier: string; active: boolean }[]).map((d) => [
-      d.id,
-      d,
-    ])
-  );
+  type DefGrantJoin = {
+    id: number;
+    slug: string;
+    title: string;
+    tier: string;
+    active: boolean;
+    sort_order: number;
+  };
+  const defById = new Map(((defs ?? []) as DefGrantJoin[]).map((d) => [d.id, d]));
+  const sortedGrants = gRows.slice().sort((ga, gb) => {
+    const da = defById.get(ga.achievement_id);
+    const db = defById.get(gb.achievement_id);
+    const tr = achievementTierRank(da?.tier ?? "") - achievementTierRank(db?.tier ?? "");
+    if (tr !== 0) return tr;
+    const so = (da?.sort_order ?? 0) - (db?.sort_order ?? 0);
+    if (so !== 0) return so;
+    return String(da?.title ?? "").localeCompare(String(db?.title ?? ""));
+  });
   res.json({
     user_id: userId,
-    grants: gRows.map((g) => {
+    grants: sortedGrants.map((g) => {
       const d = defById.get(g.achievement_id);
       return {
         grant_id: g.id,
@@ -5022,6 +5082,18 @@ app.get("/admin/cobble-ranked/feed", requireAuth, requireAdmin, async (req, res)
   res.json({ matches, replays, reviewedKeys });
 });
 
+app.get("/admin/ranked-battle/staff-history", requireAuth, requireAdmin, async (req, res) => {
+  const raw = typeof req.query.limit === "string" ? Number.parseInt(req.query.limit, 10) : 100;
+  const limit = Number.isFinite(raw) && raw > 0 ? raw : 100;
+  const out = await listRankedBattleStaffEvents(limit);
+  if (!out.ok) {
+    const missing = /Run supabase/i.test(out.error);
+    res.status(missing ? 503 : 500).json({ error: out.error });
+    return;
+  }
+  res.json({ events: out.events });
+});
+
 app.post("/admin/cobble-ranked/review", requireAuth, requireAdmin, async (req, res) => {
   if (!supabase) {
     res.status(503).json({ error: "Database not configured" });
@@ -5043,6 +5115,13 @@ app.post("/admin/cobble-ranked/review", requireAuth, requireAdmin, async (req, r
       feedKind,
       reviewed,
       reviewedByUserId: staff.userId,
+    });
+    void insertRankedBattleStaffEvent({
+      staffUserId: staff.userId,
+      eventKind: "feed_review",
+      reviewItemKey: itemKey,
+      reviewFeedKind: feedKind,
+      reviewReviewed: reviewed,
     });
     res.json({ ok: true, item_key: itemKey, reviewed });
   } catch (e) {
@@ -5073,14 +5152,193 @@ app.post("/admin/minecraft/rankedadmin-elo", requireAuth, requireAdmin, async (r
     return;
   }
 
-  const exec = await runRankedAdminEloRcon(action, amount, minecraftUsername, format);
-  if (exec.ok) {
-    console.info(`[admin] rankedadmin ${action}elo ${amount} ${minecraftUsername} ${format}: ok`);
-    res.json({ ok: true, command: exec.command, output: exec.output });
+  const adminId = res.locals.user?.userId;
+  if (!adminId) {
+    res.status(401).json({ error: "Login required" });
     return;
   }
-  console.warn(`[admin] rankedadmin ${action}elo failed`, exec.command, exec.error);
-  res.status(502).json({ ok: false, command: exec.command, error: exec.error });
+  const resolved = await resolveOptionalWebsiteUserIdForMinecraftUsername(minecraftUsername, body.user_id);
+  if (!resolved.ok) {
+    res.status(400).json({ error: resolved.error });
+    return;
+  }
+
+  const exec = await runRankedAdminEloRcon(action, amount, minecraftUsername, format);
+  const eventKind = action === "add" ? "elo_add" : "elo_remove";
+  const errText = exec.ok ? null : (exec.error ?? "").slice(0, 2000);
+  void insertRankedBattleStaffEvent({
+    staffUserId: adminId,
+    eventKind,
+    minecraftUsername,
+    eloAmount: amount,
+    eloFormat: format,
+    eloOk: exec.ok,
+    eloError: errText,
+  });
+
+  if (exec.ok) {
+    console.info(`[admin] ranked elo ${action} ${amount} ${minecraftUsername} ${format}: ok`);
+    res.json({ ok: true });
+    return;
+  }
+  console.warn(`[admin] ranked elo failed`, exec.error);
+  res.json({ ok: false, error: exec.error ?? "Could not update ELO on the server." });
+});
+
+function parseBooleanGrant(body: Record<string, unknown>, field: "grant" | "enable"): boolean | null {
+  const v = body[field];
+  if (v === true || v === "true") return true;
+  if (v === false || v === "false") return false;
+  return null;
+}
+
+async function resolveOptionalWebsiteUserIdForMinecraftUsername(
+  minecraftUsername: string,
+  userIdRaw: unknown
+): Promise<{ ok: true; websiteUserId: number | null } | { ok: false; error: string }> {
+  if (userIdRaw === undefined || userIdRaw === null || userIdRaw === "") {
+    return { ok: true, websiteUserId: null };
+  }
+  const uid =
+    typeof userIdRaw === "number" && Number.isFinite(userIdRaw)
+      ? Math.trunc(userIdRaw)
+      : parseInt(String(userIdRaw), 10);
+  if (!Number.isFinite(uid) || uid < 1) return { ok: false, error: "Invalid user_id" };
+  if (!supabase) return { ok: false, error: "Database not configured" };
+  const { data: u, error } = await supabase
+    .from("users")
+    .select("id, username")
+    .eq("id", uid)
+    .maybeSingle();
+  if (error) return { ok: false, error: error.message };
+  if (!u) return { ok: false, error: "user_id not found" };
+  const uname = String((u as { username: string }).username).trim();
+  if (uname.toLowerCase() !== minecraftUsername.trim().toLowerCase()) {
+    return {
+      ok: false,
+      error: "user_id must be the website account whose username matches the Minecraft IGN",
+    };
+  }
+  return { ok: true, websiteUserId: uid };
+}
+
+app.get("/admin/minecraft/battlepass-grants", requireAuth, requireAdmin, async (req, res) => {
+  const k = typeof req.query.kind === "string" ? req.query.kind.trim().toLowerCase() : "";
+  if (k !== "premium" && k !== "party") {
+    res.status(400).json({ error: "kind must be premium or party" });
+    return;
+  }
+  const out = await listActiveBattlePassGrants(k);
+  if (!out.ok) {
+    const missing = /Run supabase/i.test(out.error);
+    res.status(missing ? 503 : 500).json({ error: out.error });
+    return;
+  }
+  res.json({ grants: out.grants });
+});
+
+app.post("/admin/minecraft/battlepass-premium", requireAuth, requireAdmin, async (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const minecraft_username =
+    typeof body.minecraft_username === "string" ? body.minecraft_username.trim() : "";
+  const grant = parseBooleanGrant(body, "grant") ?? parseBooleanGrant(body, "enable");
+  if (grant === null) {
+    res.status(400).json({ error: "grant (or enable) must be explicitly true or false" });
+    return;
+  }
+  if (!minecraft_username) {
+    res.status(400).json({ error: "minecraft_username required" });
+    return;
+  }
+  const adminId = res.locals.user?.userId;
+  if (!adminId) {
+    res.status(401).json({ error: "Login required" });
+    return;
+  }
+  const resolved = await resolveOptionalWebsiteUserIdForMinecraftUsername(minecraft_username, body.user_id);
+  if (!resolved.ok) {
+    res.status(400).json({ error: resolved.error });
+    return;
+  }
+  const exec = await runBattlePassLuckpermsCommand("premium", minecraft_username, grant);
+  if (exec.ok) {
+    console.info(`[admin] battlepass premium ${grant ? "grant" : "revoke"} ${minecraft_username}: ok`);
+    const mirror = await persistBattlePassGrantMirror({
+      kind: "premium",
+      minecraftUsername: minecraft_username,
+      grant,
+      websiteUserId: resolved.websiteUserId,
+      grantedByUserId: adminId,
+    });
+    if (!mirror.ok) {
+      console.error("[admin] battlepass premium DB mirror failed", mirror.error);
+    }
+    res.json({
+      ok: true,
+      command: exec.command,
+      output: exec.output,
+      dbPersisted: mirror.ok,
+    });
+    return;
+  }
+  if (!exec.command) {
+    res.status(400).json({ error: exec.error });
+    return;
+  }
+  console.warn("[admin] battlepass premium failed", exec.command, exec.error);
+  res.json({ ok: false, command: exec.command, error: exec.error });
+});
+
+app.post("/admin/minecraft/battlepass-party", requireAuth, requireAdmin, async (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const minecraft_username =
+    typeof body.minecraft_username === "string" ? body.minecraft_username.trim() : "";
+  const grant = parseBooleanGrant(body, "grant") ?? parseBooleanGrant(body, "enable");
+  if (grant === null) {
+    res.status(400).json({ error: "grant (or enable) must be explicitly true or false" });
+    return;
+  }
+  if (!minecraft_username) {
+    res.status(400).json({ error: "minecraft_username required" });
+    return;
+  }
+  const adminId = res.locals.user?.userId;
+  if (!adminId) {
+    res.status(401).json({ error: "Login required" });
+    return;
+  }
+  const resolved = await resolveOptionalWebsiteUserIdForMinecraftUsername(minecraft_username, body.user_id);
+  if (!resolved.ok) {
+    res.status(400).json({ error: resolved.error });
+    return;
+  }
+  const exec = await runBattlePassLuckpermsCommand("party", minecraft_username, grant);
+  if (exec.ok) {
+    console.info(`[admin] battlepass party ${grant ? "grant" : "revoke"} ${minecraft_username}: ok`);
+    const mirror = await persistBattlePassGrantMirror({
+      kind: "party",
+      minecraftUsername: minecraft_username,
+      grant,
+      websiteUserId: resolved.websiteUserId,
+      grantedByUserId: adminId,
+    });
+    if (!mirror.ok) {
+      console.error("[admin] battlepass party DB mirror failed", mirror.error);
+    }
+    res.json({
+      ok: true,
+      command: exec.command,
+      output: exec.output,
+      dbPersisted: mirror.ok,
+    });
+    return;
+  }
+  if (!exec.command) {
+    res.status(400).json({ error: exec.error });
+    return;
+  }
+  console.warn("[admin] battlepass party failed", exec.command, exec.error);
+  res.json({ ok: false, command: exec.command, error: exec.error });
 });
 
 app.post("/admin/users/:userId/minecraft-role", requireAuth, requireAdmin, async (req, res) => {

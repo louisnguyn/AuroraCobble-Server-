@@ -10,6 +10,7 @@ import { VerificationRequestsAdmin } from './components/VerificationRequestsAdmi
 import { RoleRequestsAdmin } from './components/RoleRequestsAdmin.tsx'
 import { CobbleRankedAdmin } from './components/CobbleRankedAdmin.tsx'
 import { ProfileAchievementsAdmin } from './components/ProfileAchievementsAdmin.tsx'
+import { BattlePassAdmin } from './components/BattlePassAdmin.tsx'
 import { RoleBadge } from './components/RoleBadge.tsx'
 
 type Section =
@@ -21,13 +22,15 @@ type Section =
   | 'tournament'
   | 'cobble_ranked'
   | 'profile_badges'
+  | 'battle_pass'
   | 'settings'
   | 'bans'
 
 const SECTIONS: { id: Section; label: string }[] = [
   { id: 'minecraft', label: 'Server Dashboard' },
   { id: 'tournament', label: 'Tournaments' },
-  { id: 'cobble_ranked', label: 'CobbleRanked' },
+  { id: 'cobble_ranked', label: 'Ranked Battle' },
+  { id: 'battle_pass', label: 'Battle pass' },
   { id: 'usage', label: 'Usage stats' },
   { id: 'users', label: 'Website users' },
   { id: 'profile_badges', label: 'Profile badges' },
@@ -190,7 +193,8 @@ export default function App() {
             section === 'minecraft' ||
             section === 'tournament' ||
             section === 'cobble_ranked' ||
-            section === 'profile_badges'
+            section === 'profile_badges' ||
+            section === 'battle_pass'
               ? 'max-w-6xl mx-auto'
               : 'max-w-5xl mx-auto'
           }
@@ -198,6 +202,7 @@ export default function App() {
           {section === 'usage' && <UsageStatsAdmin />}
           {section === 'users' && <UsersAdmin currentAdminId={user.id} />}
           {section === 'profile_badges' && <ProfileAchievementsAdmin />}
+          {section === 'battle_pass' && <BattlePassAdmin />}
           {section === 'verifications' && <VerificationRequestsAdmin />}
           {section === 'role_requests' && <RoleRequestsAdmin />}
           {section === 'minecraft' && <MinecraftDashboard viewerUsername={user.username} />}

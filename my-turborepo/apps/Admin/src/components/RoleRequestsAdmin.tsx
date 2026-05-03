@@ -82,8 +82,7 @@ export function RoleRequestsAdmin() {
     <div className="space-y-6">
       <h1 className="text-xl font-bold text-[#f5efe6] m-0">Rank grant requests</h1>
       <p className="text-sm text-muted m-0 -mt-2">
-        Approve runs <code className="text-sky-300/90">lp user &lt;IGN&gt; parent set &lt;role&gt;</code> via RCON and
-        updates the website rank. Reject with an optional note.
+        Approving applies the requested in-game rank and updates it on the website. Reject with an optional note.
       </p>
       {error && (
         <div className="p-3 rounded-lg bg-error/15 border border-error/30 text-error text-sm">{error}</div>

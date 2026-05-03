@@ -717,7 +717,15 @@ export type PublicProfileAchievement = {
   id: string
   title: string
   description: string
-  tier: 'gold' | 'violet' | 'cyan'
+  tier:
+    | 'silver'
+    | 'cyan'
+    | 'emerald'
+    | 'violet'
+    | 'rose'
+    | 'gold'
+    | 'crimson'
+    | 'mythic'
 }
 
 export type PublicProfile = {

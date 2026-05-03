@@ -40,10 +40,19 @@ function formatPvpFormatLabel(raw: string): string {
   return t.replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
-function achievementCardClass(tier: 'gold' | 'violet' | 'cyan') {
-  if (tier === 'gold') return 'profile-ac-card profile-ac-gold'
-  if (tier === 'violet') return 'profile-ac-card profile-ac-violet'
-  return 'profile-ac-card profile-ac-cyan'
+const PROFILE_AC_TIER_CLASS: Record<string, string> = {
+  silver: 'profile-ac-card profile-ac-silver',
+  cyan: 'profile-ac-card profile-ac-cyan',
+  emerald: 'profile-ac-card profile-ac-emerald',
+  violet: 'profile-ac-card profile-ac-violet',
+  rose: 'profile-ac-card profile-ac-rose',
+  gold: 'profile-ac-card profile-ac-gold',
+  crimson: 'profile-ac-card profile-ac-crimson',
+  mythic: 'profile-ac-card profile-ac-mythic',
+}
+
+function achievementCardClass(tier: string) {
+  return PROFILE_AC_TIER_CLASS[tier] ?? 'profile-ac-card profile-ac-cyan'
 }
 
 type ProfileProps = {
@@ -279,13 +288,23 @@ export function Profile({ slugFromHashOrNav }: ProfileProps) {
                 add these themselves).
               </p>
             ) : (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {profile.achievements.map((a) => (
-                  <div key={a.id} className={achievementCardClass(a.tier)}>
-                    <p className="text-sm font-bold m-0 mb-1 tracking-wide">{a.title}</p>
-                    <p className="text-xs text-[#aab4d9] leading-snug m-0">{a.description}</p>
-                  </div>
-                ))}
+              <div className="grid gap-3 sm:grid-cols-2 profile-achievements-grid">
+                {profile.achievements.map((a) =>
+                  a.tier === 'mythic' ? (
+                    <div key={a.id} className={achievementCardClass(a.tier)}>
+                      <span className="profile-ac-mythic-ring" aria-hidden />
+                      <div className="profile-ac-mythic-fill">
+                        <p className="text-sm font-bold m-0 mb-1 tracking-wide">{a.title}</p>
+                        <p className="text-xs text-[#aab4d9] leading-snug m-0">{a.description}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div key={a.id} className={achievementCardClass(a.tier)}>
+                      <p className="text-sm font-bold m-0 mb-1 tracking-wide">{a.title}</p>
+                      <p className="text-xs text-[#aab4d9] leading-snug m-0">{a.description}</p>
+                    </div>
+                  )
+                )}
               </div>
             )}
           </section>

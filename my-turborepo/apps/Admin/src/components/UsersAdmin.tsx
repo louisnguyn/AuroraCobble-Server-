@@ -381,7 +381,7 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
       mergeUserIntoList(user)
       const applied = (user.minecraft_role ?? grantRolePick).trim().toLowerCase()
       setGrantRolePick(applied)
-      setSuccessMessage(`LuckPerms + website rank set to ${applied} for ${user.username}.`)
+      setSuccessMessage(`In-game and website rank set to ${applied} for ${user.username}.`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not set Minecraft rank')
     } finally {
@@ -900,11 +900,10 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
                   </div>
 
                   <div className="rounded-lg bg-surface border border-border p-4">
-                    <h2 className="text-sm font-semibold text-[#f5efe6] m-0 mb-2">Minecraft rank (LuckPerms)</h2>
+                    <h2 className="text-sm font-semibold text-[#f5efe6] m-0 mb-2">Minecraft rank</h2>
                     <p className="text-xs text-muted m-0 mb-3">
-                      Runs <code className="text-sky-300/90">lp user &lt;IGN&gt; parent set &lt;rank&gt;</code> via RCON,
-                      then updates this user&apos;s rank on the website. Same list as the public rank shop; use this to
-                      grant any role immediately without a user request.
+                      Sets this account&apos;s in-game rank on the server and updates the rank shown on the website.
+                      Same options as the public rank shop — use it to assign a role right away, without a user request.
                     </p>
                     <div className="flex flex-wrap items-center gap-2 mb-3">
                       <span className="text-xs text-muted">Current:</span>

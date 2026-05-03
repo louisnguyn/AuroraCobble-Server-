@@ -271,7 +271,7 @@ function SlotFormFields({
             onChange={(teraType) =>
               patch({ teraType: teraType.trim() ? teraType : null })
             }
-            options={TERA_TYPE_OPTIONS}
+            options={[...TERA_TYPE_OPTIONS]}
             placeholder="e.g. Ground"
           />
         </div>

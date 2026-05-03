@@ -5,7 +5,18 @@ CREATE TABLE IF NOT EXISTS profile_achievement_definitions (
   slug text NOT NULL UNIQUE,
   title text NOT NULL,
   description text NOT NULL,
-  tier text NOT NULL CHECK (tier IN ('gold', 'violet', 'cyan')),
+  tier text NOT NULL CHECK (
+    tier IN (
+      'silver',
+      'cyan',
+      'emerald',
+      'violet',
+      'rose',
+      'gold',
+      'crimson',
+      'mythic'
+    )
+  ),
   sort_order integer NOT NULL DEFAULT 0,
   active boolean NOT NULL DEFAULT true,
   created_at timestamptz NOT NULL DEFAULT now(),

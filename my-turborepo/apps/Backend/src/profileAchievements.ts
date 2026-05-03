@@ -1,9 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { PublicAchievement } from "./achievementTypes.js";
+import type { AchievementTier, PublicAchievement } from "./achievementTypes.js";
+import { ACHIEVEMENT_TIERS, achievementTierRank } from "./achievementTypes.js";
 
-const TIER_SET = new Set(["gold", "violet", "cyan"] as const);
+const TIER_SET = new Set<string>(ACHIEVEMENT_TIERS);
 
-export type AchievementTier = "gold" | "violet" | "cyan";
+export type { AchievementTier } from "./achievementTypes.js";
+export { achievementTierRank, parseAchievementTier } from "./achievementTypes.js";
 
 export function normalizeAchievementSlug(raw: string): string {
   const s = raw
@@ -13,11 +15,6 @@ export function normalizeAchievementSlug(raw: string): string {
     .replace(/^-+|-+$/g, "")
     .slice(0, 48);
   return s;
-}
-
-export function parseAchievementTier(raw: unknown): AchievementTier | null {
-  const t = typeof raw === "string" ? raw.trim().toLowerCase() : "";
-  return TIER_SET.has(t as AchievementTier) ? (t as AchievementTier) : null;
 }
 
 /** Load granted + active achievements for public profile cards. */
@@ -50,8 +47,7 @@ export async function fetchGrantedPublicAchievements(
     .from("profile_achievement_definitions")
     .select("id, slug, title, description, tier, active, sort_order")
     .in("id", ids)
-    .eq("active", true)
-    .order("sort_order", { ascending: true });
+    .eq("active", true);
 
   const missingDefs = Boolean(
     defErr && /profile_achievement_definitions|relation|does not exist|schema cache/i.test(defErr.message)
@@ -73,15 +69,16 @@ export async function fetchGrantedPublicAchievements(
     sort_order: number;
   };
   const rows = defs as DefRow[];
-  const tierOk = (t: string): t is AchievementTier => TIER_SET.has(t as AchievementTier);
+  const tierOk = (t: string): t is AchievementTier => TIER_SET.has(t);
 
   return rows
     .filter((d) => allowed.has(d.id) && tierOk(d.tier))
-    .sort((a, b) =>
-      a.sort_order !== b.sort_order
-        ? a.sort_order - b.sort_order
-        : String(a.slug).localeCompare(String(b.slug))
-    )
+    .sort((a, b) => {
+      const tr = achievementTierRank(a.tier) - achievementTierRank(b.tier);
+      if (tr !== 0) return tr;
+      if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order;
+      return String(a.slug).localeCompare(String(b.slug));
+    })
     .map(
       (d): PublicAchievement => ({
         id: d.slug,

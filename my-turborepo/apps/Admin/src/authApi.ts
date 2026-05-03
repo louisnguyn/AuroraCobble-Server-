@@ -78,8 +78,9 @@ export interface AdminUser {
   minecraft_role?: string | null
 }
 
-export async function fetchAdminUsers(): Promise<{ users: AdminUser[] }> {
-  return fetchJson<{ users: AdminUser[] }>('/admin/users')
+export async function fetchAdminUsers(q?: string): Promise<{ users: AdminUser[] }> {
+  const qs = typeof q === 'string' && q.length > 0 ? `?q=${encodeURIComponent(q)}` : ''
+  return fetchJson<{ users: AdminUser[] }>(`/admin/users${qs}`)
 }
 
 export async function patchAdminUser(
@@ -499,20 +500,58 @@ export async function adminMinecraftRankedadminElo(body: {
   amount: number
   minecraft_username: string
   format: 'singles' | 'doubles'
-}): Promise<{ ok: boolean; command?: string; output?: string; error?: string }> {
+  /** Website user whose username matches IGN (sent when using account search in admin). */
+  user_id?: number
+}): Promise<{ ok: boolean; error?: string }> {
   return fetchJson(`/admin/minecraft/rankedadmin-elo`, {
     method: 'POST',
     body: JSON.stringify(body),
   })
 }
 
+export type RankedBattleStaffEvent = {
+  id: number
+  created_at: string
+  staff_user_id: number
+  staff_username: string | null
+  event_kind: 'elo_add' | 'elo_remove' | 'feed_review'
+  minecraft_username: string | null
+  elo_amount: number | null
+  elo_format: string | null
+  elo_ok: boolean | null
+  elo_error: string | null
+  review_item_key: string | null
+  review_feed_kind: string | null
+  review_reviewed: boolean | null
+}
+
+export async function fetchRankedBattleStaffHistory(params?: {
+  limit?: number
+}): Promise<{ events: RankedBattleStaffEvent[] }> {
+  const sp = new URLSearchParams()
+  if (params?.limit != null) sp.set('limit', String(params.limit))
+  const q = sp.toString()
+  return fetchJson(`/admin/ranked-battle/staff-history${q ? `?${q}` : ''}`)
+}
+
 /** Public-profile achievement badges (definitions + grants). */
+/** Must match backend `ACHIEVEMENT_TIERS` / DB check. */
+export type ProfileAchievementTier =
+  | 'silver'
+  | 'cyan'
+  | 'emerald'
+  | 'violet'
+  | 'rose'
+  | 'gold'
+  | 'crimson'
+  | 'mythic'
+
 export type ProfileAchievementDefinition = {
   id: number
   slug: string
   title: string
   description: string
-  tier: 'gold' | 'violet' | 'cyan'
+  tier: ProfileAchievementTier
   sort_order: number
   active: boolean
   created_at: string
@@ -536,7 +575,7 @@ export async function adminFetchAchievementDefinitions(): Promise<{ definitions:
 export async function adminCreateAchievementDefinition(body: {
   title: string
   description: string
-  tier: 'gold' | 'violet' | 'cyan'
+  tier: ProfileAchievementTier
   slug?: string
   sort_order?: number
   active?: boolean
@@ -552,7 +591,7 @@ export async function adminPatchAchievementDefinition(
   body: Partial<{
     title: string
     description: string
-    tier: 'gold' | 'violet' | 'cyan'
+    tier: ProfileAchievementTier
     sort_order: number
     active: boolean
   }>
@@ -589,5 +628,60 @@ export async function adminGrantProfileAchievement(body: {
 export async function adminRevokeProfileAchievementGrant(grantId: number): Promise<{ ok: boolean }> {
   return fetchJson(`/admin/profile-achievement-grants/${grantId}`, {
     method: 'DELETE',
+  })
+}
+
+export type BattlePassLpResponse = {
+  ok: boolean
+  command?: string
+  output?: string
+  error?: string
+  /** False if RCON succeeded but the grant table could not be updated (run SQL migration). */
+  dbPersisted?: boolean
+}
+
+export type BattlePassGrantListItem = {
+  id: number
+  minecraft_username: string
+  kind: 'premium' | 'party'
+  granted_at: string
+  updated_at: string
+  website_user_id: number | null
+  website_username: string | null
+  website_email: string | null
+  granted_by_user_id: number | null
+  granted_by_username: string | null
+}
+
+export async function fetchBattlePassGrants(kind: 'premium' | 'party'): Promise<{
+  grants: BattlePassGrantListItem[]
+}> {
+  return fetchJson<{ grants: BattlePassGrantListItem[] }>(
+    `/admin/minecraft/battlepass-grants?kind=${encodeURIComponent(kind)}`
+  )
+}
+
+/** Premium battle pass — grant and revoke are separate from party. */
+export async function adminBattlePassPremium(body: {
+  minecraft_username: string
+  grant: boolean
+  /** Website user whose username matches IGN (for audit list). */
+  user_id?: number
+}): Promise<BattlePassLpResponse> {
+  return fetchJson<BattlePassLpResponse>('/admin/minecraft/battlepass-premium', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+/** Party creation access — separate from premium. */
+export async function adminBattlePassParty(body: {
+  minecraft_username: string
+  grant: boolean
+  user_id?: number
+}): Promise<BattlePassLpResponse> {
+  return fetchJson<BattlePassLpResponse>('/admin/minecraft/battlepass-party', {
+    method: 'POST',
+    body: JSON.stringify(body),
   })
 }
