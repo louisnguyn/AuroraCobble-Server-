@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS ranked_battle_staff_events (
   elo_error text,
   review_item_key text,
   review_feed_kind text,
-  review_reviewed boolean
+  review_reviewed boolean,
+  staff_reason text
 );
 
 CREATE INDEX IF NOT EXISTS ranked_battle_staff_events_created_idx ON ranked_battle_staff_events (created_at DESC);

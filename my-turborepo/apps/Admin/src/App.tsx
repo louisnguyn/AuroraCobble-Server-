@@ -11,6 +11,7 @@ import { RoleRequestsAdmin } from './components/RoleRequestsAdmin.tsx'
 import { CobbleRankedAdmin } from './components/CobbleRankedAdmin.tsx'
 import { ProfileAchievementsAdmin } from './components/ProfileAchievementsAdmin.tsx'
 import { BattlePassAdmin } from './components/BattlePassAdmin.tsx'
+import { BattleRestrictionsAdmin } from './components/BattleRestrictionsAdmin.tsx'
 import { RoleBadge } from './components/RoleBadge.tsx'
 
 type Section =
@@ -24,7 +25,7 @@ type Section =
   | 'profile_badges'
   | 'battle_pass'
   | 'settings'
-  | 'bans'
+  | 'battle_restrictions'
 
 const SECTIONS: { id: Section; label: string }[] = [
   { id: 'minecraft', label: 'Server Dashboard' },
@@ -37,7 +38,7 @@ const SECTIONS: { id: Section; label: string }[] = [
   { id: 'verifications', label: 'Verification requests' },
   { id: 'role_requests', label: 'Rank requests' },
   { id: 'settings', label: 'Settings' },
-  { id: 'bans', label: 'Bans' },
+  { id: 'battle_restrictions', label: 'Battle restrictions' },
 ]
 
 function Placeholder({ title }: { title: string }) {
@@ -194,7 +195,7 @@ export default function App() {
             section === 'tournament' ||
             section === 'cobble_ranked' ||
             section === 'profile_badges' ||
-            section === 'battle_pass'
+            section === 'battle_pass' || section === 'battle_restrictions'
               ? 'max-w-6xl mx-auto'
               : 'max-w-5xl mx-auto'
           }
@@ -209,7 +210,7 @@ export default function App() {
           {section === 'tournament' && <TournamentAdmin />}
           {section === 'cobble_ranked' && <CobbleRankedAdmin />}
           {section === 'settings' && <Placeholder title="Settings" />}
-          {section === 'bans' && <Placeholder title="Bans" />}
+          {section === 'battle_restrictions' && <BattleRestrictionsAdmin />}
         </div>
       </main>
     </div>

@@ -5,7 +5,7 @@ import { Home } from './components/Home.tsx'
 import { UsageStats } from './components/UsageStats.tsx'
 import { Leaderboard } from './components/Leaderboard.tsx'
 import { Wiki } from './components/Wiki.tsx'
-import { Rules } from './components/Rules.tsx'
+import { Restrictions } from './components/Restrictions.tsx'
 import { Gacha } from './components/Gacha.tsx'
 import { AuthModal } from './components/AuthModal.tsx'
 import { Account } from './components/Account.tsx'
@@ -21,7 +21,7 @@ type Page =
   | 'leaderboard'
   | 'usage'
   | 'wiki'
-  | 'rules'
+  | 'restrictions'
   | 'gacha'
   | 'spawn'
   | 'account'
@@ -34,7 +34,7 @@ const PAGES: { id: Page; label: string }[] = [
   { id: 'leaderboard', label: 'Leaderboard' },
   { id: 'usage', label: 'Usage Stats' },
   { id: 'wiki', label: 'Wiki' },
-  { id: 'rules', label: 'Rules' },
+  { id: 'restrictions', label: 'Restrictions' },
   { id: 'teambuilder', label: 'Team Builder' },
   { id: 'gacha', label: 'Gacha' },
   { id: 'spawn', label: 'Spawn' },
@@ -73,7 +73,7 @@ function NavIcon({ page }: { page: Page }) {
           <path d="M17 19h3V8a3 3 0 0 0-3-3" />
         </svg>
       )
-    case 'rules':
+    case 'restrictions':
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={cls}>
           <path d="M8 4h10v16H8l-2-2V6l2-2Z" />
@@ -264,7 +264,7 @@ function AppContent() {
         {page === 'usage' && <UsageStats />}
         {page === 'leaderboard' && <Leaderboard />}
         {page === 'wiki' && <Wiki />}
-        {page === 'rules' && <Rules />}
+        {page === 'restrictions' && <Restrictions />}
         {page === 'teambuilder' && <TeamBuilder />}
         {page === 'gacha' && <Gacha />}
         {page === 'spawn' && <Spawn />}

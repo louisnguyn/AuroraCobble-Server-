@@ -50,6 +50,7 @@ import {
   parseRewardForGivePokemon,
 } from "./gachaRewardClaim.js";
 import { registerTournamentRoutes } from "./tournamentRoutes.js";
+import { registerBattleRestrictionsRoutes } from "./battleRestrictionsRoutes.js";
 import { analyzeTeamPokepaste } from "./teamAnalyzeAi.js";
 import {
   buildCobbledollarsDepositCommand,
@@ -218,7 +219,19 @@ function rememberMatchResultSynced(body: unknown): void {
 
 const CORS_ORIGIN = process.env.CORS_ORIGIN ?? "*";
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL?.trim() || null;
-console.log("[Discord] webhook configured:", DISCORD_WEBHOOK_URL ? "yes" : "no");
+/** Gacha “New Listing” posts; defaults to DISCORD_WEBHOOK_URL if unset. */
+const DISCORD_GACHA_WEBHOOK_URL =
+  process.env.DISCORD_GACHA_WEBHOOK_URL?.trim() || DISCORD_WEBHOOK_URL;
+/** Ranked staff ELO add/remove announcements only (no fallback—set explicitly). */
+const DISCORD_RANKED_ELO_WEBHOOK_URL = process.env.DISCORD_RANKED_ELO_WEBHOOK_URL?.trim() || null;
+console.log(
+  "[Discord] default:",
+  DISCORD_WEBHOOK_URL ? "yes" : "no",
+  "| gacha:",
+  DISCORD_GACHA_WEBHOOK_URL ? "yes" : "no",
+  "| ranked elo:",
+  DISCORD_RANKED_ELO_WEBHOOK_URL ? "yes" : "no"
+);
 
 type PvpLeaderboardRow = {
   rank: number;
@@ -325,15 +338,18 @@ async function notifyDiscordPull(
   poolName: string,
   rewardType: string
 ): Promise<void> {
-  await notifyDiscordEmbed({
-    title: "New Listing",
-    color: 0x8b5cf6,
-    fields: [
-      { name: "Player", value: username, inline: true },
-      { name: "Pool", value: poolName, inline: true },
-      { name: "Reward", value: rewardType, inline: false },
-    ],
-  });
+  await notifyDiscordEmbed(
+    {
+      title: "New Listing",
+      color: 0x8b5cf6,
+      fields: [
+        { name: "Player", value: username, inline: true },
+        { name: "Pool", value: poolName, inline: true },
+        { name: "Reward", value: rewardType, inline: false },
+      ],
+    },
+    DISCORD_GACHA_WEBHOOK_URL
+  );
 }
 
 type DiscordEmbedField = {
@@ -355,16 +371,23 @@ type DiscordWebhookPayload = {
   embeds?: DiscordEmbed[];
 };
 
-async function notifyDiscordEmbed(embed: DiscordEmbed): Promise<void> {
-  return notifyDiscordPayload({ embeds: [embed] });
+async function notifyDiscordEmbed(
+  embed: DiscordEmbed,
+  webhookUrlOverride?: string | null
+): Promise<void> {
+  return notifyDiscordPayload({ embeds: [embed] }, webhookUrlOverride);
 }
 
-async function notifyDiscordPayload(payload: DiscordWebhookPayload): Promise<void> {
-  if (!DISCORD_WEBHOOK_URL) {
-    console.warn("[Discord] DISCORD_WEBHOOK_URL is missing; not sending");
+async function notifyDiscordPayload(
+  payload: DiscordWebhookPayload,
+  webhookUrlOverride?: string | null
+): Promise<void> {
+  const trimmedOverride = webhookUrlOverride?.trim();
+  const webhookUrl = trimmedOverride || DISCORD_WEBHOOK_URL;
+  if (!webhookUrl) {
+    console.warn("[Discord] webhook URL is missing; not sending");
     return;
   }
-  const webhookUrl = DISCORD_WEBHOOK_URL;
 
   // Serialize webhook sends + throttle slightly to avoid Discord 429.
   discordSendChain = discordSendChain
@@ -613,6 +636,7 @@ const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT?.trim() || "32mb";
 app.use(express.json({ limit: JSON_BODY_LIMIT }));
 
 registerTournamentRoutes(app, { requireAuth, requireAdmin });
+registerBattleRestrictionsRoutes(app, { requireAuth, requireAdmin });
 
 const TEAM_AI_COOLDOWN_MS = 12 * 60 * 60 * 1000;
 const GACHA_PULL_COOLDOWN_MS = 5_000;
@@ -5137,6 +5161,7 @@ app.post("/admin/minecraft/rankedadmin-elo", requireAuth, requireAdmin, async (r
   const minecraftUsername = typeof body.minecraft_username === "string" ? body.minecraft_username.trim() : "";
   const fmtIn = typeof body.format === "string" ? body.format.trim().toLowerCase() : "singles";
   const format: RankedFormatArg = fmtIn === "doubles" ? "doubles" : "singles";
+  const reasonRaw = typeof body.reason === "string" ? body.reason.trim() : "";
 
   if (!minecraftUsername) {
     res.status(400).json({ error: "minecraft_username required" });
@@ -5149,6 +5174,15 @@ app.post("/admin/minecraft/rankedadmin-elo", requireAuth, requireAdmin, async (r
   const maxAmt = 10_000;
   if (amount > maxAmt) {
     res.status(400).json({ error: `amount must be at most ${maxAmt}` });
+    return;
+  }
+  const maxReason = 4000;
+  if (!reasonRaw) {
+    res.status(400).json({ error: "reason is required (explain the decision for audit and Discord)." });
+    return;
+  }
+  if (reasonRaw.length > maxReason) {
+    res.status(400).json({ error: `reason must be at most ${maxReason} characters` });
     return;
   }
 
@@ -5174,10 +5208,35 @@ app.post("/admin/minecraft/rankedadmin-elo", requireAuth, requireAdmin, async (r
     eloFormat: format,
     eloOk: exec.ok,
     eloError: errText,
+    staffReason: reasonRaw,
   });
 
   if (exec.ok) {
     console.info(`[admin] ranked elo ${action} ${amount} ${minecraftUsername} ${format}: ok`);
+    void (async () => {
+      if (!DISCORD_RANKED_ELO_WEBHOOK_URL) {
+        console.warn("[Discord] DISCORD_RANKED_ELO_WEBHOOK_URL missing; ranked elo not announced");
+        return;
+      }
+      const staffName = await resolveDiscordUsername(adminId);
+      const title = action === "add" ? "Ranked ELO added" : "Ranked ELO removed";
+      const color = action === "add" ? 0x22c55e : 0xf43f5e;
+      await notifyDiscordEmbed(
+        {
+          title,
+          color,
+          fields: [
+            { name: "Player", value: clampDiscordText(minecraftUsername, 256), inline: true },
+            { name: "Amount", value: String(amount), inline: true },
+            { name: "Format", value: format, inline: true },
+            { name: "Staff", value: clampDiscordText(staffName, 256), inline: false },
+            { name: "Reason", value: clampDiscordText(reasonRaw, 1024), inline: false },
+          ],
+          timestamp: new Date().toISOString(),
+        },
+        DISCORD_RANKED_ELO_WEBHOOK_URL
+      );
+    })().catch((e) => console.warn("[Discord] ranked elo notify:", e instanceof Error ? e.message : e));
     res.json({ ok: true });
     return;
   }

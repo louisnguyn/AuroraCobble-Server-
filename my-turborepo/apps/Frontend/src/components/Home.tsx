@@ -3,7 +3,7 @@ type Page =
   | 'leaderboard'
   | 'usage'
   | 'wiki'
-  | 'rules'
+  | 'restrictions'
   | 'teambuilder'
   | 'gacha'
   | 'spawn'
@@ -18,7 +18,7 @@ const QUICK_LINKS: { id: Exclude<Page, 'main'>; label: string; description: stri
   },
   { id: 'usage', label: 'Usage Stats', description: 'Pokémon usage by tier and format' },
   { id: 'wiki', label: 'Wiki', description: 'Pokédex, moves, evolution & forms' },
-  { id: 'rules', label: 'Rules', description: 'Format rules & restrictions' },
+  { id: 'restrictions', label: 'Restrictions', description: 'Battle limits & staff-published rules' },
   {
     id: 'teambuilder',
     label: 'Team Builder',
@@ -109,7 +109,7 @@ export function Home({ onNavigate }: HomeProps) {
 
       {!onNavigate && (
         <p className="text-center text-base text-muted/80 mt-8 max-w-5xl mx-auto">
-          Use the menu to switch sections — Leaderboard, Usage, Wiki, Rules, Team Builder, Gacha, Spawn,
+          Use the menu to switch sections — Leaderboard, Usage, Wiki, Restrictions, Team Builder, Gacha, Spawn,
           Tournament, and Account.
         </p>
       )}

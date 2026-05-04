@@ -16,6 +16,7 @@ export type RankedBattleStaffEventListItem = {
   review_item_key: string | null;
   review_feed_kind: string | null;
   review_reviewed: boolean | null;
+  staff_reason: string | null;
 };
 
 export async function insertRankedBattleStaffEvent(params: {
@@ -29,6 +30,7 @@ export async function insertRankedBattleStaffEvent(params: {
   reviewItemKey?: string | null;
   reviewFeedKind?: string | null;
   reviewReviewed?: boolean | null;
+  staffReason?: string | null;
 }): Promise<void> {
   if (!supabase) return;
   const row = {
@@ -42,6 +44,7 @@ export async function insertRankedBattleStaffEvent(params: {
     review_item_key: params.reviewItemKey ?? null,
     review_feed_kind: params.reviewFeedKind ?? null,
     review_reviewed: params.reviewReviewed ?? null,
+    staff_reason: params.staffReason ?? null,
   };
   const { error } = await supabase.from("ranked_battle_staff_events").insert(row);
   if (error) {
@@ -57,15 +60,19 @@ export async function listRankedBattleStaffEvents(
   const { data: rows, error } = await supabase
     .from("ranked_battle_staff_events")
     .select(
-      "id, created_at, staff_user_id, event_kind, minecraft_username, elo_amount, elo_format, elo_ok, elo_error, review_item_key, review_feed_kind, review_reviewed"
+      "id, created_at, staff_user_id, event_kind, minecraft_username, elo_amount, elo_format, elo_ok, elo_error, review_item_key, review_feed_kind, review_reviewed, staff_reason"
     )
     .order("created_at", { ascending: false })
     .limit(lim);
   if (error) {
-    const missing = /ranked_battle_staff_events|relation|does not exist|schema cache/i.test(error.message);
+    const missingTbl = /ranked_battle_staff_events|relation|does not exist|schema cache/i.test(error.message);
+    const missingCol = /staff_reason/i.test(error.message);
+    let hint = error.message;
+    if (missingTbl) hint = "Run supabase/ranked_battle_staff_events.sql.";
+    else if (missingCol) hint = "Run supabase/ranked_battle_staff_events_reason.sql (adds staff_reason).";
     return {
       ok: false,
-      error: missing ? "Run supabase/ranked_battle_staff_events.sql." : error.message,
+      error: missingTbl || missingCol ? hint : error.message,
     };
   }
   const base = (rows ?? []) as Omit<RankedBattleStaffEventListItem, "staff_username">[];

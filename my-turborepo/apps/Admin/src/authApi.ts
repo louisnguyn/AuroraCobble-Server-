@@ -508,6 +508,8 @@ export async function adminMinecraftRankedadminElo(body: {
   amount: number
   minecraft_username: string
   format: 'singles' | 'doubles'
+  /** Shown in staff history and Discord (successful changes). */
+  reason: string
   /** Website user whose username matches IGN (sent when using account search in admin). */
   user_id?: number
 }): Promise<{ ok: boolean; error?: string }> {
@@ -531,6 +533,7 @@ export type RankedBattleStaffEvent = {
   review_item_key: string | null
   review_feed_kind: string | null
   review_reviewed: boolean | null
+  staff_reason: string | null
 }
 
 export async function fetchRankedBattleStaffHistory(params?: {
@@ -692,4 +695,50 @@ export async function adminBattlePassParty(body: {
     method: 'POST',
     body: JSON.stringify(body),
   })
+}
+
+/** Public battle restrictions document (edited in Admin, shown on website). */
+export type BattleRestrictionsDocument = {
+  updated_at: string
+  /** Plain text, e.g. "National Dex OU — Singles" (shown on public page). */
+  format_label: string
+  player_restrictions_html: string
+  pokemon_slugs: string[]
+  pokemon_notes_html: string
+  move_slugs: string[]
+  move_notes_html: string
+  ability_slugs: string[]
+  ability_notes_html: string
+  item_slugs: string[]
+  item_notes_html: string
+}
+
+export async function fetchAdminBattleRestrictions(): Promise<BattleRestrictionsDocument> {
+  return fetchJson('/admin/battle-restrictions')
+}
+
+export async function putAdminBattleRestrictions(
+  body: Omit<BattleRestrictionsDocument, 'updated_at'>
+): Promise<BattleRestrictionsDocument> {
+  return fetchJson('/admin/battle-restrictions', {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function uploadBattleRestrictionImage(file: File): Promise<string> {
+  const url = buildUrl('/admin/battle-restrictions/upload-image')
+  const headers: HeadersInit = {}
+  const token = getToken()
+  if (token) {
+    ;(headers as Record<string, string>)['Authorization'] = `Bearer ${token}`
+  }
+  const body = new FormData()
+  body.append('image', file)
+  const res = await fetch(url, { method: 'POST', headers, body })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    throw new Error((data as { error?: string })?.error ?? `Upload failed: ${res.status}`)
+  }
+  return (data as { url: string }).url
 }

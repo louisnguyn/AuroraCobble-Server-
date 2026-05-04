@@ -71,6 +71,7 @@ export function CobbleRankedAdmin() {
   const pickWrapRef = useRef<HTMLDivElement>(null)
 
   const [eloFormat, setEloFormat] = useState<'singles' | 'doubles'>('singles')
+  const [eloReason, setEloReason] = useState('')
   const [eloBusy, setEloBusy] = useState<'add' | 'remove' | null>(null)
   const [eloMessage, setEloMessage] = useState<string | null>(null)
   const [eloError, setEloError] = useState<string | null>(null)
@@ -191,6 +192,11 @@ export function CobbleRankedAdmin() {
       setEloError('Amount must be a positive whole number.')
       return
     }
+    const reason = eloReason.trim()
+    if (!reason) {
+      setEloError('Enter a reason (saved to staff history and sent to Discord on success).')
+      return
+    }
     setEloBusy(action)
     try {
       const out = await adminMinecraftRankedadminElo({
@@ -198,6 +204,7 @@ export function CobbleRankedAdmin() {
         amount,
         minecraft_username: ign,
         format: eloFormat,
+        reason,
         user_id: userId,
       })
       if (out.ok) {
@@ -230,7 +237,8 @@ export function CobbleRankedAdmin() {
       <section className="rounded-2xl border border-white/10 bg-black/25 p-5 space-y-4">
         <h2 className="text-sm font-semibold text-white m-0">ELO adjustment</h2>
         <p className="text-xs text-slate-500 m-0 max-w-2xl">
-          Pick the player’s website account, choose singles or doubles, then add or remove ELO.
+          Pick the player’s website account, choose singles or doubles, enter why you’re changing ELO (audit + Discord),
+          then add or remove.
         </p>
         <div className="flex flex-wrap items-end gap-3">
           <div>
@@ -328,6 +336,21 @@ export function CobbleRankedAdmin() {
               <option value="doubles">Doubles</option>
             </select>
           </div>
+        </div>
+        <div className="max-w-3xl">
+          <label className="block text-xs text-slate-500 mb-1" htmlFor="elo-reason">
+            Reason
+          </label>
+          <textarea
+            id="elo-reason"
+            rows={3}
+            value={eloReason}
+            onChange={(e) => setEloReason(e.target.value)}
+            placeholder="e.g. Manual correction after confirmed win trading / bugged match"
+            className="w-full px-2 py-1.5 rounded-lg bg-black/40 border border-white/15 text-sm text-slate-100 placeholder:text-slate-600 resize-y min-h-[4.5rem]"
+          />
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
           <button
             type="button"
             disabled={eloBusy !== null}
@@ -403,17 +426,27 @@ export function CobbleRankedAdmin() {
                     <th className="px-3 py-2 font-semibold">Staff</th>
                     <th className="px-3 py-2 font-semibold">Action</th>
                     <th className="px-3 py-2 font-semibold">Details</th>
+                    <th className="px-3 py-2 font-semibold">Reason</th>
                   </tr>
                 </thead>
                 <tbody>
                   {staffEvents.map((ev) => {
                     const { action, details } = staffEventSummary(ev)
+                    const reasonCell =
+                      ev.event_kind === 'feed_review'
+                        ? '—'
+                        : ev.staff_reason?.trim()
+                          ? ev.staff_reason
+                          : '—'
                     return (
                       <tr key={ev.id} className="border-t border-white/10 hover:bg-white/[0.03]">
                         <td className="px-3 py-2 text-slate-400 whitespace-nowrap">{formatTs(ev.created_at)}</td>
                         <td className="px-3 py-2 text-slate-200">{ev.staff_username ?? `#${ev.staff_user_id}`}</td>
                         <td className="px-3 py-2 text-slate-200">{action}</td>
                         <td className="px-3 py-2 text-slate-400 max-w-xl">{details}</td>
+                        <td className="px-3 py-2 text-slate-400 max-w-md whitespace-pre-wrap break-words align-top">
+                          {reasonCell}
+                        </td>
                       </tr>
                     )
                   })}

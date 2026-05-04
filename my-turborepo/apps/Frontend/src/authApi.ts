@@ -777,6 +777,25 @@ export async function uploadProfileAvatar(file: File): Promise<{ profile: Public
   return data as { profile: PublicProfile }
 }
 
+/** Server-sanitized HTML + PokéAPI slugs for tags (public GET). */
+export type BattleRestrictionsDocument = {
+  updated_at: string
+  format_label: string
+  player_restrictions_html: string
+  pokemon_slugs: string[]
+  pokemon_notes_html: string
+  move_slugs: string[]
+  move_notes_html: string
+  ability_slugs: string[]
+  ability_notes_html: string
+  item_slugs: string[]
+  item_notes_html: string
+}
+
+export async function fetchBattleRestrictions(): Promise<BattleRestrictionsDocument> {
+  return fetchApi<BattleRestrictionsDocument>('/battle-restrictions', { skipAuth: true })
+}
+
 export async function fetchTournamentParticipantTeam(
   slug: string,
   participantId: number

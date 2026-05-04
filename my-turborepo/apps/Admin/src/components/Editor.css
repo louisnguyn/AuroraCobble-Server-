@@ -1,0 +1,171 @@
+/* TipTap (battle restrictions admin) */
+.tiptap-editor-container {
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+
+.tiptap-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  align-items: center;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.tiptap-toolbar button,
+.tiptap-toolbar label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #e2e8f0;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.tiptap-toolbar button:hover,
+.tiptap-toolbar label:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.tiptap-toolbar button.active,
+.tiptap-toolbar .color-picker-button.active {
+  border-color: rgba(251, 191, 36, 0.45);
+  background: rgba(251, 191, 36, 0.12);
+}
+
+.tiptap-editor {
+  padding: 12px 14px;
+  min-height: 140px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.tiptap-editor .ProseMirror {
+  outline: none;
+  color: #f1f5f9;
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+
+.tiptap-editor .ProseMirror p.is-editor-empty:first-child::before {
+  color: #64748b;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.tiptap-editor .ProseMirror h1 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin: 0.6em 0 0.35em;
+}
+.tiptap-editor .ProseMirror h2 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 0.55em 0 0.3em;
+}
+.tiptap-editor .ProseMirror h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0.5em 0 0.25em;
+}
+
+.tiptap-editor .ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+
+.tiptap-character-count {
+  padding: 6px 12px 10px;
+  font-size: 11px;
+  color: #94a3b8;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.color-picker-container {
+  position: relative;
+}
+
+.color-picker-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 50;
+  margin-top: 6px;
+  width: 220px;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #141218;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+.color-picker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: #cbd5e1;
+  margin-bottom: 8px;
+}
+
+.close-color-picker {
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.color-options {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+
+.color-option {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  cursor: pointer;
+  padding: 0;
+}
+
+.color-picker-actions {
+  margin-top: 8px;
+}
+
+@keyframes tiptap-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.tiptap-toolbar svg.animate-spin,
+.tiptap-toolbar .tiptap-spin {
+  animation: tiptap-spin 0.8s linear infinite;
+}
+
+.remove-color-button {
+  width: 100%;
+  padding: 6px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(239, 68, 68, 0.12);
+  color: #fecaca;
+  font-size: 11px;
+  cursor: pointer;
+}
