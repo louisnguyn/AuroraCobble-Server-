@@ -20,6 +20,8 @@ const emptyDoc: Omit<BattleRestrictionsDocument, 'updated_at'> = {
   player_restrictions_html: '',
   pokemon_slugs: [],
   pokemon_notes_html: '',
+  pokemon_blacklist_slugs: [],
+  pokemon_blacklist_notes_html: '',
   move_slugs: [],
   move_notes_html: '',
   ability_slugs: [],
@@ -51,6 +53,8 @@ export function BattleRestrictionsAdmin() {
           player_restrictions_html: d.player_restrictions_html ?? '',
           pokemon_slugs: d.pokemon_slugs ?? [],
           pokemon_notes_html: d.pokemon_notes_html ?? '',
+          pokemon_blacklist_slugs: d.pokemon_blacklist_slugs ?? [],
+          pokemon_blacklist_notes_html: d.pokemon_blacklist_notes_html ?? '',
           move_slugs: d.move_slugs ?? [],
           move_notes_html: d.move_notes_html ?? '',
           ability_slugs: d.ability_slugs ?? [],
@@ -110,6 +114,8 @@ export function BattleRestrictionsAdmin() {
         player_restrictions_html: saved.player_restrictions_html ?? '',
         pokemon_slugs: saved.pokemon_slugs ?? [],
         pokemon_notes_html: saved.pokemon_notes_html ?? '',
+        pokemon_blacklist_slugs: saved.pokemon_blacklist_slugs ?? [],
+        pokemon_blacklist_notes_html: saved.pokemon_blacklist_notes_html ?? '',
         move_slugs: saved.move_slugs ?? [],
         move_notes_html: saved.move_notes_html ?? '',
         ability_slugs: saved.ability_slugs ?? [],
@@ -186,23 +192,44 @@ export function BattleRestrictionsAdmin() {
         />
       </section>
 
-      <section className="space-y-3">
+      <section className="space-y-6">
         <h2 className="text-sm font-semibold text-white m-0">Pokémon</h2>
-        <RestrictionSlugPicker
-          label="Restricted Pokémon (from PokéAPI)"
-          hint="Adds tags with sprites on the website. Combine with notes below when needed."
-          options={pokeOpts}
-          selected={doc.pokemon_slugs}
-          onChange={(slugs) => setDoc((d) => ({ ...d, pokemon_slugs: slugs }))}
-          loading={listsLoading}
-        />
-        <p className="text-xs text-slate-500 m-0">Optional rich text if you are not using the picker (or for extra nuance).</p>
-        <TipTap
-          value={doc.pokemon_notes_html}
-          onChange={(html) => setDoc((d) => ({ ...d, pokemon_notes_html: html }))}
-          placeholder="e.g. form-specific bans, unofficial species…"
-          uploadImage={uploadImg}
-        />
+        <div className="space-y-3 border-l-2 border-emerald-500/25 pl-3">
+          <p className="text-xs font-medium text-emerald-200/90 m-0">Restricted</p>
+          <RestrictionSlugPicker
+            label="Restricted Pokémon (from PokéAPI)"
+            hint="Banned from the format entirely. Shown first on the public page."
+            options={pokeOpts}
+            selected={doc.pokemon_slugs}
+            onChange={(slugs) => setDoc((d) => ({ ...d, pokemon_slugs: slugs }))}
+            loading={listsLoading}
+          />
+          <p className="text-xs text-slate-500 m-0">Optional notes for restricted species.</p>
+          <TipTap
+            value={doc.pokemon_notes_html}
+            onChange={(html) => setDoc((d) => ({ ...d, pokemon_notes_html: html }))}
+            placeholder="e.g. allowed forms, nuances for restricted Pokémon…"
+            uploadImage={uploadImg}
+          />
+        </div>
+        <div className="space-y-3 border-l-2 border-rose-500/30 pl-3">
+          <p className="text-xs font-medium text-rose-200/90 m-0">Blacklisted</p>
+          <RestrictionSlugPicker
+            label="Blacklisted Pokémon"
+            hint="Separate list — e.g. temp bans, scouting list, or stricter disallow than “restricted”. Shown in its own block on the site."
+            options={pokeOpts}
+            selected={doc.pokemon_blacklist_slugs}
+            onChange={(slugs) => setDoc((d) => ({ ...d, pokemon_blacklist_slugs: slugs }))}
+            loading={listsLoading}
+          />
+          <p className="text-xs text-slate-500 m-0">Optional notes for the blacklist.</p>
+          <TipTap
+            value={doc.pokemon_blacklist_notes_html}
+            onChange={(html) => setDoc((d) => ({ ...d, pokemon_blacklist_notes_html: html }))}
+            placeholder="Why these are blacklisted, duration, exceptions…"
+            uploadImage={uploadImg}
+          />
+        </div>
       </section>
 
       <section className="space-y-3">

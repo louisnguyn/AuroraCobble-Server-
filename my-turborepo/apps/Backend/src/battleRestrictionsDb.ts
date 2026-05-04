@@ -7,6 +7,8 @@ export type BattleRestrictionsPublic = {
   player_restrictions_html: string;
   pokemon_slugs: string[];
   pokemon_notes_html: string;
+  pokemon_blacklist_slugs: string[];
+  pokemon_blacklist_notes_html: string;
   move_slugs: string[];
   move_notes_html: string;
   ability_slugs: string[];
@@ -52,6 +54,11 @@ function rowToPublic(r: Record<string, unknown>): BattleRestrictionsPublic {
     player_restrictions_html: typeof r.player_restrictions_html === "string" ? r.player_restrictions_html : "",
     pokemon_slugs: Array.isArray(r.pokemon_slugs) ? (r.pokemon_slugs as string[]) : [],
     pokemon_notes_html: typeof r.pokemon_notes_html === "string" ? r.pokemon_notes_html : "",
+    pokemon_blacklist_slugs: Array.isArray(r.pokemon_blacklist_slugs)
+      ? (r.pokemon_blacklist_slugs as string[])
+      : [],
+    pokemon_blacklist_notes_html:
+      typeof r.pokemon_blacklist_notes_html === "string" ? r.pokemon_blacklist_notes_html : "",
     move_slugs: Array.isArray(r.move_slugs) ? (r.move_slugs as string[]) : [],
     move_notes_html: typeof r.move_notes_html === "string" ? r.move_notes_html : "",
     ability_slugs: Array.isArray(r.ability_slugs) ? (r.ability_slugs as string[]) : [],
@@ -62,7 +69,7 @@ function rowToPublic(r: Record<string, unknown>): BattleRestrictionsPublic {
 }
 
 const SELECT_FIELDS =
-  "updated_at, format_label, player_restrictions_html, pokemon_slugs, pokemon_notes_html, move_slugs, move_notes_html, ability_slugs, ability_notes_html, item_slugs, item_notes_html";
+  "updated_at, format_label, player_restrictions_html, pokemon_slugs, pokemon_notes_html, pokemon_blacklist_slugs, pokemon_blacklist_notes_html, move_slugs, move_notes_html, ability_slugs, ability_notes_html, item_slugs, item_notes_html";
 
 export async function fetchBattleRestrictionsPublic(): Promise<
   { ok: true; data: BattleRestrictionsPublic } | { ok: false; error: string }
@@ -76,12 +83,14 @@ export async function fetchBattleRestrictionsPublic(): Promise<
   if (error) {
     const missing = /battle_restrictions_config|relation|does not exist|schema cache/i.test(error.message);
     const missingFmt = /format_label/i.test(error.message);
+    const missingBl = /pokemon_blacklist/i.test(error.message);
     let msg = error.message;
     if (missing) msg = "Run supabase/battle_restrictions_config.sql.";
     else if (missingFmt) msg = "Run supabase/battle_restrictions_format_label.sql (adds format_label).";
+    else if (missingBl) msg = "Run supabase/battle_restrictions_pokemon_blacklist.sql.";
     return {
       ok: false,
-      error: missing || missingFmt ? msg : error.message,
+      error: missing || missingFmt || missingBl ? msg : error.message,
     };
   }
   if (!data) {
@@ -93,6 +102,8 @@ export async function fetchBattleRestrictionsPublic(): Promise<
         player_restrictions_html: "",
         pokemon_slugs: [],
         pokemon_notes_html: "",
+        pokemon_blacklist_slugs: [],
+        pokemon_blacklist_notes_html: "",
         move_slugs: [],
         move_notes_html: "",
         ability_slugs: [],
@@ -116,6 +127,9 @@ export async function upsertBattleRestrictionsFromAdmin(body: Record<string, unk
   const pokemon_notes_html = sanitizeBattleRestrictionsHtml(
     typeof body.pokemon_notes_html === "string" ? body.pokemon_notes_html : ""
   );
+  const pokemon_blacklist_notes_html = sanitizeBattleRestrictionsHtml(
+    typeof body.pokemon_blacklist_notes_html === "string" ? body.pokemon_blacklist_notes_html : ""
+  );
   const move_notes_html = sanitizeBattleRestrictionsHtml(
     typeof body.move_notes_html === "string" ? body.move_notes_html : ""
   );
@@ -134,6 +148,8 @@ export async function upsertBattleRestrictionsFromAdmin(body: Record<string, unk
     player_restrictions_html,
     pokemon_slugs: normalizeSlugArray(body.pokemon_slugs),
     pokemon_notes_html,
+    pokemon_blacklist_slugs: normalizeSlugArray(body.pokemon_blacklist_slugs),
+    pokemon_blacklist_notes_html,
     move_slugs: normalizeSlugArray(body.move_slugs),
     move_notes_html,
     ability_slugs: normalizeSlugArray(body.ability_slugs),
@@ -146,12 +162,14 @@ export async function upsertBattleRestrictionsFromAdmin(body: Record<string, unk
   if (error) {
     const missing = /battle_restrictions_config|relation|does not exist|schema cache/i.test(error.message);
     const missingFmt = /format_label/i.test(error.message);
+    const missingBl = /pokemon_blacklist/i.test(error.message);
     let msg = error.message;
     if (missing) msg = "Run supabase/battle_restrictions_config.sql.";
     else if (missingFmt) msg = "Run supabase/battle_restrictions_format_label.sql (adds format_label).";
+    else if (missingBl) msg = "Run supabase/battle_restrictions_pokemon_blacklist.sql.";
     return {
       ok: false,
-      error: missing || missingFmt ? msg : error.message,
+      error: missing || missingFmt || missingBl ? msg : error.message,
     };
   }
   return fetchBattleRestrictionsPublic();

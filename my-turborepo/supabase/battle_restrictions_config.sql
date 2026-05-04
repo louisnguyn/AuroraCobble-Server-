@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS battle_restrictions_config (
   player_restrictions_html text NOT NULL DEFAULT '',
   pokemon_slugs text[] NOT NULL DEFAULT '{}',
   pokemon_notes_html text NOT NULL DEFAULT '',
+  pokemon_blacklist_slugs text[] NOT NULL DEFAULT '{}',
+  pokemon_blacklist_notes_html text NOT NULL DEFAULT '',
   move_slugs text[] NOT NULL DEFAULT '{}',
   move_notes_html text NOT NULL DEFAULT '',
   ability_slugs text[] NOT NULL DEFAULT '{}',

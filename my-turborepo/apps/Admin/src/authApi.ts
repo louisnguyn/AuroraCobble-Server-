@@ -705,6 +705,8 @@ export type BattleRestrictionsDocument = {
   player_restrictions_html: string
   pokemon_slugs: string[]
   pokemon_notes_html: string
+  pokemon_blacklist_slugs: string[]
+  pokemon_blacklist_notes_html: string
   move_slugs: string[]
   move_notes_html: string
   ability_slugs: string[]

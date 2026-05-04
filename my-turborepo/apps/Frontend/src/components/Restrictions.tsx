@@ -36,7 +36,13 @@ function isEmptyHtml(html: string | undefined | null): boolean {
   return !t || t === '<p></p>' || t === '<p><br></p>'
 }
 
-function PokemonChip({ slug }: { slug: string }) {
+function PokemonChip({
+  slug,
+  variant,
+}: {
+  slug: string
+  variant?: 'restricted' | 'blacklist'
+}) {
   const [image, setImage] = useState<string | null>(null)
   useEffect(() => {
     let cancelled = false
@@ -47,8 +53,12 @@ function PokemonChip({ slug }: { slug: string }) {
       cancelled = true
     }
   }, [slug])
+  const ring =
+    variant === 'blacklist'
+      ? 'border-rose-500/45 bg-rose-950/20'
+      : 'border-border/50 bg-bg/60'
   return (
-    <span className="inline-flex items-center gap-1.5 py-0.5 px-2 rounded text-sm bg-bg/60 text-muted border border-border/50">
+    <span className={`inline-flex items-center gap-1.5 py-0.5 px-2 rounded text-sm text-muted border ${ring}`}>
       {image ? (
         <img src={image} alt="" className="w-6 h-6 object-contain flex-shrink-0" />
       ) : (
@@ -180,10 +190,12 @@ export function Restrictions() {
     !(data.format_label?.trim()) &&
     isEmptyHtml(data.player_restrictions_html) &&
     (data.pokemon_slugs?.length ?? 0) === 0 &&
+    (data.pokemon_blacklist_slugs?.length ?? 0) === 0 &&
     (data.move_slugs?.length ?? 0) === 0 &&
     (data.ability_slugs?.length ?? 0) === 0 &&
     (data.item_slugs?.length ?? 0) === 0 &&
     isEmptyHtml(data.pokemon_notes_html) &&
+    isEmptyHtml(data.pokemon_blacklist_notes_html) &&
     isEmptyHtml(data.move_notes_html) &&
     isEmptyHtml(data.ability_notes_html) &&
     isEmptyHtml(data.item_notes_html)
@@ -210,8 +222,8 @@ export function Restrictions() {
         <div className="pixel-panel p-6 text-rose-400 text-base">
           {error}
           <p className="text-muted text-sm m-0 mt-2">
-            If the database migration is missing, apply supabase/battle_restrictions_config.sql and
-            battle_restrictions_format_label.sql.
+            If the database migration is missing, apply supabase/battle_restrictions_config.sql,
+            battle_restrictions_format_label.sql, and battle_restrictions_pokemon_blacklist.sql when needed.
           </p>
         </div>
       ) : null}
@@ -237,11 +249,19 @@ export function Restrictions() {
           ) : null}
 
           <SectionCard
-            title="Pokémon restrictions"
+            title="Pokémon — restricted"
             chips={(data.pokemon_slugs ?? []).map((s) => (
-              <PokemonChip key={s} slug={s} />
+              <PokemonChip key={s} slug={s} variant="restricted" />
             ))}
             notesHtml={data.pokemon_notes_html}
+          />
+
+          <SectionCard
+            title="Pokémon — blacklisted"
+            chips={(data.pokemon_blacklist_slugs ?? []).map((s) => (
+              <PokemonChip key={`bl-${s}`} slug={s} variant="blacklist" />
+            ))}
+            notesHtml={data.pokemon_blacklist_notes_html}
           />
 
           <SectionCard
