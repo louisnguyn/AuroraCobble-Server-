@@ -293,7 +293,13 @@ export function Leaderboard() {
 
   const formats = lbData?.formats ?? {}
   const rankFormat = getFormatById(formats, rankFormatId)
-  const rankPlayers: LeaderboardPlayer[] = rankFormat?.players ?? []
+  const rankPlayers: LeaderboardPlayer[] = useMemo(() => {
+    const players = rankFormat?.players ?? []
+    // Hide never-played players and re-rank by visible order.
+    return players
+      .filter((p) => p.matches > 0)
+      .map((p, idx) => ({ ...p, rank: idx + 1 }))
+  }, [rankFormat?.players])
 
   const yourRankPlayer = useMemo(() => {
     if (!viewerIgn) return undefined

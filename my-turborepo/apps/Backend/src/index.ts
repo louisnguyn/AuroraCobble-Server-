@@ -3189,6 +3189,7 @@ const POKEMON_SHOP_OFFER_COUNT = 4;
 const POKEMON_SHOP_CATEGORIES = {
   mythic: {
     price: 7_500_000,
+    weight: 5,
     species: [
       "mew", "celebi", "jirachi", "deoxys", "manaphy", "phione", "darkrai", "shaymin",
       "arceus", "victini", "keldeo", "meloetta", "genesect", "diancie", "hoopa", "volcanion",
@@ -3197,6 +3198,7 @@ const POKEMON_SHOP_CATEGORIES = {
   },
   pseudo_legend: {
     price: 3_000_000,
+    weight: 36,
     species: [
       "dragonite", "tyranitar", "salamence", "metagross", "garchomp", "hydreigon",
       "goodra", "kommo-o", "dragapult", "baxcalibur"
@@ -3204,6 +3206,7 @@ const POKEMON_SHOP_CATEGORIES = {
   },
   paradox: {
     price: 4_000_000,
+    weight: 32,
     species: [
       "greattusk", "screamtail", "brutebonnet", "fluttermane", "slitherwing", "sandyshocks",
       "irontreads", "ironbundle", "ironhands", "ironjugulis", "ironmoth", "ironthorns",
@@ -3213,6 +3216,7 @@ const POKEMON_SHOP_CATEGORIES = {
   },
   ultra_beast: {
     price: 5_000_000,
+    weight: 26,
     species: [
       "nihilego", "buzzwole", "pheromosa", "xurkitree", "celesteela", "kartana", "guzzlord",
       "poipole", "naganadel", "stakataka", "blacephalon"
@@ -3220,6 +3224,7 @@ const POKEMON_SHOP_CATEGORIES = {
   },
   legend: {
     price: 10_000_000,
+    weight: 1,
     species: [
       "articuno", "zapdos", "moltres", "mewtwo", "raikou", "entei", "suicune", "lugia", "hooh",
       "regirock", "regice", "registeel", "latias", "latios", "kyogre", "groudon", "rayquaza",
@@ -3264,15 +3269,26 @@ function buildPokemonShopOffers(windowStartIso: string) {
   const categories = Object.keys(POKEMON_SHOP_CATEGORIES) as PokemonShopCategory[];
   const rng = mulberry32(hashString(`pokemon-shop:${windowStartIso}`));
   const categoryPool = [...categories];
-  // Fisher-Yates shuffle so category order is random but complete.
-  for (let i = categoryPool.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(rng() * (i + 1));
-    const a = categoryPool[i]!;
-    const b = categoryPool[j]!;
-    categoryPool[i] = b;
-    categoryPool[j] = a;
+
+  // Weighted pick without replacement: rarer categories (legend/mythic) roll less often.
+  const pickedCategories: PokemonShopCategory[] = [];
+  while (pickedCategories.length < Math.min(POKEMON_SHOP_OFFER_COUNT, categoryPool.length)) {
+    const totalWeight = categoryPool.reduce((sum, c) => sum + Math.max(0, POKEMON_SHOP_CATEGORIES[c].weight), 0);
+    if (totalWeight <= 0) break;
+    let roll = rng() * totalWeight;
+    let pickIndex = 0;
+    for (let i = 0; i < categoryPool.length; i += 1) {
+      const w = Math.max(0, POKEMON_SHOP_CATEGORIES[categoryPool[i]!].weight);
+      roll -= w;
+      if (roll <= 0) {
+        pickIndex = i;
+        break;
+      }
+    }
+    const [picked] = categoryPool.splice(pickIndex, 1);
+    if (picked) pickedCategories.push(picked);
   }
-  const pickedCategories = categoryPool.slice(0, Math.min(POKEMON_SHOP_OFFER_COUNT, categoryPool.length));
+
   const offers = pickedCategories.map((category, i) => {
     const def = POKEMON_SHOP_CATEGORIES[category];
     const pickIdx = Math.floor(rng() * def.species.length);
