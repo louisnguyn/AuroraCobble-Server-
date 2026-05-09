@@ -373,6 +373,18 @@ export async function fetchMinecraftDashboard(): Promise<MinecraftDashboardRespo
   return data as MinecraftDashboardResponse
 }
 
+export async function runAdminBossSpawnNow(): Promise<{
+  ok: boolean
+  warningDelayMs: number
+  warningCommands: number
+  spawnCommands: number
+}> {
+  return fetchJson('/admin/minecraft/boss-spawn/run-now', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+}
+
 // --- Tournaments (admin API; public bracket lives on the main site) ---
 
 export interface TournamentBracketSlot {

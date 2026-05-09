@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { fetchMinecraftDashboard, type MinecraftDashboardResponse } from '../authApi'
+import { fetchMinecraftDashboard, runAdminBossSpawnNow, type MinecraftDashboardResponse } from '../authApi'
 import { DashboardLeaderboardPanel } from './DashboardLeaderboardPanel.tsx'
 
 function StatCard({
@@ -98,6 +98,8 @@ export function MinecraftDashboard({ viewerUsername }: { viewerUsername?: string
   const [hint, setHint] = useState<string | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
   const [search, setSearch] = useState('')
+  const [bossRunBusy, setBossRunBusy] = useState(false)
+  const [bossRunMessage, setBossRunMessage] = useState<string | null>(null)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -137,6 +139,21 @@ export function MinecraftDashboard({ viewerUsername }: { viewerUsername?: string
     return { on, off }
   }, [data?.players])
 
+  const handleRunBossNow = useCallback(async () => {
+    if (bossRunBusy) return
+    setBossRunBusy(true)
+    setBossRunMessage(null)
+    try {
+      await runAdminBossSpawnNow()
+      setBossRunMessage('Boss cycle started: warning sent now, spawn starts in 1 minute.')
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Could not run boss cycle now.'
+      setBossRunMessage(msg)
+    } finally {
+      setBossRunBusy(false)
+    }
+  }, [bossRunBusy])
+
   return (
     <div className="space-y-8 pb-12">
       {/* Header */}
@@ -146,23 +163,39 @@ export function MinecraftDashboard({ viewerUsername }: { viewerUsername?: string
             Server Dashboard
           </h1>
         </div>
-        <button
-          type="button"
-          onClick={load}
-          disabled={loading}
-          className="shrink-0 inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-amber-600 to-stone-600 hover:from-amber-500 hover:to-stone-500 border border-white/10 shadow-lg shadow-amber-900/40 disabled:opacity-50 transition-all"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-            />
-          </svg>
-          {loading ? 'Refreshing…' : 'Refresh'}
-        </button>
+        <div className="shrink-0 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void handleRunBossNow()}
+            disabled={bossRunBusy}
+            className="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-red-700 to-rose-700 hover:from-red-600 hover:to-rose-600 border border-red-300/20 shadow-lg shadow-red-900/40 disabled:opacity-50 transition-all"
+            title="Send raid warning now and spawn bosses after 1 minute"
+          >
+            {bossRunBusy ? 'Running…' : 'Run boss now'}
+          </button>
+          <button
+            type="button"
+            onClick={load}
+            disabled={loading}
+            className="inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-amber-600 to-stone-600 hover:from-amber-500 hover:to-stone-500 border border-white/10 shadow-lg shadow-amber-900/40 disabled:opacity-50 transition-all"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </button>
+        </div>
       </div>
+      {bossRunMessage && (
+        <div className="rounded-xl border border-amber-500/25 bg-amber-950/20 px-4 py-3 text-sm text-amber-100/90">
+          {bossRunMessage}
+        </div>
+      )}
 
       {loading && !data && (
         <div className="rounded-2xl border border-white/10 bg-surface/50 p-16 text-center text-slate-400 animate-pulse">

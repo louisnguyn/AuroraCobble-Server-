@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import multer from "multer";
+import cron from "node-cron";
 import {
   adminResetPassword,
   createUser,
@@ -5840,6 +5841,25 @@ app.post("/admin/pvp-rank/daily-payout", requireAuth, requireAdmin, async (_req,
   }
 });
 
+app.post("/admin/minecraft/boss-spawn/run-now", requireAuth, requireAdmin, async (_req, res) => {
+  try {
+    await runBossSpawnCycleNow();
+    res.json({
+      ok: true,
+      warningDelayMs: BOSS_SPAWN_WARNING_DELAY_MS,
+      warningCommands: BOSS_SPAWN_WARNING_COMMANDS.length,
+      spawnCommands: BOSS_SPAWN_COMMANDS.length,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/already running/i.test(msg)) {
+      res.status(409).json({ error: msg });
+      return;
+    }
+    res.status(500).json({ error: msg });
+  }
+});
+
 app.get("/admin/users/:userId/currency", requireAuth, requireAdmin, async (req, res) => {
   if (!supabase) {
     res.status(503).json({ error: "Database not configured" });
@@ -6262,6 +6282,83 @@ function startDailyPvpAutoPayoutScheduler(): void {
   }, 60_000);
 }
 
+const BOSS_SPAWN_WARNING_COMMANDS = [
+  "title @a title {\"text\":\"\\u2694 BOSSES SPAWN IN 1' \\u2694\",\"color\":\"red\",\"bold\":true}",
+  "title @a subtitle {\"text\":\"A mysterious boss will appear in the Raid Area! Use /raid\",\"color\":\"gold\"}",
+] as const;
+const BOSS_SPAWN_COMMANDS = [
+  "execute in superflatdimension:overworld run crd spawnboss 225.56 -9.00 326.13 superflatdimension:overworld random false false false",
+  "execute in superflatdimension:overworld run crd spawnboss 244 -9 346 superflatdimension:overworld random false false false",
+  "execute in superflatdimension:overworld run crd spawnboss 225 -9.00 364 superflatdimension:overworld random false false false",
+  "execute in superflatdimension:overworld run crd spawnboss 207 -9 346 superflatdimension:overworld random false false false",
+  "execute in superflatdimension:overworld run crd spawnboss 211 -9 360 superflatdimension:overworld random false false false",
+  "execute in superflatdimension:overworld run crd spawnboss 238 -9 333 superflatdimension:overworld random false false false",
+  "execute in superflatdimension:overworld run crd spawnboss 238 -9 359 superflatdimension:overworld random false false false",
+] as const;
+const BOSS_SPAWN_WARNING_DELAY_MS = 60_000;
+let bossSpawnCycleInProgress = false;
+
+async function runBossSpawnCycleNow(): Promise<void> {
+  if (bossSpawnCycleInProgress) {
+    throw new Error("Boss spawn cycle is already running");
+  }
+  bossSpawnCycleInProgress = true;
+  try {
+    for (const command of BOSS_SPAWN_WARNING_COMMANDS) {
+      const exec = await executeMinecraftRconCommand(command);
+      if (!exec.ok) {
+        console.warn(`[boss-spawn-cron] warning command failed: ${command} :: ${exec.error}`);
+      } else {
+        console.log(`[boss-spawn-cron] warning command ok: ${command}`);
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, BOSS_SPAWN_WARNING_DELAY_MS));
+    for (const command of BOSS_SPAWN_COMMANDS) {
+      const exec = await executeMinecraftRconCommand(command);
+      if (!exec.ok) {
+        console.warn(`[boss-spawn-cron] spawn command failed: ${command} :: ${exec.error}`);
+      } else {
+        console.log(`[boss-spawn-cron] spawn command ok: ${command}`);
+      }
+    }
+  } finally {
+    bossSpawnCycleInProgress = false;
+  }
+}
+
+function startBossSpawnCronScheduler(): void {
+  const cronExpr = (process.env.MC_BOSS_SPAWN_CRON ?? "").trim();
+  if (!cronExpr) return;
+  if (!cron.validate(cronExpr)) {
+    console.warn(`[boss-spawn-cron] invalid MC_BOSS_SPAWN_CRON="${cronExpr}"`);
+    return;
+  }
+  const tzRaw = (process.env.MC_BOSS_SPAWN_CRON_TIMEZONE ?? DAILY_RESET_TIMEZONE).trim();
+  const timezone = tzRaw || DAILY_RESET_TIMEZONE;
+
+  const runBossSpawnCycle = async () => {
+    if (bossSpawnCycleInProgress) {
+      console.warn("[boss-spawn-cron] skipped trigger because previous cycle is still running");
+      return;
+    }
+    await runBossSpawnCycleNow();
+  };
+
+  cron.schedule(
+    cronExpr,
+    () => {
+      void runBossSpawnCycle();
+    },
+    { timezone }
+  );
+  console.log(
+    `[boss-spawn-cron] started cron="${cronExpr}" timezone="${timezone}" warning_commands=${BOSS_SPAWN_WARNING_COMMANDS.length} spawn_commands=${BOSS_SPAWN_COMMANDS.length} delay_ms=${BOSS_SPAWN_WARNING_DELAY_MS}`
+  );
+  if (process.env.MC_BOSS_SPAWN_CRON_RUN_ON_BOOT === "true") {
+    void runBossSpawnCycle();
+  }
+}
+
 app.listen(port, () => {
   console.log(`Backend http://localhost:${port}`);
   if (supabase) {
@@ -6270,4 +6367,5 @@ app.listen(port, () => {
     });
   }
   startDailyPvpAutoPayoutScheduler();
+  startBossSpawnCronScheduler();
 });
