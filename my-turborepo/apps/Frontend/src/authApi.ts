@@ -244,6 +244,13 @@ export async function fetchUserPvpRank(): Promise<UserPvpRank> {
   return fetchApi<UserPvpRank>('/user/pvp-rank')
 }
 
+export async function summarizeBattleReplayAi(replay: BattleReplayPayload): Promise<{ summary: string }> {
+  return fetchApi<{ summary: string }>('/user/ranked-replay/ai-summary', {
+    method: 'POST',
+    body: JSON.stringify({ replay }),
+  })
+}
+
 export async function fetchUserRankedHistory(params?: { limit?: number }): Promise<{
   matchResults: MatchResultPayload[]
   battleReplays: BattleReplayPayload[]

@@ -11,6 +11,7 @@ import {
   adminResetUserPassword,
   deleteAdminUser,
   bulkGrantCobbledollars,
+  bulkGrantTickets,
   bulkGrantInventory,
   fetchGrantableInventoryItems,
   verifyUserIngame,
@@ -23,7 +24,7 @@ import {
 } from '../authApi'
 import { RoleBadge } from './RoleBadge.tsx'
 
-type UsersTab = 'account' | 'rewards' | 'bulkCobble' | 'bulkItems'
+type UsersTab = 'account' | 'rewards' | 'bulkCobble' | 'bulkTickets' | 'bulkItems'
 
 export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
   const [users, setUsers] = useState<AdminUser[]>([])
@@ -63,6 +64,12 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
   const [bulkItemQty, setBulkItemQty] = useState('1')
   const [bulkItemConfirmOpen, setBulkItemConfirmOpen] = useState(false)
   const [bulkItemBusy, setBulkItemBusy] = useState(false)
+  const [bulkTicketsAllUsers, setBulkTicketsAllUsers] = useState(false)
+  const [bulkTicketsType, setBulkTicketsType] = useState('tickets')
+  const [bulkTicketsAmount, setBulkTicketsAmount] = useState('')
+  const [bulkTicketsNote, setBulkTicketsNote] = useState('')
+  const [bulkTicketsConfirmOpen, setBulkTicketsConfirmOpen] = useState(false)
+  const [bulkTicketsBusy, setBulkTicketsBusy] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [ingameVerifyBusy, setIngameVerifyBusy] = useState(false)
   const [minecraftRoleKeys, setMinecraftRoleKeys] = useState<string[]>([])
@@ -167,6 +174,11 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
     [bulkAllUsers, users, bulkIds]
   )
 
+  const bulkTicketsTargetIds = useMemo(
+    () => (bulkTicketsAllUsers ? [...new Set(users.map((u) => u.id))] : [...new Set(bulkIds)]),
+    [bulkTicketsAllUsers, users, bulkIds]
+  )
+
   const openBulkConfirm = () => {
     setError(null)
     setSuccessMessage(null)
@@ -220,6 +232,67 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
       setBulkConfirmOpen(false)
     } finally {
       setBulkBusy(false)
+    }
+  }
+
+  const openBulkTicketsConfirm = () => {
+    setError(null)
+    setSuccessMessage(null)
+    const n = Number(bulkTicketsAmount)
+    const targetCount = bulkTicketsTargetIds.length
+    if (targetCount === 0) {
+      setError(
+        bulkTicketsAllUsers
+          ? 'No users available to receive this grant.'
+          : 'Select at least one user in the list (use the checkboxes).'
+      )
+      return
+    }
+    if (targetCount > 500) {
+      setError('At most 500 users per request. Clear some selections or run multiple batches.')
+      return
+    }
+    if (!bulkTicketsType.trim()) {
+      setError('Choose a ticket type.')
+      return
+    }
+    if (!Number.isFinite(n) || n <= 0 || !Number.isInteger(n)) {
+      setError('Enter a positive whole number for tickets per user.')
+      return
+    }
+    setBulkTicketsConfirmOpen(true)
+  }
+
+  const confirmBulkTicketsGrant = async () => {
+    const amount = Number(bulkTicketsAmount)
+    if (!Number.isFinite(amount) || amount <= 0) return
+    setBulkTicketsBusy(true)
+    setError(null)
+    setSuccessMessage(null)
+    try {
+      const res = await bulkGrantTickets({
+        user_ids: bulkTicketsTargetIds,
+        currency_type: bulkTicketsType.trim(),
+        amount,
+        ...(bulkTicketsNote.trim() ? { note: bulkTicketsNote.trim() } : {}),
+      })
+      setBulkTicketsConfirmOpen(false)
+      const failMsg =
+        res.failures.length > 0
+          ? ` ${res.failures.length} failed (${res.failures.slice(0, 3).map((f) => `#${f.user_id}`).join(', ')}${res.failures.length > 3 ? '…' : ''}).`
+          : ''
+      setSuccessMessage(
+        `Added ${res.amount_per_user.toLocaleString()} × ${res.currency_type} to ${res.granted} of ${res.requested} accounts.${failMsg}`
+      )
+      if (selectedUser && bulkTicketsTargetIds.includes(selectedUser.id)) {
+        const { currencies: c } = await fetchAdminUserCurrency(selectedUser.id)
+        setCurrencies(c)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Bulk ticket grant failed')
+      setBulkTicketsConfirmOpen(false)
+    } finally {
+      setBulkTicketsBusy(false)
     }
   }
 
@@ -526,12 +599,16 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
               className="w-full px-2.5 py-2 rounded-md bg-[#0f0d0b] border border-border text-sm text-[#f5efe6] placeholder:text-muted/70 focus:outline-none focus:ring-1 focus:ring-accent/50 focus:border-accent/40"
               autoComplete="off"
             />
-            {(tab === 'bulkCobble' || tab === 'bulkItems') && filteredUsers.length > 0 && (
+            {(tab === 'bulkCobble' || tab === 'bulkTickets' || tab === 'bulkItems') &&
+              filteredUsers.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={selectBulkFiltered}
-                  disabled={tab === 'bulkCobble' && bulkAllUsers}
+                  disabled={
+                    (tab === 'bulkCobble' && bulkAllUsers) ||
+                    (tab === 'bulkTickets' && bulkTicketsAllUsers)
+                  }
                   className="px-2 py-1 rounded-md text-xs font-medium bg-accent/15 text-accent border border-accent/35 hover:bg-accent/25"
                 >
                   Select visible ({filteredUsers.length})
@@ -547,13 +624,18 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
               </div>
             )}
             <p className="text-[11px] text-muted m-0">
-              {tab === 'bulkCobble' || tab === 'bulkItems' ? (
+              {tab === 'bulkCobble' || tab === 'bulkTickets' || tab === 'bulkItems' ? (
                 <>
                   <span className="text-accent font-semibold">
-                    {tab === 'bulkCobble' && bulkAllUsers ? users.length : bulkIds.length}
+                    {tab === 'bulkCobble' && bulkAllUsers
+                      ? users.length
+                      : tab === 'bulkTickets' && bulkTicketsAllUsers
+                        ? users.length
+                        : bulkIds.length}
                   </span>{' '}
                   selected
-                  {tab === 'bulkCobble' && bulkAllUsers ? ' (all users)' : ''} ·{' '}
+                  {tab === 'bulkCobble' && bulkAllUsers ? ' (all users)' : ''}
+                  {tab === 'bulkTickets' && bulkTicketsAllUsers ? ' (all users)' : ''} ·{' '}
                   {filteredUsers.length === users.length
                     ? `${users.length} user${users.length === 1 ? '' : 's'}`
                     : `${filteredUsers.length} of ${users.length} shown`}
@@ -571,13 +653,21 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
             ) : (
               filteredUsers.map((u) => (
                 <li key={u.id} className="flex items-stretch border-b border-border/50">
-                  {(tab === 'bulkCobble' || tab === 'bulkItems') && (
+                  {(tab === 'bulkCobble' || tab === 'bulkTickets' || tab === 'bulkItems') && (
                     <div className="flex items-center pl-3 pr-0 shrink-0">
                       <input
                         type="checkbox"
-                        checked={tab === 'bulkCobble' && bulkAllUsers ? true : bulkIds.includes(u.id)}
+                        checked={
+                          (tab === 'bulkCobble' && bulkAllUsers) ||
+                          (tab === 'bulkTickets' && bulkTicketsAllUsers)
+                            ? true
+                            : bulkIds.includes(u.id)
+                        }
                         onChange={() => toggleBulkId(u.id)}
-                        disabled={tab === 'bulkCobble' && bulkAllUsers}
+                        disabled={
+                          (tab === 'bulkCobble' && bulkAllUsers) ||
+                          (tab === 'bulkTickets' && bulkTicketsAllUsers)
+                        }
                         className="rounded border-border"
                         aria-label={`Include ${u.username} in bulk grant`}
                       />
@@ -587,7 +677,7 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
                     type="button"
                     onClick={() => setSelectedUser(u)}
                     className={`flex-1 min-w-0 text-left py-3 pr-4 text-sm transition-colors border-l border-transparent ${
-                      tab === 'bulkCobble' || tab === 'bulkItems' ? 'pl-2' : 'pl-4'
+                      tab === 'bulkCobble' || tab === 'bulkTickets' || tab === 'bulkItems' ? 'pl-2' : 'pl-4'
                     } ${
                       selectedUser?.id === u.id
                         ? 'bg-accent/20 text-accent font-medium'
@@ -659,6 +749,20 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
               }`}
             >
               Bulk Cobble$
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setTab('bulkTickets')
+                setSuccessMessage(null)
+              }}
+              className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                tab === 'bulkTickets'
+                  ? 'bg-accent/25 text-accent border border-accent/40'
+                  : 'text-muted hover:text-[#f5efe6] border border-transparent'
+              }`}
+            >
+              Bulk tickets
             </button>
             <button
               type="button"
@@ -738,6 +842,87 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
             </div>
           )}
 
+          {tab === 'bulkTickets' && (
+            <div className="rounded-lg bg-surface border border-border p-4 space-y-4">
+              <div>
+                <h2 className="text-sm font-semibold text-[#f5efe6] m-0 mb-1">Bulk tickets (website wallet)</h2>
+                <p className="text-xs text-muted m-0">
+                  Same checkboxes as Cobble$: each selected account gets the same ticket balance increase (exchange
+                  types: mythic / paradox / shiny, etc.).
+                </p>
+              </div>
+              <label className="inline-flex items-center gap-2 text-xs text-muted">
+                <input
+                  type="checkbox"
+                  checked={bulkTicketsAllUsers}
+                  onChange={(e) => setBulkTicketsAllUsers(e.target.checked)}
+                  className="rounded border-border"
+                />
+                Grant to all users ({users.length})
+              </label>
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label htmlFor="bulk-ticket-type" className="block text-xs text-muted mb-1">
+                    Ticket type
+                  </label>
+                  <select
+                    id="bulk-ticket-type"
+                    value={bulkTicketsType}
+                    onChange={(e) => setBulkTicketsType(e.target.value)}
+                    className="min-w-[11rem] px-2 py-1.5 rounded bg-[#0f0d0b] border border-border text-sm text-[#f5efe6]"
+                  >
+                    <option value="tickets">tickets</option>
+                    <option value="mythic tickets">mythic tickets</option>
+                    <option value="shiny mythic tickets">shiny mythic tickets</option>
+                    <option value="legendary tickets">legend tickets</option>
+                    <option value="shiny legendary tickets">shiny legend tickets</option>
+                    <option value="paradox tickets">paradox tickets</option>
+                    <option value="shiny paradox tickets">shiny paradox tickets</option>
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="bulk-ticket-amt" className="block text-xs text-muted mb-1">
+                    Amount per user (whole number)
+                  </label>
+                  <input
+                    id="bulk-ticket-amt"
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={bulkTicketsAmount}
+                    onChange={(e) => setBulkTicketsAmount(e.target.value)}
+                    className="w-36 px-2 py-1.5 rounded bg-[#0f0d0b] border border-border text-sm text-[#f5efe6]"
+                  />
+                </div>
+                <div className="flex-1 min-w-[200px]">
+                  <label htmlFor="bulk-ticket-note" className="block text-xs text-muted mb-1">
+                    Note (optional, server log only)
+                  </label>
+                  <input
+                    id="bulk-ticket-note"
+                    type="text"
+                    maxLength={500}
+                    value={bulkTicketsNote}
+                    onChange={(e) => setBulkTicketsNote(e.target.value)}
+                    placeholder="e.g. event reward"
+                    className="w-full px-2 py-1.5 rounded bg-[#0f0d0b] border border-border text-sm text-[#f5efe6]"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={openBulkTicketsConfirm}
+                  className="px-3 py-1.5 rounded-lg bg-accent text-[#1a1510] text-sm font-medium hover:bg-accent/90"
+                >
+                  Review &amp; grant…
+                </button>
+              </div>
+              <p className="text-xs text-muted m-0">
+                Selected: <span className="text-[#f5efe6] font-medium">{bulkTicketsTargetIds.length}</span> users
+                {bulkTicketsAllUsers ? ' (all users)' : ''} · max 500 per request · max 1,000,000 per user.
+              </p>
+            </div>
+          )}
+
           {tab === 'bulkItems' && (
             <div className="rounded-lg bg-surface border border-border p-4 space-y-4">
               <div>
@@ -812,13 +997,13 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
             </div>
           )}
 
-          {tab !== 'bulkCobble' && tab !== 'bulkItems' && !selectedUser && (
+          {tab !== 'bulkCobble' && tab !== 'bulkTickets' && tab !== 'bulkItems' && !selectedUser && (
             <div className="rounded-lg bg-surface border border-border p-8 text-center text-muted">
               Select a user to manage their account or tickets and gacha history.
             </div>
           )}
 
-          {tab !== 'bulkCobble' && tab !== 'bulkItems' && selectedUser && (
+          {tab !== 'bulkCobble' && tab !== 'bulkTickets' && tab !== 'bulkItems' && selectedUser && (
             <>
               {tab === 'account' && (
                 <div className="space-y-4">
@@ -1213,6 +1398,62 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
                 className="px-4 py-2 rounded-lg text-sm bg-accent text-[#1a1510] font-medium hover:bg-accent/90 disabled:opacity-50"
               >
                 {bulkItemBusy ? 'Granting…' : 'Confirm grant'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {bulkTicketsConfirmOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="bulk-tickets-title"
+          onClick={() => !bulkTicketsBusy && setBulkTicketsConfirmOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-xl bg-surface border border-border shadow-xl p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="bulk-tickets-title" className="text-lg font-semibold text-[#f5efe6] m-0 mb-2">
+              Grant{' '}
+              <span className="text-accent">{bulkTicketsType}</span> to {bulkTicketsTargetIds.length}{' '}
+              accounts{bulkTicketsAllUsers ? ' (all users)' : ''}?
+            </h3>
+            <p className="text-sm text-muted m-0 mb-4">
+              Each account will receive{' '}
+              <span className="text-[#f5efe6] font-medium">
+                {Number(bulkTicketsAmount).toLocaleString()} × {bulkTicketsType}
+              </span>
+              . Total units credited:{' '}
+              <span className="text-[#f5efe6] font-medium">
+                {(Number(bulkTicketsAmount) * bulkTicketsTargetIds.length).toLocaleString()}
+              </span>
+              .
+              {bulkTicketsNote.trim() ? (
+                <>
+                  {' '}
+                  Note: <span className="text-[#f5efe6]">{bulkTicketsNote.trim()}</span>
+                </>
+              ) : null}
+            </p>
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => !bulkTicketsBusy && setBulkTicketsConfirmOpen(false)}
+                disabled={bulkTicketsBusy}
+                className="px-4 py-2 rounded-lg text-sm border border-border text-muted hover:bg-surface-hover hover:text-[#f5efe6] disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmBulkTicketsGrant}
+                disabled={bulkTicketsBusy}
+                className="px-4 py-2 rounded-lg text-sm bg-accent text-[#1a1510] font-medium hover:bg-accent/90 disabled:opacity-50"
+              >
+                {bulkTicketsBusy ? 'Granting…' : 'Confirm grant'}
               </button>
             </div>
           </div>

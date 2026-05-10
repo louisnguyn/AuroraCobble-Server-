@@ -252,6 +252,27 @@ export async function bulkGrantCobbledollars(body: {
   })
 }
 
+export type BulkTicketGrantResult = {
+  ok: boolean
+  currency_type: string
+  amount_per_user: number
+  granted: number
+  requested: number
+  failures: Array<{ user_id: number; error: string }>
+}
+
+export async function bulkGrantTickets(body: {
+  user_ids: number[]
+  currency_type: string
+  amount: number
+  note?: string
+}): Promise<BulkTicketGrantResult> {
+  return fetchJson<BulkTicketGrantResult>('/admin/tickets/bulk-grant', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
 export type GrantableInventoryItem = { key: string; label: string }
 
 export async function fetchGrantableInventoryItems(): Promise<{ items: GrantableInventoryItem[] }> {
@@ -512,6 +533,13 @@ export async function setAdminCobbleRankedReview(body: {
   return fetchJson(`/admin/cobble-ranked/review`, {
     method: 'POST',
     body: JSON.stringify(body),
+  })
+}
+
+export async function adminSummarizeBattleReplay(replay: BattleReplayPayload): Promise<{ summary: string }> {
+  return fetchJson<{ summary: string }>('/admin/ranked-replay/ai-summary', {
+    method: 'POST',
+    body: JSON.stringify({ replay }),
   })
 }
 

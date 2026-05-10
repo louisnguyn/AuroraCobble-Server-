@@ -1,5 +1,7 @@
-import { useMemo, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
+import ReactMarkdown, { type Components } from 'react-markdown'
 import { humanizeBattleLogLines } from '../battleReplayHumanize'
+import { adminSummarizeBattleReplay } from '../authApi'
 import type { BattleReplayPayload, MatchResultPayload } from '../types'
 
 export function formatRankedTs(iso: string | undefined): string {
@@ -68,10 +70,49 @@ export function AdminMatchResultCard({ m }: { m: MatchResultPayload }) {
   )
 }
 
+const adminReplayMarkdownComponents: Components = {
+  h1: ({ children }) => (
+    <h3 className="text-lg font-semibold text-slate-100 mt-4 mb-2 first:mt-0">{children}</h3>
+  ),
+  h2: ({ children }) => (
+    <h3 className="text-base font-semibold text-slate-100 mt-4 mb-2 first:mt-0 border-b border-white/10 pb-1">
+      {children}
+    </h3>
+  ),
+  h3: ({ children }) => (
+    <h4 className="text-sm font-semibold text-slate-100 mt-3 mb-1.5">{children}</h4>
+  ),
+  p: ({ children }) => (
+    <p className="my-2 text-slate-200/95 leading-relaxed first:mt-0 last:mb-0">{children}</p>
+  ),
+  ul: ({ children }) => (
+    <ul className="my-2 ml-4 list-disc space-y-1.5 text-slate-200/95 marker:text-cyan-300/70">{children}</ul>
+  ),
+  ol: ({ children }) => (
+    <ol className="my-2 ml-4 list-decimal space-y-1.5 text-slate-200/95 marker:text-cyan-300/70">{children}</ol>
+  ),
+  li: ({ children }) => <li className="[&>p]:my-1 [&>p:first-child]:mt-0 [&>p:last-child]:mb-0">{children}</li>,
+  strong: ({ children }) => <strong className="font-semibold text-slate-50">{children}</strong>,
+  em: ({ children }) => <em className="italic text-slate-100">{children}</em>,
+}
+
 export function AdminBattleReplayCard({ r }: { r: BattleReplayPayload }) {
   const players = r.players ?? []
   const log = r.battleLog ?? []
   const story = useMemo(() => humanizeBattleLogLines(log, players), [log, players])
+  const [aiSummary, setAiSummary] = useState<string | null>(null)
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
+
+  const runAi = () => {
+    setAiBusy(true)
+    setAiError(null)
+    void adminSummarizeBattleReplay(r)
+      .then(({ summary }) => setAiSummary(summary))
+      .catch((e) => setAiError(e instanceof Error ? e.message : 'Summary failed'))
+      .finally(() => setAiBusy(false))
+  }
+
   return (
     <article className="rounded-xl border border-white/10 bg-black/25 overflow-hidden">
       <details className="group">
@@ -94,6 +135,41 @@ export function AdminBattleReplayCard({ r }: { r: BattleReplayPayload }) {
               </li>
             ))}
           </ul>
+
+          <div className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-slate-500 m-0">
+                AI summary (OpenAI)
+              </p>
+              <button
+                type="button"
+                disabled={aiBusy}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  runAi()
+                }}
+                className="text-xs font-medium px-2.5 py-1 rounded-md bg-cyan-500/15 text-cyan-200 border border-cyan-400/35 hover:bg-cyan-500/25 disabled:opacity-50"
+              >
+                {aiBusy ? 'Generating…' : aiSummary ? 'Regenerate' : 'Summarize'}
+              </button>
+            </div>
+            <p className="text-[0.65rem] text-slate-500 m-0 leading-snug">
+              Battle recap and per-team faint vs standing Pokémon when inferable from the log.
+            </p>
+            {aiError ? <p className="text-xs text-rose-400 m-0">{aiError}</p> : null}
+            {aiSummary ? (
+              <div className="mt-1 max-h-[min(26rem,50vh)] overflow-y-auto rounded border border-white/10 bg-black/35 p-3 text-[0.8125rem] font-sans leading-relaxed [&>*:first-child]:mt-0">
+                <ReactMarkdown components={adminReplayMarkdownComponents}>{aiSummary}</ReactMarkdown>
+              </div>
+            ) : (
+              !aiBusy && (
+                <p className="text-xs text-slate-500 m-0">
+                  Runs on the backend (same OPENAI_API_KEY as Team AI).
+                </p>
+              )
+            )}
+          </div>
+
           {log.length > 0 ? (
             <div className="rounded-lg border border-white/10 bg-black/30 px-3 py-2">
               <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-slate-500 m-0 mb-2">

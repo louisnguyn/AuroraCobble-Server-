@@ -53,6 +53,7 @@ import {
 import { registerTournamentRoutes } from "./tournamentRoutes.js";
 import { registerBattleRestrictionsRoutes } from "./battleRestrictionsRoutes.js";
 import { analyzeTeamPokepaste } from "./teamAnalyzeAi.js";
+import { sanitizeReplayForAi, summarizeBattleReplayWithOpenAI } from "./replaySummaryAi.js";
 import {
   buildCobbledollarsDepositCommand,
   isCobbledollarsDepositEnabled,
@@ -155,6 +156,17 @@ const PVP_DAILY_TICKETS_BY_RANK: Record<number, number> = {
   3: 1,
 };
 const PVP_TICKETS_CURRENCY = "tickets";
+
+/** Ticket-family `user_currency` types staff may bulk-grant from admin (same strings as single-user grant). */
+const BULK_ADMIN_TICKET_CURRENCIES: readonly string[] = [
+  PVP_TICKETS_CURRENCY,
+  "mythic tickets",
+  "shiny mythic tickets",
+  "legendary tickets",
+  "shiny legendary tickets",
+  "paradox tickets",
+  "shiny paradox tickets",
+];
 
 /** PVP predictions: exact top-3 order pays `stake ×` this; each single-rank bet pays `stake ×` PVP_PREDICTION_SLOT_WIN_MULT. */
 const PVP_PREDICTION_MAX_STAKE = 20_000;
@@ -2835,6 +2847,61 @@ app.get("/user/ranked-history", requireAuth, (req, res) => {
     matchResults: matchResults.slice(0, limit),
     battleReplays: battleReplays.slice(0, limit),
   });
+});
+
+/** OpenAI summary of a ranked battle replay (must include the signed-in user as a player). */
+app.post("/user/ranked-replay/ai-summary", requireAuth, async (req, res) => {
+  if (!process.env.OPENAI_API_KEY?.trim()) {
+    res.status(503).json({ error: "AI analysis is not configured on this server." });
+    return;
+  }
+  const user = res.locals.user!;
+  const raw = (req.body as { replay?: unknown } | undefined)?.replay ?? req.body;
+  if (!raw || typeof raw !== "object") {
+    res.status(400).json({ error: "replay payload required" });
+    return;
+  }
+  if (!rankedPayloadInvolvesUsername(raw, user.username ?? "")) {
+    res.status(403).json({ error: "This replay does not involve your account." });
+    return;
+  }
+  const sanitized = sanitizeReplayForAi(raw);
+  if (!sanitized.ok) {
+    res.status(400).json({ error: sanitized.error });
+    return;
+  }
+  try {
+    const { text } = await summarizeBattleReplayWithOpenAI(sanitized.replay);
+    res.json({ summary: text });
+  } catch (e) {
+    console.error("[user/ranked-replay/ai-summary]", e);
+    res.status(502).json({ error: "AI request failed. Try again later." });
+  }
+});
+
+/** Staff: OpenAI summary for any battle replay payload (no “your match” check). */
+app.post("/admin/ranked-replay/ai-summary", requireAuth, requireAdmin, async (req, res) => {
+  if (!process.env.OPENAI_API_KEY?.trim()) {
+    res.status(503).json({ error: "AI analysis is not configured on this server." });
+    return;
+  }
+  const raw = (req.body as { replay?: unknown } | undefined)?.replay ?? req.body;
+  if (!raw || typeof raw !== "object") {
+    res.status(400).json({ error: "replay payload required" });
+    return;
+  }
+  const sanitized = sanitizeReplayForAi(raw);
+  if (!sanitized.ok) {
+    res.status(400).json({ error: sanitized.error });
+    return;
+  }
+  try {
+    const { text } = await summarizeBattleReplayWithOpenAI(sanitized.replay);
+    res.json({ summary: text });
+  } catch (e) {
+    console.error("[admin/ranked-replay/ai-summary]", e);
+    res.status(502).json({ error: "AI request failed. Try again later." });
+  }
 });
 
 /** Resolve pending top-3 predictions when daily payout runs. Idempotent per row (`result` must stay `pending`). */
@@ -6014,6 +6081,88 @@ app.post("/admin/cobbledollars/bulk-grant", requireAuth, requireAdmin, async (re
   res.json({
     ok: true,
     currency: COBBLEDOLLARS_CURRENCY,
+    amount_per_user: amount,
+    granted,
+    requested: userIds.length,
+    failures,
+  });
+});
+
+/** Grant website ticket currencies (exchange types + normal tickets) to many users. No Cobble$ ledger. */
+app.post("/admin/tickets/bulk-grant", requireAuth, requireAdmin, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const staff = res.locals.user!;
+  const body = req.body ?? {};
+  const rawIds = body.user_ids;
+  const amount = body.amount;
+  const currencyTypeStr =
+    typeof body.currency_type === "string" ? body.currency_type.trim() : "";
+  const note =
+    typeof body.note === "string" ? body.note.trim().slice(0, 500) : "";
+
+  if (!BULK_ADMIN_TICKET_CURRENCIES.includes(currencyTypeStr)) {
+    res.status(400).json({
+      error: "Invalid currency_type for bulk ticket grant",
+      allowed: [...BULK_ADMIN_TICKET_CURRENCIES],
+    });
+    return;
+  }
+
+  if (!Array.isArray(rawIds) || rawIds.length === 0) {
+    res.status(400).json({ error: "user_ids must be a non-empty array" });
+    return;
+  }
+  if (typeof amount !== "number" || !Number.isFinite(amount) || amount <= 0 || !Number.isInteger(amount)) {
+    res.status(400).json({ error: "amount must be a positive whole number" });
+    return;
+  }
+  const maxPerUser = 1_000_000;
+  if (amount > maxPerUser) {
+    res.status(400).json({ error: `amount per user must be at most ${maxPerUser}` });
+    return;
+  }
+
+  const userIds = [
+    ...new Set(
+      rawIds
+        .map((x: unknown) => Number(x))
+        .filter((n): n is number => Number.isFinite(n) && Number.isInteger(n) && n > 0)
+    ),
+  ];
+  if (userIds.length === 0) {
+    res.status(400).json({ error: "No valid user ids" });
+    return;
+  }
+  const maxBulk = 500;
+  if (userIds.length > maxBulk) {
+    res.status(400).json({ error: `At most ${maxBulk} users per request` });
+    return;
+  }
+
+  const detailNote = note.length > 0 ? ` (${note})` : "";
+  const failures: Array<{ user_id: number; error: string }> = [];
+  let granted = 0;
+  for (const userId of userIds) {
+    try {
+      await incrementUserCurrency(userId, currencyTypeStr, amount);
+      granted += 1;
+      console.info(
+        `[admin] bulk tickets +${amount} ${currencyTypeStr} user ${userId} by ${staff.username}${detailNote}`
+      );
+    } catch (e) {
+      failures.push({
+        user_id: userId,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+
+  res.json({
+    ok: true,
+    currency_type: currencyTypeStr,
     amount_per_user: amount,
     granted,
     requested: userIds.length,
