@@ -50,6 +50,14 @@ import {
   parseCobbledollarsReward,
   parseRewardForGivePokemon,
 } from "./gachaRewardClaim.js";
+import {
+  extractPvpRowsFromLeaderboardPayload,
+  filterPvpRowsWithPlayedMatchesAndRerank,
+  leaderboardPayloadHasSyncedData,
+  livePvpSnapFromLeaderboardForWebsiteUser,
+  rankedPvpRowsForWebsiteRewards,
+  type PvpLeaderboardRow,
+} from "./leaderboardPvpDerived.js";
 import { registerTournamentRoutes } from "./tournamentRoutes.js";
 import { registerBattleRestrictionsRoutes } from "./battleRestrictionsRoutes.js";
 import { analyzeTeamPokepaste } from "./teamAnalyzeAi.js";
@@ -249,15 +257,6 @@ console.log(
   DISCORD_RANKED_ELO_WEBHOOK_URL ? "yes" : "no"
 );
 
-type PvpLeaderboardRow = {
-  rank: number;
-  playerName: string;
-  elo: number | null;
-  formatKey: string;
-  /** Raw match count from CobbleRanked payload (website filters `matches > 0` before top-3 / rewards). */
-  matches?: number;
-};
-
 function pvpTierFromElo(elo: number | null): string {
   const n = Number(elo ?? 0);
   if (n >= 1350) return "netherite";
@@ -270,77 +269,6 @@ function pvpTierFromElo(elo: number | null): string {
 
 function normalizeName(s: string): string {
   return s.trim().toLowerCase();
-}
-
-/** Match count from API player/entry (`matches` is what the public leaderboard uses). */
-function readLeaderboardMatches(p: Record<string, unknown>): number | undefined {
-  const raw = p.matches ?? p.gamesPlayed ?? p.games_played ?? p.total_matches;
-  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
-  if (typeof raw === "string" && raw.trim() !== "") {
-    const n = parseInt(raw.trim(), 10);
-    return Number.isFinite(n) ? n : undefined;
-  }
-  return undefined;
-}
-
-function extractPvpRowsFromLeaderboardPayload(payload: unknown): PvpLeaderboardRow[] {
-  const obj = payload as { formats?: Record<string, { players?: unknown[] }>; entries?: unknown[] } | null;
-  if (!obj || typeof obj !== "object") return [];
-
-  const formats = obj.formats ?? {};
-  const formatKeys = Object.keys(formats);
-  const singlesKey = formatKeys.find((k) => k.toLowerCase() === "singles");
-  const chosenKey = singlesKey ?? formatKeys.find((k) => Array.isArray(formats[k]?.players));
-
-  if (chosenKey) {
-    const players = formats[chosenKey]?.players ?? [];
-    const rows = (players as Array<{ rank?: unknown; playerName?: unknown; elo?: unknown }>)
-      .map((p) => {
-        const po = p as Record<string, unknown>;
-        return {
-          rank: Number(p.rank),
-          playerName: typeof p.playerName === "string" ? p.playerName.trim() : "",
-          elo: Number.isFinite(Number(p.elo)) ? Number(p.elo) : null,
-          formatKey: chosenKey,
-          matches: readLeaderboardMatches(po),
-        };
-      })
-      .filter((p) => p.playerName && Number.isFinite(p.rank))
-      .sort((a, b) => a.rank - b.rank);
-    if (rows.length) return rows;
-  }
-
-  const entries = obj.entries ?? [];
-  return (entries as Array<{ rank?: unknown; name?: unknown; playerName?: unknown; elo?: unknown; rating?: unknown }>)
-    .map((e) => {
-      const eo = e as Record<string, unknown>;
-      return {
-        rank: Number(e.rank),
-        playerName:
-          typeof e.playerName === "string"
-            ? e.playerName.trim()
-            : typeof e.name === "string"
-              ? e.name.trim()
-              : "",
-        elo: Number.isFinite(Number(e.elo)) ? Number(e.elo) : Number.isFinite(Number(e.rating)) ? Number(e.rating) : null,
-        formatKey: "singles",
-        matches: readLeaderboardMatches(eo),
-      };
-    })
-    .filter((p) => p.playerName && Number.isFinite(p.rank))
-    .sort((a, b) => a.rank - b.rank);
-}
-
-/** Same ordering as public Leaderboard.tsx: exclude never-played (`matches <= 0` or unset), then re-rank #1–#n. */
-function filterPvpRowsWithPlayedMatchesAndRerank(rows: PvpLeaderboardRow[]): PvpLeaderboardRow[] {
-  const played = rows
-    .filter((r) => typeof r.matches === "number" && Number.isFinite(r.matches) && r.matches > 0)
-    .sort((a, b) => a.rank - b.rank);
-  return played.map((r, i) => ({ ...r, rank: i + 1 }));
-}
-
-function rankedPvpRowsForWebsiteRewards(payload: unknown): PvpLeaderboardRow[] {
-  return filterPvpRowsWithPlayedMatchesAndRerank(extractPvpRowsFromLeaderboardPayload(payload));
 }
 
 async function syncWebsitePvpRanksFromLeaderboard(payload: unknown): Promise<void> {
@@ -1224,7 +1152,14 @@ app.get("/public/profile/:username", async (req, res) => {
     return;
   }
   try {
-    const profile = await fetchPublicProfileByUsername(supabase, param, readMinecraftRoleField, pvpTierFromElo);
+    const profile = await fetchPublicProfileByUsername(
+      supabase,
+      param,
+      readMinecraftRoleField,
+      pvpTierFromElo,
+      cobbleStore.leaderboard
+    );
+
     if (!profile) {
       res.status(404).json({ error: "Profile not found" });
       return;
@@ -1246,8 +1181,10 @@ app.get("/user/my-public-profile", requireAuth, async (_req, res) => {
       supabase,
       tokenUser.username.trim(),
       readMinecraftRoleField,
-      pvpTierFromElo
+      pvpTierFromElo,
+      cobbleStore.leaderboard
     );
+
     if (!profile) {
       res.status(404).json({ error: "Profile not found" });
       return;
@@ -1328,7 +1265,8 @@ app.patch("/user/my-public-profile", requireAuth, async (req, res) => {
       supabase,
       res.locals.user!.username.trim(),
       readMinecraftRoleField,
-      pvpTierFromElo
+      pvpTierFromElo,
+      cobbleStore.leaderboard
     );
     if (!profile) {
       res.status(404).json({ error: "Profile not found" });
@@ -1341,6 +1279,7 @@ app.patch("/user/my-public-profile", requireAuth, async (req, res) => {
 });
 
 const PROFILE_AVATAR_UPLOAD = multer({
+
   storage: multer.memoryStorage(),
   limits: { fileSize: 2 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
@@ -1428,7 +1367,8 @@ app.post(
         supabase,
         res.locals.user!.username.trim(),
         readMinecraftRoleField,
-        pvpTierFromElo
+        pvpTierFromElo,
+        cobbleStore.leaderboard
       );
       if (!profile) {
         res.status(404).json({ error: "Profile not found" });
@@ -2787,6 +2727,42 @@ app.get("/user/pvp-rank", requireAuth, async (_req, res) => {
     res.status(503).json({ error: "Database not configured" });
     return;
   }
+
+  const lb = cobbleStore.leaderboard;
+  const hasLive = leaderboardPayloadHasSyncedData(lb);
+  const now = new Date().toISOString();
+
+  if (hasLive) {
+    const snap = livePvpSnapFromLeaderboardForWebsiteUser(lb, user.username ?? "");
+    if (snap != null) {
+      await supabase.from("user_pvp_ranks").upsert(
+        {
+          user_id: user.userId,
+          minecraft_username: snap.ladderPlayerName,
+          format_key: snap.formatKey,
+          rank_position: snap.rank,
+          elo: snap.elo,
+          source_updated_at: now,
+          updated_at: now,
+        },
+        { onConflict: "user_id" }
+      );
+      res.json({
+        rank: snap.rank,
+        status: "ranked",
+        format: snap.formatKey,
+        minecraftUsername: snap.ladderPlayerName,
+        elo: snap.elo,
+        tier: pvpTierFromElo(snap.elo),
+        updatedAt: now,
+      });
+      return;
+    }
+
+    res.json({ rank: null, status: "unranked" });
+    return;
+  }
+
   const { data, error } = await supabase
     .from("user_pvp_ranks")
     .select("rank_position, minecraft_username, format_key, elo, source_updated_at")
@@ -2821,36 +2797,7 @@ app.get("/user/pvp-rank", requireAuth, async (_req, res) => {
     return;
   }
 
-  // Fallback: derive live rank directly from in-memory /leaderboard payload.
-  const liveRows = rankedPvpRowsForWebsiteRewards(cobbleStore.leaderboard);
-  const mine = liveRows.find((r) => normalizeName(r.playerName) === normalizeName(user.username));
-  if (!mine) {
-    res.json({ rank: null, status: "unranked" });
-    return;
-  }
-  const now = new Date().toISOString();
-  await supabase.from("user_pvp_ranks").upsert(
-    {
-      user_id: user.userId,
-      minecraft_username: mine.playerName,
-      format_key: mine.formatKey,
-      rank_position: mine.rank,
-      elo: mine.elo,
-      source_updated_at: now,
-      updated_at: now,
-    },
-    { onConflict: "user_id" }
-  );
-  res.json({
-    rank: mine.rank,
-    status: "ranked",
-    format: mine.formatKey,
-    minecraftUsername: mine.playerName,
-    elo: mine.elo,
-    tier: pvpTierFromElo(mine.elo),
-    updatedAt: now,
-    fromLiveLeaderboard: true,
-  });
+  res.json({ rank: null, status: "unranked" });
 });
 
 function rankedPayloadInvolvesUsername(payload: unknown, username: string): boolean {
@@ -5227,7 +5174,13 @@ app.post("/admin/profile-achievement-grants", requireAuth, requireAdmin, async (
     return;
   }
   try {
-    const profile = await fetchPublicProfileByUsername(supabase, un, readMinecraftRoleField, pvpTierFromElo);
+    const profile = await fetchPublicProfileByUsername(
+      supabase,
+      un,
+      readMinecraftRoleField,
+      pvpTierFromElo,
+      cobbleStore.leaderboard
+    );
     res.status(201).json({ ok: true, profile });
   } catch {
     res.status(201).json({ ok: true });
@@ -5266,7 +5219,13 @@ app.delete("/admin/profile-achievement-grants/:grantId", requireAuth, requireAdm
     return;
   }
   try {
-    const profile = await fetchPublicProfileByUsername(supabase, un, readMinecraftRoleField, pvpTierFromElo);
+    const profile = await fetchPublicProfileByUsername(
+      supabase,
+      un,
+      readMinecraftRoleField,
+      pvpTierFromElo,
+      cobbleStore.leaderboard
+    );
     res.json({ ok: true, profile });
   } catch {
     res.json({ ok: true });

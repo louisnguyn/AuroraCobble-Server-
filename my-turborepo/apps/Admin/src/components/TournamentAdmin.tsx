@@ -13,7 +13,13 @@ import {
 } from '../authApi'
 import { formatBracketMatchKeyLabel } from '../bracketLabels'
 
-type TRow = { id: number; slug: string; title: string; is_published?: boolean }
+type TRow = {
+  id: number
+  slug: string
+  title: string
+  is_published?: boolean
+  bracket_size?: number
+}
 
 type ParticipantSummary = { id: number; seed_rank: number; display_name: string }
 
@@ -85,6 +91,10 @@ function roundPill(round: TournamentBracketMatch['round']): string {
   return labels[round]
 }
 
+function bracketSizeFromUnknown(v: unknown): 8 | 12 {
+  return Number(v) === 8 ? 8 : 12
+}
+
 export function TournamentAdmin() {
   const [tournaments, setTournaments] = useState<TRow[]>([])
   const [selectedId, setSelectedId] = useState<number | null>(null)
@@ -97,6 +107,10 @@ export function TournamentAdmin() {
   const [newSlug, setNewSlug] = useState('championship-s1')
   const [newTitle, setNewTitle] = useState('AuroraCobble Championship Season 1')
   const [newSubtitle, setNewSubtitle] = useState('National Dex OU Singles — Bo3')
+  /** Bracket layout for newly created tournaments. */
+  const [newBracketSize, setNewBracketSize] = useState<8 | 12>(12)
+  /** Loaded tournament bracket size (seeds + qualifying UI). */
+  const [loadedBracketSize, setLoadedBracketSize] = useState<8 | 12>(12)
 
   const [seedRank, setSeedRank] = useState(1)
   const [displayName, setDisplayName] = useState('')
@@ -119,7 +133,10 @@ export function TournamentAdmin() {
     adminFetchBracket(id)
       .then((r) => {
         setBracket(r.bracket)
-        const t = r.tournament as { qf_qual_feed?: unknown; prizes?: unknown } | undefined
+        const t = r.tournament as { qf_qual_feed?: unknown; prizes?: unknown; bracket_size?: unknown } | undefined
+        const bs = bracketSizeFromUnknown(t?.bracket_size)
+        setLoadedBracketSize(bs)
+        setSeedRank((prev) => Math.min(prev, bs === 8 ? 8 : 12))
         setQfQualDraft(parseQfDraft(t?.qf_qual_feed))
         setPrizesDraft(prizesToDraft(t?.prizes))
         setParticipants(
@@ -177,6 +194,7 @@ export function TournamentAdmin() {
         subtitle: newSubtitle.trim(),
         prizes: [...DEFAULT_PRIZES_LINES],
         is_published: false,
+        bracket_size: newBracketSize,
       })
       const t = r.tournament as TRow
       setMsg('Tournament created — set participants, then publish.')
@@ -243,6 +261,20 @@ export function TournamentAdmin() {
     }
   }
 
+  const handleSaveBracketSize = async (size: 8 | 12) => {
+    if (selectedId == null) return
+    setErr(null)
+    try {
+      await adminPatchTournament(selectedId, { bracket_size: size })
+      setLoadedBracketSize(size)
+      setMsg(size === 8 ? 'Bracket set to 8 players (no qualifying round).' : 'Bracket set to 12 players.')
+      refreshList()
+      loadBracket(selectedId)
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Save bracket size failed')
+    }
+  }
+
   const selectClass =
     'w-full rounded-xl border border-violet-500/30 bg-[#151524]/90 px-3 py-2.5 text-sm text-[#f5efe6] transition-colors hover:border-violet-400/45 focus:border-cyan-400/60 focus:ring-2 focus:ring-cyan-500/25 outline-none'
 
@@ -253,8 +285,9 @@ export function TournamentAdmin() {
           Tournaments
         </h2>
         <p className="text-sm text-muted m-0 leading-relaxed">
-          Create brackets, add 12 seeds with PokePaste, publish for the public site, then record winners. Flow:
-          qualifiers (seeds 5–12) → quarter-finals with seeds 1–4 → semis → final and 3rd place.
+          Choose <strong className="text-slate-300">12 players</strong> for the usual flow (qualifiers for seeds 5–12 →
+          quarter-finals) or <strong className="text-slate-300">8 players</strong> for straight quarter-finals (1 vs 8, 2
+          vs 7, …) with no qualifying round. Publish when ready for the main site.
         </p>
       </header>
 
@@ -275,6 +308,23 @@ export function TournamentAdmin() {
             <input className={fieldClass} placeholder="Title" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} />
             <input className={fieldClass} placeholder="Subtitle / format" value={newSubtitle} onChange={(e) => setNewSubtitle(e.target.value)} />
           </div>
+          <fieldset className="sm:col-span-2 rounded-xl border border-violet-500/25 px-4 py-3 space-y-2">
+            <legend className="text-xs font-semibold text-cyan-200/95 px-1">Bracket size</legend>
+            <label className="flex items-start gap-2 text-sm text-slate-200 cursor-pointer">
+              <input type="radio" name="newBs" checked={newBracketSize === 12} onChange={() => setNewBracketSize(12)} />
+              <span>
+                <span className="font-medium text-[#f5efe6]">12 players</span>
+                <span className="block text-xs text-muted">Qualifying (seeds 5–12), then quarters with configurable qual → QF pairings.</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm text-slate-200 cursor-pointer">
+              <input type="radio" name="newBs" checked={newBracketSize === 8} onChange={() => setNewBracketSize(8)} />
+              <span>
+                <span className="font-medium text-[#f5efe6]">8 players</span>
+                <span className="block text-xs text-muted">Quarter-finals immediately: seed 1 vs 8, 2 vs 7, 3 vs 6, 4 vs 5.</span>
+              </span>
+            </label>
+          </fieldset>
         </div>
         <button type="button" onClick={handleCreate} className={btnPrimary}>
           Create tournament
@@ -291,7 +341,8 @@ export function TournamentAdmin() {
           <option value="">Choose one…</option>
           {tournaments.map((t) => (
             <option key={t.id} value={t.id}>
-              {t.title} · {t.slug} {t.is_published ? '· live' : '· draft'}
+              {t.title} · {bracketSizeFromUnknown(t.bracket_size) === 8 ? '8p' : '12p'} · {t.slug}{' '}
+              {t.is_published ? '· live' : '· draft'}
             </option>
           ))}
         </select>
@@ -309,6 +360,35 @@ export function TournamentAdmin() {
 
       {selectedId != null ? (
         <>
+          <section className={cardClass}>
+            <h3 className="text-sm font-semibold text-cyan-200 m-0 tracking-wide uppercase">Bracket format</h3>
+            <p className="text-xs text-muted m-0 leading-relaxed">
+              Current: <strong className="text-slate-200">{loadedBracketSize === 8 ? '8 players' : '12 players'}</strong>
+              .
+              {loadedBracketSize === 8
+                ? ' No qualifying matches — quarters use seeds 1–8 only.'
+                : ' Seeds 5–12 play qualifiers; edit QF vs qual pairings below.'}
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                disabled={loadedBracketSize === 12}
+                onClick={() => handleSaveBracketSize(12)}
+                className={btnSecondary}
+              >
+                Use 12-player bracket
+              </button>
+              <button
+                type="button"
+                disabled={loadedBracketSize === 8}
+                onClick={() => handleSaveBracketSize(8)}
+                className={btnSecondary}
+              >
+                Use 8-player bracket
+              </button>
+            </div>
+          </section>
+
           <section className={cardClass}>
             <h3 className="text-sm font-semibold text-cyan-200 m-0 tracking-wide uppercase">Prizes</h3>
             <p className="text-xs text-muted m-0 leading-relaxed">
@@ -335,59 +415,71 @@ export function TournamentAdmin() {
             </div>
           </section>
 
-          <section className={cardClass}>
-            <h3 className="text-sm font-semibold text-cyan-200 m-0 tracking-wide uppercase">Quarter-final pairings</h3>
-            <p className="text-xs text-muted m-0 leading-relaxed">
-              For each quarter-final, pick which <strong className="text-slate-300">qualifier winner</strong> (Qualifier 1 =
-              seeds 5 vs 12, …) plays that top seed. Each qualifier must appear once.
-            </p>
-            <div className="grid gap-4 sm:grid-cols-2">
-              {[0, 1, 2, 3].map((qfIdx) => (
-                <label key={qfIdx} className="flex flex-col gap-2 text-xs text-muted">
-                  <span>
-                    <span className="text-cyan-200/90 font-medium">Quarter-final {qfIdx + 1}</span>
-                    <span className="text-slate-400"> — top seed {qfIdx + 1} vs winner of</span>
-                  </span>
-                  <select
-                    className={selectClass}
-                    value={qfQualDraft[qfIdx]}
-                    onChange={(e) => {
-                      const v = parseInt(e.target.value, 10)
-                      setQfQualDraft((prev) => {
-                        const next = [...prev] as [number, number, number, number]
-                        next[qfIdx] = v
-                        return next
-                      })
-                    }}
-                  >
-                    {[0, 1, 2, 3].map((qi) => (
-                      <option key={qi} value={qi}>
-                        Qualifier {qi + 1}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ))}
-            </div>
-            {!qfDraftIsPermutation ? (
-              <p className="text-xs text-cyan-300 m-0">Choose four different qualifiers (no duplicates).</p>
-            ) : null}
-            <button type="button" onClick={handleSaveQfPairings} disabled={!qfDraftIsPermutation} className={btnSecondary}>
-              Save pairings
-            </button>
-          </section>
+          {loadedBracketSize === 12 ? (
+            <section className={cardClass}>
+              <h3 className="text-sm font-semibold text-cyan-200 m-0 tracking-wide uppercase">Quarter-final pairings</h3>
+              <p className="text-xs text-muted m-0 leading-relaxed">
+                For each quarter-final, pick which <strong className="text-slate-300">qualifier winner</strong>{' '}
+                (Qualifier 1 = seeds 5 vs 12, …) plays that top seed. Each qualifier must appear once.
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {[0, 1, 2, 3].map((qfIdx) => (
+                  <label key={qfIdx} className="flex flex-col gap-2 text-xs text-muted">
+                    <span>
+                      <span className="text-cyan-200/90 font-medium">Quarter-final {qfIdx + 1}</span>
+                      <span className="text-slate-400"> — top seed {qfIdx + 1} vs winner of</span>
+                    </span>
+                    <select
+                      className={selectClass}
+                      value={qfQualDraft[qfIdx]}
+                      onChange={(e) => {
+                        const v = parseInt(e.target.value, 10)
+                        setQfQualDraft((prev) => {
+                          const next = [...prev] as [number, number, number, number]
+                          next[qfIdx] = v
+                          return next
+                        })
+                      }}
+                    >
+                      {[0, 1, 2, 3].map((qi) => (
+                        <option key={qi} value={qi}>
+                          Qualifier {qi + 1}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ))}
+              </div>
+              {!qfDraftIsPermutation ? (
+                <p className="text-xs text-cyan-300 m-0">Choose four different qualifiers (no duplicates).</p>
+              ) : null}
+              <button type="button" onClick={handleSaveQfPairings} disabled={!qfDraftIsPermutation} className={btnSecondary}>
+                Save pairings
+              </button>
+            </section>
+          ) : (
+            <section className={cardClass}>
+              <h3 className="text-sm font-semibold text-cyan-200 m-0 tracking-wide uppercase">8-player quarters</h3>
+              <p className="text-xs text-muted m-0 leading-relaxed">
+                Fixed pairings: QF1 = seed 1 vs 8, QF2 = 2 vs 7, QF3 = 3 vs 6, QF4 = 4 vs 5. Enter participants for seeds{' '}
+                1–8 only.
+              </p>
+            </section>
+          )}
 
           <section className={cardClass}>
-            <h3 className="text-sm font-semibold text-cyan-200 m-0 tracking-wide uppercase">Participant (seed 1–12)</h3>
+            <h3 className="text-sm font-semibold text-cyan-200 m-0 tracking-wide uppercase">
+              Participant (seed 1–{loadedBracketSize})
+            </h3>
             <div className="flex flex-wrap gap-3 items-end">
               <label className="flex flex-col gap-1.5 text-xs text-muted">
                 Seed
                 <select
                   className={`${selectClass} w-auto min-w-[5rem]`}
-                  value={seedRank}
+                  value={Math.min(seedRank, loadedBracketSize)}
                   onChange={(e) => setSeedRank(parseInt(e.target.value, 10))}
                 >
-                  {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => (
+                  {Array.from({ length: loadedBracketSize }, (_, i) => i + 1).map((n) => (
                     <option key={n} value={n}>
                       {n}
                     </option>

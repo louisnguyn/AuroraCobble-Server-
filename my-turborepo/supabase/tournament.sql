@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS tournaments (
   subtitle text,
   prizes jsonb NOT NULL DEFAULT '[]'::jsonb,
   is_published boolean NOT NULL DEFAULT false,
+  /** 12 = qualifiers (seeds 5–12) + QF + SF + … ; 8 = single-elim starting at quarter-finals (1v8 … 4v5). */
+  bracket_size smallint NOT NULL DEFAULT 12 CHECK (bracket_size IN (8, 12)),
   qf_qual_feed jsonb NOT NULL DEFAULT '[3, 2, 1, 0]'::jsonb,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()

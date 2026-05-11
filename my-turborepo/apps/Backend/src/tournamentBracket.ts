@@ -1,7 +1,9 @@
 /**
- * Fixed 12-player bracket: seeds 5–12 play qualifying (4 matches);
- * seeds 1–4 enter quarter-finals vs qualifying winners; then SF, final, 3rd place.
+ * 12-player: seeds 5–12 qualify → QF vs seeds 1–4 → SF → final + 3rd.
+ * 8-player: classic single-elim at QF — (1 vs 8), (2 vs 7), (3 vs 6), (4 vs 5) → SF → final + 3rd (no qualifying round).
  */
+
+export type BracketSizeMode = 8 | 12;
 
 export const QUAL_PAIRS: [number, number][] = [
   [5, 12],
@@ -11,6 +13,15 @@ export const QUAL_PAIRS: [number, number][] = [
 ];
 
 export const QF_TOP_SEEDS = [1, 2, 3, 4] as const;
+
+/** Eight-player bracket: quarter-final seed pairings (high vs low within each matchup). */
+export const QF_SEED_PAIRS_8: readonly [number, number][] = [
+  [1, 8],
+  [2, 7],
+  [3, 6],
+  [4, 5],
+];
+
 /** Legacy default: QF i faces winner of qual `DEFAULT_QF_QUAL_FEED[i]` (QF0 ← qual-3, QF1 ← qual-2, …). */
 export const DEFAULT_QF_QUAL_FEED: readonly [number, number, number, number] = [3, 2, 1, 0];
 
@@ -105,71 +116,10 @@ function slotFromWinner(
   return { kind: "winner_of", matchKey: pendingKey };
 }
 
-export function buildBracketView(
+function buildSemiFinalThroughThird(
   participants: ParticipantRow[],
-  results: MatchResultRow[],
-  options?: { qfQualFeed?: unknown }
+  res: Map<string, number | null>
 ): BuiltMatch[] {
-  const feed =
-    normalizeQfQualFeed(options?.qfQualFeed) ??
-    ([...DEFAULT_QF_QUAL_FEED] as [number, number, number, number]);
-  const seedMap = bySeed(participants);
-  const res = new Map<string, number | null>();
-  for (const r of results) res.set(r.match_key, r.winner_participant_id);
-
-  const qualMatches: BuiltMatch[] = QUAL_PAIRS.map(([sa, sb], i) => {
-    const key = `qual-${i}`;
-    const pa = seedMap.get(sa);
-    const pb = seedMap.get(sb);
-    const left: SlotResolved = pa
-      ? { kind: "participant", id: pa.id, name: pa.display_name, teamPreview: teamPreview(pa.team_json) }
-      : { kind: "tbd" };
-    const right: SlotResolved = pb
-      ? { kind: "participant", id: pb.id, name: pb.display_name, teamPreview: teamPreview(pb.team_json) }
-      : { kind: "tbd" };
-    return {
-      key,
-      round: "qualifying",
-      label: `Qualifier ${i + 1}`,
-      left,
-      right,
-      winnerParticipantId: getWinner(res, key),
-      canSetWinner: !!(pa && pb),
-    };
-  });
-
-  const qfMatches: BuiltMatch[] = QF_TOP_SEEDS.map((topSeed, i) => {
-    const key = `qf-${i}`;
-    const qualIdx = feed[i]!;
-    const qualKey = `qual-${qualIdx}`;
-    const seeded = seedMap.get(topSeed);
-    const left: SlotResolved = seeded
-      ? { kind: "participant", id: seeded.id, name: seeded.display_name, teamPreview: teamPreview(seeded.team_json) }
-      : { kind: "tbd" };
-    const wq = getWinner(res, qualKey);
-    const rightP = wq ? participantById(participants, wq) : undefined;
-    const right: SlotResolved =
-      wq && rightP
-        ? { kind: "participant", id: rightP.id, name: rightP.display_name, teamPreview: teamPreview(rightP.team_json) }
-        : { kind: "winner_of", matchKey: qualKey };
-    const w = getWinner(res, key);
-    const canSet =
-      !!seeded &&
-      !!wq &&
-      !!rightP &&
-      left.kind === "participant" &&
-      right.kind === "participant";
-    return {
-      key,
-      round: "quarter",
-      label: `Quarter-final ${i + 1}`,
-      left,
-      right,
-      winnerParticipantId: w,
-      canSetWinner: canSet,
-    };
-  });
-
   const wqf = (idx: number) => getWinner(res, `qf-${idx}`);
   const w0 = wqf(0);
   const w1 = wqf(1);
@@ -243,5 +193,114 @@ export function buildBracketView(
     canSetWinner: canThird,
   };
 
-  return [...qualMatches, ...qfMatches, ...sfMatches, finalMatch, thirdMatch];
+  return [...sfMatches, finalMatch, thirdMatch];
+}
+
+function buildBracketTwelvePlayers(
+  participants: ParticipantRow[],
+  results: MatchResultRow[],
+  qfQualFeed: unknown
+): BuiltMatch[] {
+  const feed =
+    normalizeQfQualFeed(qfQualFeed) ?? ([...DEFAULT_QF_QUAL_FEED] as [number, number, number, number]);
+  const seedMap = bySeed(participants);
+  const res = new Map<string, number | null>();
+  for (const r of results) res.set(r.match_key, r.winner_participant_id);
+
+  const qualMatches: BuiltMatch[] = QUAL_PAIRS.map(([sa, sb], i) => {
+    const key = `qual-${i}`;
+    const pa = seedMap.get(sa);
+    const pb = seedMap.get(sb);
+    const left: SlotResolved = pa
+      ? { kind: "participant", id: pa.id, name: pa.display_name, teamPreview: teamPreview(pa.team_json) }
+      : { kind: "tbd" };
+    const right: SlotResolved = pb
+      ? { kind: "participant", id: pb.id, name: pb.display_name, teamPreview: teamPreview(pb.team_json) }
+      : { kind: "tbd" };
+    return {
+      key,
+      round: "qualifying",
+      label: `Qualifier ${i + 1}`,
+      left,
+      right,
+      winnerParticipantId: getWinner(res, key),
+      canSetWinner: !!(pa && pb),
+    };
+  });
+
+  const qfMatches: BuiltMatch[] = QF_TOP_SEEDS.map((topSeed, i) => {
+    const key = `qf-${i}`;
+    const qualIdx = feed[i]!;
+    const qualKey = `qual-${qualIdx}`;
+    const seeded = seedMap.get(topSeed);
+    const left: SlotResolved = seeded
+      ? { kind: "participant", id: seeded.id, name: seeded.display_name, teamPreview: teamPreview(seeded.team_json) }
+      : { kind: "tbd" };
+    const wq = getWinner(res, qualKey);
+    const rightP = wq ? participantById(participants, wq) : undefined;
+    const right: SlotResolved =
+      wq && rightP
+        ? { kind: "participant", id: rightP.id, name: rightP.display_name, teamPreview: teamPreview(rightP.team_json) }
+        : { kind: "winner_of", matchKey: qualKey };
+    const w = getWinner(res, key);
+    const canSet =
+      !!seeded &&
+      !!wq &&
+      !!rightP &&
+      left.kind === "participant" &&
+      right.kind === "participant";
+    return {
+      key,
+      round: "quarter",
+      label: `Quarter-final ${i + 1}`,
+      left,
+      right,
+      winnerParticipantId: w,
+      canSetWinner: canSet,
+    };
+  });
+
+  const tail = buildSemiFinalThroughThird(participants, res);
+
+  return [...qualMatches, ...qfMatches, ...tail];
+}
+
+function buildBracketEightPlayers(participants: ParticipantRow[], results: MatchResultRow[]): BuiltMatch[] {
+  const seedMap = bySeed(participants);
+  const res = new Map<string, number | null>();
+  for (const r of results) res.set(r.match_key, r.winner_participant_id);
+
+  const qfMatches: BuiltMatch[] = QF_SEED_PAIRS_8.map(([sa, sb], i) => {
+    const key = `qf-${i}`;
+    const pa = seedMap.get(sa);
+    const pb = seedMap.get(sb);
+    const left: SlotResolved = pa
+      ? { kind: "participant", id: pa.id, name: pa.display_name, teamPreview: teamPreview(pa.team_json) }
+      : { kind: "tbd" };
+    const right: SlotResolved = pb
+      ? { kind: "participant", id: pb.id, name: pb.display_name, teamPreview: teamPreview(pb.team_json) }
+      : { kind: "tbd" };
+    return {
+      key,
+      round: "quarter",
+      label: `Quarter-final ${i + 1}`,
+      left,
+      right,
+      winnerParticipantId: getWinner(res, key),
+      canSetWinner: !!(pa && pb),
+    };
+  });
+
+  return [...qfMatches, ...buildSemiFinalThroughThird(participants, res)];
+}
+
+export function buildBracketView(
+  participants: ParticipantRow[],
+  results: MatchResultRow[],
+  options?: { qfQualFeed?: unknown; bracketSize?: BracketSizeMode }
+): BuiltMatch[] {
+  if (options?.bracketSize === 8) {
+    return buildBracketEightPlayers(participants, results);
+  }
+  return buildBracketTwelvePlayers(participants, results, options?.qfQualFeed);
 }

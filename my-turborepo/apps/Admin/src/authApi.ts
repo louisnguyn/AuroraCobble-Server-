@@ -443,6 +443,8 @@ export async function adminCreateTournament(body: {
   subtitle?: string
   prizes?: unknown[]
   is_published?: boolean
+  /** 12 = qualifiers + QF; 8 = start at quarter-finals only. */
+  bracket_size?: 8 | 12
 }): Promise<{ tournament: unknown }> {
   return fetchJson<{ tournament: unknown }>('/admin/tournaments', {
     method: 'POST',
@@ -459,6 +461,7 @@ export async function adminPatchTournament(
     is_published?: boolean
     /** Length 4, permutation of 0–3: QF slot i gets winner of qual-(value). */
     qf_qual_feed?: number[]
+    bracket_size?: 8 | 12
   }
 ): Promise<{ tournament: unknown }> {
   return fetchJson<{ tournament: unknown }>(`/admin/tournaments/${id}`, {

@@ -231,9 +231,23 @@ export function Tournament({
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold text-[#f5efe6] m-0">Tournament</h1>
         <p className="text-sm text-muted m-0">
-          Qualifying (seeds 5–12) → Quarter-finals (seeds 1–4 enter) → Semi-finals → Final & 3rd place. Click a player
-          for team details. Use <span className="text-[#f5efe6]/90">Compare both teams</span> on a match when both slots
-          are filled.
+          {!data?.tournament ? (
+            <>
+              Twelve-player brackets use a qualifying round (seeds 5–12); eight-player brackets start at quarter-finals
+              (1 vs 8 … 4 vs 5). Select a bracket to see the layout.
+            </>
+          ) : data.tournament.bracketSize === 8 ? (
+            <>
+              Eight-player bracket: quarter-finals first (seeds 1 vs 8, 2 vs 7, 3 vs 6, 4 vs 5) → semi-finals → final & 3rd
+              place — no qualifiers.
+            </>
+          ) : (
+            <>
+              Twelve-player bracket: qualifying (seeds 5–12) → quarter-finals → semi-finals → final & 3rd place.
+            </>
+          )}{' '}
+          Click a player for team details. Use <span className="text-[#f5efe6]/90">Compare both teams</span> when both
+          slots are filled.
         </p>
         {comparePickFirst != null ? (
           <div
@@ -271,7 +285,12 @@ export function Tournament({
                       },
                     ]
                   : []),
-                ...catalog.map((t) => ({ value: t.slug.toLowerCase(), label: t.title })),
+                ...catalog.map((t) => ({
+                  value: t.slug.toLowerCase(),
+                  label:
+                    t.title +
+                    (t.bracketSize === 8 ? ' · 8p' : t.bracketSize === 12 ? ' · 12p' : ''),
+                })),
               ]}
               className="w-full"
               buttonClassName="pixel-field px-3 py-2.5 text-base w-full"
@@ -329,21 +348,30 @@ export function Tournament({
               ) : null}
             </div>
 
-            <section className="w-full min-w-0">
-              <h3 className="text-sm font-semibold text-[#d9cec0] m-0 mb-3">Qualifying (seeds 5–12)</h3>
-              {/*
-                Space goes *between* cards: equal columns + wide column-gap (not a lump of empty space on the right).
-                md+ = four across; smaller screens = 2×2 with the same gap logic.
-              */}
-              <div className="grid w-full min-w-0 grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-4 sm:gap-x-6 sm:gap-y-5 md:gap-x-8 md:gap-y-5 lg:gap-x-10">
-                {byRound('qualifying').map((m) => (
-                  <MatchCard key={m.key} m={m} onOpenPlayer={onOpenPlayer} onComparePair={onComparePair} />
-                ))}
-              </div>
-            </section>
+            {byRound('qualifying').length > 0 ? (
+              <section className="w-full min-w-0">
+                <h3 className="text-sm font-semibold text-[#d9cec0] m-0 mb-3">Qualifying (seeds 5–12)</h3>
+                {/*
+                  Space goes *between* cards: equal columns + wide column-gap (not a lump of empty space on the right).
+                  md+ = four across; smaller screens = 2×2 with the same gap logic.
+                */}
+                <div className="grid w-full min-w-0 grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-4 sm:gap-x-6 sm:gap-y-5 md:gap-x-8 md:gap-y-5 lg:gap-x-10">
+                  {byRound('qualifying').map((m) => (
+                    <MatchCard key={m.key} m={m} onOpenPlayer={onOpenPlayer} onComparePair={onComparePair} />
+                  ))}
+                </div>
+              </section>
+            ) : null}
 
             <section className="w-full min-w-0">
-              <h3 className="text-sm font-semibold text-[#d9cec0] m-0 mb-3">Quarter-finals</h3>
+              <h3 className="text-sm font-semibold text-[#d9cec0] m-0 mb-3">
+                Quarter-finals
+                {data.tournament.bracketSize === 8 ? (
+                  <span className="block text-xs font-normal text-muted mt-1">
+                    Seeds 1 vs 8, 2 vs 7, 3 vs 6, 4 vs 5 (eight-player mode)
+                  </span>
+                ) : null}
+              </h3>
               <div className="grid w-full min-w-0 grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-4 sm:gap-x-6 sm:gap-y-5 md:gap-x-8 md:gap-y-5 lg:gap-x-10">
                 {byRound('quarter').map((m) => (
                   <MatchCard key={m.key} m={m} onOpenPlayer={onOpenPlayer} onComparePair={onComparePair} />

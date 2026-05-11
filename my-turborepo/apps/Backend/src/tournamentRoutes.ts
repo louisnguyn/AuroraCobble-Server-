@@ -13,6 +13,16 @@ function qfFeedFromRow(t: { qf_qual_feed?: unknown } | null | undefined): [numbe
   return normalizeQfQualFeed(t?.qf_qual_feed) ?? ([...DEFAULT_QF_QUAL_FEED] as [number, number, number, number]);
 }
 
+function bracketSizeFromRow(t: { bracket_size?: unknown } | null | undefined): 8 | 12 {
+  const n = Number(t?.bracket_size);
+  return n === 8 ? 8 : 12;
+}
+
+function parseBracketSizeInput(raw: unknown): 8 | 12 {
+  const n = typeof raw === "number" ? raw : parseInt(String(raw ?? ""), 10);
+  return n === 8 ? 8 : 12;
+}
+
 function paramStr(v: string | string[] | undefined): string {
   if (v == null) return "";
   return Array.isArray(v) ? String(v[0] ?? "") : String(v);
@@ -54,7 +64,7 @@ export function registerTournamentRoutes(
     if (!requireSupabase(res)) return;
     const { data, error } = await supabase!
       .from("tournaments")
-      .select("id, slug, title, subtitle, prizes, is_published, created_at, updated_at")
+      .select("id, slug, title, subtitle, prizes, is_published, bracket_size, created_at, updated_at")
       .order("created_at", { ascending: false });
     if (error) {
       res.status(500).json({ error: error.message });
@@ -75,6 +85,7 @@ export function registerTournamentRoutes(
     const subtitle = typeof body.subtitle === "string" ? body.subtitle.trim() : null;
     const prizes = Array.isArray(body.prizes) ? body.prizes : [];
     const is_published = Boolean(body.is_published);
+    const bracket_size = parseBracketSizeInput((body as { bracket_size?: unknown }).bracket_size);
     const now = new Date().toISOString();
     const qfRaw = (body as { qf_qual_feed?: unknown }).qf_qual_feed;
     const qfNorm = normalizeQfQualFeed(qfRaw);
@@ -91,10 +102,11 @@ export function registerTournamentRoutes(
         subtitle,
         prizes,
         is_published,
+        bracket_size,
         ...(qfNorm != null ? { qf_qual_feed: qfNorm } : {}),
         updated_at: now,
       })
-      .select("id, slug, title, subtitle, prizes, is_published")
+      .select("id, slug, title, subtitle, prizes, is_published, bracket_size")
       .single();
     if (error) {
       if (/duplicate key/i.test(error.message)) {
@@ -120,6 +132,9 @@ export function registerTournamentRoutes(
     if (typeof body.subtitle === "string") patch.subtitle = body.subtitle.trim();
     if (Array.isArray(body.prizes)) patch.prizes = body.prizes;
     if (typeof body.is_published === "boolean") patch.is_published = body.is_published;
+    if ("bracket_size" in body) {
+      patch.bracket_size = parseBracketSizeInput((body as { bracket_size?: unknown }).bracket_size);
+    }
     if ("qf_qual_feed" in body) {
       const qfNorm = normalizeQfQualFeed((body as { qf_qual_feed?: unknown }).qf_qual_feed);
       if (qfNorm == null) {
@@ -144,8 +159,14 @@ export function registerTournamentRoutes(
     if (!requireSupabase(res)) return;
     const tournamentId = parseInt(paramStr(req.params.id), 10);
     const seedRank = parseInt(paramStr(req.params.seedRank), 10);
-    if (!Number.isFinite(tournamentId) || !Number.isFinite(seedRank) || seedRank < 1 || seedRank > 12) {
-      res.status(400).json({ error: "Invalid tournament id or seed (1–12)" });
+    const { data: tMeta } = await supabase!
+      .from("tournaments")
+      .select("bracket_size")
+      .eq("id", tournamentId)
+      .maybeSingle();
+    const maxSeed = bracketSizeFromRow(tMeta);
+    if (!Number.isFinite(tournamentId) || !Number.isFinite(seedRank) || seedRank < 1 || seedRank > maxSeed) {
+      res.status(400).json({ error: `Invalid tournament id or seed (1–${maxSeed} for this bracket)` });
       return;
     }
     const body = req.body ?? {};
@@ -220,7 +241,7 @@ export function registerTournamentRoutes(
 
     const { data: tRow } = await supabase!
       .from("tournaments")
-      .select("qf_qual_feed")
+      .select("qf_qual_feed, bracket_size")
       .eq("id", tournamentId)
       .maybeSingle();
     const { data: parts } = await supabase!
@@ -236,7 +257,7 @@ export function registerTournamentRoutes(
     const bracket = buildBracketView(
       participants,
       (results ?? []) as { match_key: string; winner_participant_id: number | null }[],
-      { qfQualFeed: tRow?.qf_qual_feed }
+      { qfQualFeed: tRow?.qf_qual_feed, bracketSize: bracketSizeFromRow(tRow) }
     );
     const m = bracket.find((x) => x.key === matchKey);
     if (!m) {
@@ -310,7 +331,10 @@ export function registerTournamentRoutes(
     const bracket = buildBracketView(
       (parts ?? []) as ParticipantRow[],
       (results ?? []) as { match_key: string; winner_participant_id: number | null }[],
-      { qfQualFeed: (t as { qf_qual_feed?: unknown }).qf_qual_feed }
+      {
+        qfQualFeed: (t as { qf_qual_feed?: unknown }).qf_qual_feed,
+        bracketSize: bracketSizeFromRow(t as { bracket_size?: unknown }),
+      }
     );
     res.json({ tournament: t, participants: parts ?? [], bracket });
   });
@@ -320,7 +344,7 @@ export function registerTournamentRoutes(
     if (!requireSupabase(res)) return;
     const { data, error } = await supabase!
       .from("tournaments")
-      .select("slug, title, updated_at")
+      .select("slug, title, updated_at, bracket_size")
       .eq("is_published", true)
       .order("updated_at", { ascending: false });
     if (error) {
@@ -333,6 +357,7 @@ export function registerTournamentRoutes(
         slug: row.slug as string,
         title: row.title as string,
         updatedAt: row.updated_at as string,
+        bracketSize: bracketSizeFromRow(row as { bracket_size?: unknown }),
       })),
     });
   });
@@ -347,7 +372,7 @@ export function registerTournamentRoutes(
     }
     const { data: t } = await supabase!
       .from("tournaments")
-      .select("id, slug, title, subtitle, prizes, is_published, updated_at, qf_qual_feed")
+      .select("id, slug, title, subtitle, prizes, is_published, updated_at, qf_qual_feed, bracket_size")
       .eq("slug", slug)
       .maybeSingle();
     if (!t || !t.is_published) {
@@ -367,7 +392,10 @@ export function registerTournamentRoutes(
     const bracket = buildBracketView(
       (parts ?? []) as ParticipantRow[],
       (results ?? []) as { match_key: string; winner_participant_id: number | null }[],
-      { qfQualFeed: (t as { qf_qual_feed?: unknown }).qf_qual_feed }
+      {
+        qfQualFeed: (t as { qf_qual_feed?: unknown }).qf_qual_feed,
+        bracketSize: bracketSizeFromRow(t as { bracket_size?: unknown }),
+      }
     );
     res.json({
       tournament: {
@@ -377,6 +405,7 @@ export function registerTournamentRoutes(
         prizes: t.prizes,
         updatedAt: t.updated_at,
         qfQualFeed: qfFeedFromRow(t as { qf_qual_feed?: unknown }),
+        bracketSize: bracketSizeFromRow(t as { bracket_size?: unknown }),
       },
       bracket,
     });

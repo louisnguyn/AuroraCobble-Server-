@@ -694,6 +694,8 @@ export interface PublishedTournamentSummary {
   slug: string
   title: string
   updatedAt: string
+  /** Omit = treat as 12 (legacy listings). */
+  bracketSize?: 8 | 12
 }
 
 export async function fetchPublishedTournaments(): Promise<{ tournaments: PublishedTournamentSummary[] }> {
@@ -731,6 +733,7 @@ export async function fetchPublicTournament(slug: string): Promise<{
     updatedAt: string
     /** QF slot i faces winner of qual qfQualFeed[i] (0–3). */
     qfQualFeed?: [number, number, number, number]
+    bracketSize?: 8 | 12
   }
   bracket: TournamentBracketMatch[]
 }> {

@@ -1,5 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PublicAchievement } from "./achievementTypes.js";
+import {
+  leaderboardPayloadHasSyncedData,
+  livePvpSnapFromLeaderboardForWebsiteUser,
+} from "./leaderboardPvpDerived.js";
 import { fetchGrantedPublicAchievements } from "./profileAchievements.js";
 
 export type { PublicAchievement };
@@ -59,7 +63,9 @@ export async function fetchPublicProfileByUsername(
   supabase: SupabaseClient,
   usernameParam: string,
   readMinecraftRole: (row: { minecraft_role?: string | null } | null) => string,
-  pvpTierFromElo: (elo: number | null) => string
+  pvpTierFromElo: (elo: number | null) => string,
+  /** In-memory CobbleRanked leaderboard (same as sync). When present with data, overrides stale `user_pvp_ranks`. */
+  liveLeaderboardPayload?: unknown | null
 ): Promise<PublicProfilePayload | null> {
   const uname = safeDecodePathSegment(usernameParam);
   if (!uname || uname.length > 48) return null;
@@ -98,16 +104,30 @@ export async function fetchPublicProfileByUsername(
   let rank: number | null = null;
   let elo: number | null = null;
   let formatKey: string | null = null;
-  const { data: pv } = await supabase
-    .from("user_pvp_ranks")
-    .select("rank_position, elo, format_key")
-    .eq("user_id", uid)
-    .maybeSingle();
-  if (pv) {
-    const pr = pv as { rank_position?: number | null; elo?: number | null; format_key?: string | null };
-    rank = typeof pr.rank_position === "number" ? pr.rank_position : null;
-    elo = typeof pr.elo === "number" ? pr.elo : null;
-    formatKey = typeof pr.format_key === "string" ? pr.format_key : null;
+
+  if (liveLeaderboardPayload != null && leaderboardPayloadHasSyncedData(liveLeaderboardPayload)) {
+    const snap = livePvpSnapFromLeaderboardForWebsiteUser(liveLeaderboardPayload, username);
+    if (snap) {
+      rank = snap.rank;
+      elo = snap.elo;
+      formatKey = snap.formatKey;
+    } else {
+      rank = null;
+      elo = null;
+      formatKey = null;
+    }
+  } else {
+    const { data: pv } = await supabase
+      .from("user_pvp_ranks")
+      .select("rank_position, elo, format_key")
+      .eq("user_id", uid)
+      .maybeSingle();
+    if (pv) {
+      const pr = pv as { rank_position?: number | null; elo?: number | null; format_key?: string | null };
+      rank = typeof pr.rank_position === "number" ? pr.rank_position : null;
+      elo = typeof pr.elo === "number" ? pr.elo : null;
+      formatKey = typeof pr.format_key === "string" ? pr.format_key : null;
+    }
   }
 
   const achievements = await fetchGrantedPublicAchievements(supabase, uid);
