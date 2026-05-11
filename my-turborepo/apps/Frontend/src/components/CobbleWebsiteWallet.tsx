@@ -3,9 +3,11 @@ import { useAuth } from '../contexts/AuthContext'
 import {
   depositCobbledollars,
   fetchCobbledollarsLedger,
+  fetchTicketsLedger,
   fetchUserCurrencies,
   transferCobbledollars,
   type CobbledollarLedgerRow,
+  type TicketCurrencyLedgerRow,
 } from '../authApi'
 
 const LEDGER_KIND_LABEL: Record<string, string> = {
@@ -21,6 +23,16 @@ const LEDGER_KIND_LABEL: Record<string, string> = {
   gacha_reward: 'Gacha reward',
   transfer_to_user: 'Sent to player',
   transfer_from_user: 'Received from player',
+}
+
+const TICKET_LEDGER_KIND_LABEL: Record<string, string> = {
+  ...LEDGER_KIND_LABEL,
+  ticket_exchange: 'Ticket exchange',
+}
+
+function ticketCurrencyLabel(currencyType: string): string {
+  if (currencyType === 'tickets') return 'Normal tickets'
+  return currencyType
 }
 
 /** Website Cobble$ balance and history. */
@@ -39,6 +51,9 @@ export function CobbleWebsiteWallet({ onBalanceUpdated }: { onBalanceUpdated?: (
   const [ledger, setLedger] = useState<CobbledollarLedgerRow[]>([])
   const [ledgerLoading, setLedgerLoading] = useState(false)
   const [ledgerError, setLedgerError] = useState<string | null>(null)
+  const [ticketLedger, setTicketLedger] = useState<TicketCurrencyLedgerRow[]>([])
+  const [ticketLedgerLoading, setTicketLedgerLoading] = useState(false)
+  const [ticketLedgerError, setTicketLedgerError] = useState<string | null>(null)
 
   const loadWallet = useCallback(() => {
     if (!isAuthenticated) {
@@ -71,6 +86,22 @@ export function CobbleWebsiteWallet({ onBalanceUpdated }: { onBalanceUpdated?: (
       .finally(() => setLedgerLoading(false))
   }, [isAuthenticated])
 
+  const loadTicketLedger = useCallback(() => {
+    if (!isAuthenticated) {
+      setTicketLedger([])
+      return
+    }
+    setTicketLedgerLoading(true)
+    setTicketLedgerError(null)
+    fetchTicketsLedger(10)
+      .then(({ transactions }) => setTicketLedger(transactions ?? []))
+      .catch((e) => {
+        setTicketLedger([])
+        setTicketLedgerError(e instanceof Error ? e.message : 'Could not load ticket history')
+      })
+      .finally(() => setTicketLedgerLoading(false))
+  }, [isAuthenticated])
+
   useEffect(() => {
     loadWallet()
   }, [loadWallet])
@@ -78,6 +109,10 @@ export function CobbleWebsiteWallet({ onBalanceUpdated }: { onBalanceUpdated?: (
   useEffect(() => {
     loadLedger()
   }, [loadLedger])
+
+  useEffect(() => {
+    loadTicketLedger()
+  }, [loadTicketLedger])
 
   const handleDeposit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -247,6 +282,61 @@ export function CobbleWebsiteWallet({ onBalanceUpdated }: { onBalanceUpdated?: (
                           {tx.detail || '—'}
                         </span>
                         <span className="tabular-nums shrink-0 text-[#fbbf24]/90">
+                          Bal. {Number(tx.balance_after).toLocaleString()}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-muted/80 m-0 mt-1">
+                        {new Date(tx.created_at).toLocaleString()}
+                      </p>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </div>
+
+          <div className="mt-8 pt-5 border-t border-border/80">
+            <h3 className="text-sm font-semibold text-[#e2e8f0] m-0 mb-2">Ticket activity</h3>
+            <p className="text-xs text-muted m-0 mb-3">
+              Last 10 changes to normal and special ticket balances (daily bonus, leaderboard rewards, exchange, staff
+              grants).
+            </p>
+            {ticketLedgerLoading ? (
+              <p className="text-xs text-muted m-0">Loading ticket history…</p>
+            ) : ticketLedgerError ? (
+              <p className="text-xs text-error m-0">{ticketLedgerError}</p>
+            ) : ticketLedger.length === 0 ? (
+              <p className="text-xs text-muted m-0">No ticket entries yet.</p>
+            ) : (
+              <ul className="list-none m-0 p-0 space-y-2 max-h-72 overflow-y-auto pr-1">
+                {ticketLedger.map((tx) => {
+                  const sign = tx.delta >= 0 ? '+' : ''
+                  const label = TICKET_LEDGER_KIND_LABEL[tx.kind] ?? tx.kind.replace(/_/g, ' ')
+                  const cu = ticketCurrencyLabel(tx.currency_type)
+                  return (
+                    <li
+                      key={tx.id}
+                      className="rounded-lg border border-border/60 bg-[#0f0a1a]/50 px-3 py-2 text-left text-xs"
+                    >
+                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <span className="text-[#e2e8f0] font-medium">
+                          {label}
+                          <span className="text-muted font-normal"> · {cu}</span>
+                        </span>
+                        <span
+                          className={`tabular-nums font-semibold shrink-0 ${
+                            tx.delta >= 0 ? 'text-sky-300' : 'text-rose-300'
+                          }`}
+                        >
+                          {sign}
+                          {Number(tx.delta).toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 mt-1 text-muted">
+                        <span className="truncate" title={tx.detail ?? undefined}>
+                          {tx.detail || '—'}
+                        </span>
+                        <span className="tabular-nums shrink-0 text-sky-200/85">
                           Bal. {Number(tx.balance_after).toLocaleString()}
                         </span>
                       </div>

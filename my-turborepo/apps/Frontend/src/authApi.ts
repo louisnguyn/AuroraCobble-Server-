@@ -367,6 +367,27 @@ export async function fetchCobbledollarsLedger(
   )
 }
 
+export interface TicketCurrencyLedgerRow {
+  id: number
+  currency_type: string
+  delta: number
+  balance_after: number
+  kind: string
+  detail: string | null
+  created_at: string
+}
+
+/** Last website ticket-wallet movements (daily bonus, leaderboard, exchange, staff grants). */
+export async function fetchTicketsLedger(
+  limit = 10
+): Promise<{ transactions: TicketCurrencyLedgerRow[] }> {
+  const n = typeof limit === 'number' && Number.isFinite(limit) ? Math.floor(limit) : 10
+  const clamped = Math.min(Math.max(n, 1), 50)
+  return fetchApi<{ transactions: TicketCurrencyLedgerRow[] }>(
+    `/user/tickets/ledger?limit=${clamped}`
+  )
+}
+
 export interface DailyLoginStatus {
   date: string
   timeZone: string

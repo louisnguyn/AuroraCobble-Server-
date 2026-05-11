@@ -168,6 +168,9 @@ const BULK_ADMIN_TICKET_CURRENCIES: readonly string[] = [
   "shiny paradox tickets",
 ];
 
+/** Website ticket-family balances that append to `user_ticket_currency_ledger`. */
+const TICKET_LEDGER_CURRENCIES: ReadonlySet<string> = new Set(BULK_ADMIN_TICKET_CURRENCIES);
+
 /** PVP predictions: exact top-3 order pays `stake ×` this; each single-rank bet pays `stake ×` PVP_PREDICTION_SLOT_WIN_MULT. */
 const PVP_PREDICTION_MAX_STAKE = 20_000;
 const PVP_PREDICTION_MIN_STAKE = 100;
@@ -251,6 +254,8 @@ type PvpLeaderboardRow = {
   playerName: string;
   elo: number | null;
   formatKey: string;
+  /** Raw match count from CobbleRanked payload (website filters `matches > 0` before top-3 / rewards). */
+  matches?: number;
 };
 
 function pvpTierFromElo(elo: number | null): string {
@@ -267,6 +272,16 @@ function normalizeName(s: string): string {
   return s.trim().toLowerCase();
 }
 
+/** Match count from API player/entry (`matches` is what the public leaderboard uses). */
+function readLeaderboardMatches(p: Record<string, unknown>): number | undefined {
+  const raw = p.matches ?? p.gamesPlayed ?? p.games_played ?? p.total_matches;
+  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  if (typeof raw === "string" && raw.trim() !== "") {
+    const n = parseInt(raw.trim(), 10);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  return undefined;
+}
 
 function extractPvpRowsFromLeaderboardPayload(payload: unknown): PvpLeaderboardRow[] {
   const obj = payload as { formats?: Record<string, { players?: unknown[] }>; entries?: unknown[] } | null;
@@ -280,12 +295,16 @@ function extractPvpRowsFromLeaderboardPayload(payload: unknown): PvpLeaderboardR
   if (chosenKey) {
     const players = formats[chosenKey]?.players ?? [];
     const rows = (players as Array<{ rank?: unknown; playerName?: unknown; elo?: unknown }>)
-      .map((p) => ({
-        rank: Number(p.rank),
-        playerName: typeof p.playerName === "string" ? p.playerName.trim() : "",
-        elo: Number.isFinite(Number(p.elo)) ? Number(p.elo) : null,
-        formatKey: chosenKey,
-      }))
+      .map((p) => {
+        const po = p as Record<string, unknown>;
+        return {
+          rank: Number(p.rank),
+          playerName: typeof p.playerName === "string" ? p.playerName.trim() : "",
+          elo: Number.isFinite(Number(p.elo)) ? Number(p.elo) : null,
+          formatKey: chosenKey,
+          matches: readLeaderboardMatches(po),
+        };
+      })
       .filter((p) => p.playerName && Number.isFinite(p.rank))
       .sort((a, b) => a.rank - b.rank);
     if (rows.length) return rows;
@@ -293,24 +312,40 @@ function extractPvpRowsFromLeaderboardPayload(payload: unknown): PvpLeaderboardR
 
   const entries = obj.entries ?? [];
   return (entries as Array<{ rank?: unknown; name?: unknown; playerName?: unknown; elo?: unknown; rating?: unknown }>)
-    .map((e) => ({
-      rank: Number(e.rank),
-      playerName:
-        typeof e.playerName === "string"
-          ? e.playerName.trim()
-          : typeof e.name === "string"
-            ? e.name.trim()
-            : "",
-      elo: Number.isFinite(Number(e.elo)) ? Number(e.elo) : Number.isFinite(Number(e.rating)) ? Number(e.rating) : null,
-      formatKey: "singles",
-    }))
+    .map((e) => {
+      const eo = e as Record<string, unknown>;
+      return {
+        rank: Number(e.rank),
+        playerName:
+          typeof e.playerName === "string"
+            ? e.playerName.trim()
+            : typeof e.name === "string"
+              ? e.name.trim()
+              : "",
+        elo: Number.isFinite(Number(e.elo)) ? Number(e.elo) : Number.isFinite(Number(e.rating)) ? Number(e.rating) : null,
+        formatKey: "singles",
+        matches: readLeaderboardMatches(eo),
+      };
+    })
     .filter((p) => p.playerName && Number.isFinite(p.rank))
     .sort((a, b) => a.rank - b.rank);
 }
 
+/** Same ordering as public Leaderboard.tsx: exclude never-played (`matches <= 0` or unset), then re-rank #1–#n. */
+function filterPvpRowsWithPlayedMatchesAndRerank(rows: PvpLeaderboardRow[]): PvpLeaderboardRow[] {
+  const played = rows
+    .filter((r) => typeof r.matches === "number" && Number.isFinite(r.matches) && r.matches > 0)
+    .sort((a, b) => a.rank - b.rank);
+  return played.map((r, i) => ({ ...r, rank: i + 1 }));
+}
+
+function rankedPvpRowsForWebsiteRewards(payload: unknown): PvpLeaderboardRow[] {
+  return filterPvpRowsWithPlayedMatchesAndRerank(extractPvpRowsFromLeaderboardPayload(payload));
+}
+
 async function syncWebsitePvpRanksFromLeaderboard(payload: unknown): Promise<void> {
   if (!supabase) return;
-  const rows = extractPvpRowsFromLeaderboardPayload(payload);
+  const rows = rankedPvpRowsForWebsiteRewards(payload);
   if (!rows.length) return;
   const { data: users, error: usersErr } = await supabase.from("users").select("id, username");
   if (usersErr || !users?.length) return;
@@ -2787,7 +2822,7 @@ app.get("/user/pvp-rank", requireAuth, async (_req, res) => {
   }
 
   // Fallback: derive live rank directly from in-memory /leaderboard payload.
-  const liveRows = extractPvpRowsFromLeaderboardPayload(cobbleStore.leaderboard);
+  const liveRows = rankedPvpRowsForWebsiteRewards(cobbleStore.leaderboard);
   const mine = liveRows.find((r) => normalizeName(r.playerName) === normalizeName(user.username));
   if (!mine) {
     res.json({ rank: null, status: "unranked" });
@@ -3003,7 +3038,7 @@ app.get("/user/pvp-top-prediction", requireAuth, async (_req, res) => {
     res.status(503).json({ error: "Database not configured" });
     return;
   }
-  const rows = extractPvpRowsFromLeaderboardPayload(cobbleStore.leaderboard);
+  const rows = rankedPvpRowsForWebsiteRewards(cobbleStore.leaderboard);
   const forPayoutDate = pvpPredictionTargetDate();
   const windowOpen = isPvpPredictionWindowOpenFor(forPayoutDate);
   const formatKey = rows[0]?.formatKey ?? "singles";
@@ -3049,7 +3084,7 @@ app.post("/user/pvp-top-prediction", requireAuth, async (req, res) => {
     res.status(400).json({ error: "Prediction window is closed for this reset." });
     return;
   }
-  const rows = extractPvpRowsFromLeaderboardPayload(cobbleStore.leaderboard);
+  const rows = rankedPvpRowsForWebsiteRewards(cobbleStore.leaderboard);
   if (rows.length < 3) {
     res.status(503).json({ error: "Ranked leaderboard needs at least 3 players to predict." });
     return;
@@ -3438,7 +3473,7 @@ function isPvpPredictionWindowOpenFor(forPayoutDate: string, now: Date = new Dat
   return localDateOnly(now, DAILY_RESET_TIMEZONE) < forPayoutDate;
 }
 
-type CobbledollarsLedgerMeta = { kind: string; detail?: string | null };
+type CurrencyLedgerMeta = { kind: string; detail?: string | null };
 
 async function recordCobbledollarLedger(
   userId: number,
@@ -3463,39 +3498,87 @@ async function recordCobbledollarLedger(
   void notifyDiscordCobbleLedger(userId, delta, balanceAfter, kind, detail).catch(() => {});
 }
 
+async function recordTicketCurrencyLedger(
+  userId: number,
+  currencyType: string,
+  delta: number,
+  balanceAfter: number,
+  kind: string,
+  detail: string | null
+): Promise<void> {
+  if (!supabase || delta === 0) return;
+  const { error } = await supabase.from("user_ticket_currency_ledger").insert({
+    user_id: userId,
+    currency_type: currencyType,
+    delta,
+    balance_after: balanceAfter,
+    kind,
+    detail,
+  });
+  if (error) {
+    console.warn("[ticket currency ledger]", error.message);
+  }
+}
+
+async function ensureUserTicketsWalletRow(userId: number): Promise<void> {
+  if (!supabase) return;
+  const { data: rows, error } = await supabase
+    .from("user_currency")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("currency_type", PVP_TICKETS_CURRENCY)
+    .limit(1);
+  if (error) {
+    console.warn("[user_currency] ensure tickets row — select:", error.message);
+    return;
+  }
+  if (rows?.length) return;
+  const ins = await supabase.from("user_currency").insert({
+    user_id: userId,
+    currency_type: PVP_TICKETS_CURRENCY,
+    balance: 0,
+  });
+  if (ins.error && !/duplicate|unique/i.test(`${ins.error.code ?? ""} ${ins.error.message}`)) {
+    console.warn("[user_currency] ensure tickets row — insert:", ins.error.message);
+  }
+}
+
 async function incrementUserCurrency(
   userId: number,
   currencyType: string,
   amount: number,
-  cobbledollarsLedger?: CobbledollarsLedgerMeta
+  ledger?: CurrencyLedgerMeta
 ): Promise<number> {
   if (!supabase) throw new Error("Database not configured");
-  const { data: row } = await supabase
+  const { data: sel, error: selErr } = await supabase
     .from("user_currency")
     .select("id, balance")
     .eq("user_id", userId)
     .eq("currency_type", currencyType)
-    .maybeSingle();
+    .limit(1);
+  if (selErr) throw new Error(selErr.message);
+  const row = sel?.[0] as { id: number; balance: number } | undefined;
   const now = new Date().toISOString();
   if (row) {
-    const newBalance = (row as { balance: number }).balance + amount;
+    const newBalance = row.balance + amount;
     const { error } = await supabase
       .from("user_currency")
       .update({ balance: newBalance, updated_at: now })
-      .eq("id", (row as { id: number }).id);
+      .eq("id", row.id);
     if (error) throw new Error(error.message);
-    if (
-      currencyType === COBBLEDOLLARS_CURRENCY &&
-      amount !== 0 &&
-      cobbledollarsLedger
-    ) {
-      void recordCobbledollarLedger(
-        userId,
-        amount,
-        newBalance,
-        cobbledollarsLedger.kind,
-        cobbledollarsLedger.detail ?? null
-      );
+    if (amount !== 0 && ledger) {
+      if (currencyType === COBBLEDOLLARS_CURRENCY) {
+        void recordCobbledollarLedger(userId, amount, newBalance, ledger.kind, ledger.detail ?? null);
+      } else if (TICKET_LEDGER_CURRENCIES.has(currencyType)) {
+        void recordTicketCurrencyLedger(
+          userId,
+          currencyType,
+          amount,
+          newBalance,
+          ledger.kind,
+          ledger.detail ?? null
+        );
+      }
     }
     return newBalance;
   }
@@ -3505,18 +3588,19 @@ async function incrementUserCurrency(
     balance: amount,
   });
   if (error) throw new Error(error.message);
-  if (
-    currencyType === COBBLEDOLLARS_CURRENCY &&
-    amount !== 0 &&
-    cobbledollarsLedger
-  ) {
-    void recordCobbledollarLedger(
-      userId,
-      amount,
-      amount,
-      cobbledollarsLedger.kind,
-      cobbledollarsLedger.detail ?? null
-    );
+  if (amount !== 0 && ledger) {
+    if (currencyType === COBBLEDOLLARS_CURRENCY) {
+      void recordCobbledollarLedger(userId, amount, amount, ledger.kind, ledger.detail ?? null);
+    } else if (TICKET_LEDGER_CURRENCIES.has(currencyType)) {
+      void recordTicketCurrencyLedger(
+        userId,
+        currencyType,
+        amount,
+        amount,
+        ledger.kind,
+        ledger.detail ?? null
+      );
+    }
   }
   return amount;
 }
@@ -3833,6 +3917,28 @@ app.get("/user/cobbledollars/ledger", requireAuth, async (req, res) => {
   const { data, error } = await supabase
     .from("user_cobbledollar_ledger")
     .select("id, delta, balance_after, kind, detail, created_at")
+    .eq("user_id", user.userId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+  res.json({ transactions: data ?? [] });
+});
+
+app.get("/user/tickets/ledger", requireAuth, async (req, res) => {
+  const user = res.locals.user!;
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const raw = req.query.limit;
+  const n = typeof raw === "string" ? parseInt(raw, 10) : NaN;
+  const limit = Number.isFinite(n) ? Math.min(Math.max(n, 1), 50) : 10;
+  const { data, error } = await supabase
+    .from("user_ticket_currency_ledger")
+    .select("id, currency_type, delta, balance_after, kind, detail, created_at")
     .eq("user_id", user.userId)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -4635,19 +4741,39 @@ app.post("/user/exchange", requireAuth, async (req, res) => {
     .eq("currency_type", to_currency)
     .maybeSingle();
   const now = new Date().toISOString();
+  const ticketsAfter = currentTickets - cost;
+  let targetNewBalance: number;
   if (targetRow) {
-    const newBalance = (targetRow as { balance: number }).balance + 1;
+    targetNewBalance = (targetRow as { balance: number }).balance + 1;
     await supabase
       .from("user_currency")
-      .update({ balance: newBalance, updated_at: now })
+      .update({ balance: targetNewBalance, updated_at: now })
       .eq("id", (targetRow as { id: number }).id);
   } else {
+    targetNewBalance = 1;
     await supabase.from("user_currency").insert({
       user_id: userId,
       currency_type: to_currency,
       balance: 1,
     });
   }
+
+  void recordTicketCurrencyLedger(
+    userId,
+    PVP_TICKETS_CURRENCY,
+    -cost,
+    ticketsAfter,
+    "ticket_exchange",
+    `Spent on ${rate.label}`
+  );
+  void recordTicketCurrencyLedger(
+    userId,
+    to_currency,
+    1,
+    targetNewBalance,
+    "ticket_exchange",
+    `From normal tickets (−${cost})`
+  );
 
   res.json({
     to_currency,
@@ -5795,16 +5921,28 @@ app.delete("/admin/users/:userId", requireAuth, requireAdmin, async (req, res) =
 async function runDailyPvpRankPayout(): Promise<{
   payoutDate: string;
   format: string;
-  paid: Array<{ rank: number; username: string; amount: number; tickets?: number }>;
+  paid: Array<{
+    rank: number;
+    username: string;
+    amount: number;
+    tickets?: number;
+    ticket_error?: string;
+  }>;
   skipped: Array<{ rank: number; username: string; reason: string }>;
   predictions: { settled: number; wins: number };
 }> {
   if (!supabase) {
     throw new Error("Database not configured");
   }
-  const rows = extractPvpRowsFromLeaderboardPayload(cobbleStore.leaderboard);
-  if (!rows.length) {
+  const rawRows = extractPvpRowsFromLeaderboardPayload(cobbleStore.leaderboard);
+  if (!rawRows.length) {
     throw new Error("Leaderboard is empty. Sync /leaderboard first.");
+  }
+  const rows = filterPvpRowsWithPlayedMatchesAndRerank(rawRows);
+  if (!rows.length) {
+    throw new Error(
+      "No PvP leaderboard players have matches > 0 in the synced payload. Top-3 payouts only include players who played at least one ranked match."
+    );
   }
   const payoutDate = localDateOnly(new Date(), DAILY_RESET_TIMEZONE);
   const formatKey = rows[0]?.formatKey ?? "singles";
@@ -5858,12 +5996,23 @@ async function runDailyPvpRankPayout(): Promise<{
       detail: `Rank ${rank} — ${row.formatKey} (daily job)`,
     });
     let note: string | null = null;
+    let payoutStatus: "success" | "partial" = "success";
+    let ticketError: string | undefined;
     if (ticketBonus > 0) {
-      await incrementUserCurrency(user.id, PVP_TICKETS_CURRENCY, ticketBonus, {
-        kind: "pvp_rank_daily",
-        detail: `Rank ${rank} — tickets (daily job)`,
-      });
-      note = `+${ticketBonus} website normal ticket(s) (${PVP_TICKETS_CURRENCY})`;
+      await ensureUserTicketsWalletRow(user.id);
+      try {
+        await incrementUserCurrency(user.id, PVP_TICKETS_CURRENCY, ticketBonus, {
+          kind: "pvp_rank_daily",
+          detail: `Rank ${rank} — tickets (daily job)`,
+        });
+        note = `+${ticketBonus} website normal ticket(s) (${PVP_TICKETS_CURRENCY})`;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        ticketError = msg;
+        payoutStatus = "partial";
+        console.error(`[pvp-daily-payout] Cobble$ paid but tickets failed (rank ${rank}, user ${user.id}):`, msg);
+        note = `Cobble$ OK. Ticket grant failed: ${msg}. Staff can grant ${ticketBonus} ${PVP_TICKETS_CURRENCY} manually.`;
+      }
     }
     await supabase.from("user_pvp_daily_payouts").insert({
       payout_date: payoutDate,
@@ -5873,7 +6022,7 @@ async function runDailyPvpRankPayout(): Promise<{
       user_id: user.id,
       amount,
       ticket_bonus: ticketBonus,
-      status: "success",
+      status: payoutStatus,
       note,
       paid_at: now,
       claimed_at: now,
@@ -5883,7 +6032,8 @@ async function runDailyPvpRankPayout(): Promise<{
       rank,
       username: row.playerName,
       amount,
-      ...(ticketBonus > 0 ? { tickets: ticketBonus } : {}),
+      ...(ticketBonus > 0 && !ticketError ? { tickets: ticketBonus } : {}),
+      ...(ticketError ? { ticket_error: ticketError } : {}),
     });
   }
 
@@ -5989,6 +6139,15 @@ app.post("/admin/users/:userId/currency", requireAuth, requireAdmin, async (req,
         "admin_grant",
         `Staff: ${staff.username}`
       );
+    } else if (TICKET_LEDGER_CURRENCIES.has(currencyTypeStr)) {
+      await recordTicketCurrencyLedger(
+        userId,
+        currencyTypeStr,
+        amount,
+        newBalance,
+        "admin_grant",
+        `Staff: ${staff.username}`
+      );
     }
     res.json(data);
   } else {
@@ -6008,6 +6167,15 @@ app.post("/admin/users/:userId/currency", requireAuth, requireAdmin, async (req,
     if (currencyTypeStr === COBBLEDOLLARS_CURRENCY) {
       await recordCobbledollarLedger(
         userId,
+        amount,
+        amount,
+        "admin_grant",
+        `Staff: ${staff.username}`
+      );
+    } else if (TICKET_LEDGER_CURRENCIES.has(currencyTypeStr)) {
+      await recordTicketCurrencyLedger(
+        userId,
+        currencyTypeStr,
         amount,
         amount,
         "admin_grant",
@@ -6088,7 +6256,7 @@ app.post("/admin/cobbledollars/bulk-grant", requireAuth, requireAdmin, async (re
   });
 });
 
-/** Grant website ticket currencies (exchange types + normal tickets) to many users. No Cobble$ ledger. */
+/** Grant website ticket currencies (exchange types + normal tickets) to many users. Ticket ledger mirrors single admin grant. */
 app.post("/admin/tickets/bulk-grant", requireAuth, requireAdmin, async (req, res) => {
   if (!supabase) {
     res.status(503).json({ error: "Database not configured" });
@@ -6143,11 +6311,18 @@ app.post("/admin/tickets/bulk-grant", requireAuth, requireAdmin, async (req, res
   }
 
   const detailNote = note.length > 0 ? ` (${note})` : "";
+  const ledgerDetail =
+    note.length > 0
+      ? `Staff: ${staff.username} (bulk: ${note})`
+      : `Staff: ${staff.username} (bulk)`;
   const failures: Array<{ user_id: number; error: string }> = [];
   let granted = 0;
   for (const userId of userIds) {
     try {
-      await incrementUserCurrency(userId, currencyTypeStr, amount);
+      await incrementUserCurrency(userId, currencyTypeStr, amount, {
+        kind: "admin_grant",
+        detail: ledgerDetail,
+      });
       granted += 1;
       console.info(
         `[admin] bulk tickets +${amount} ${currencyTypeStr} user ${userId} by ${staff.username}${detailNote}`

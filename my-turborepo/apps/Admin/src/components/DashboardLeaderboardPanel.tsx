@@ -313,7 +313,10 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
 
   const formats = lbData?.formats ?? {}
   const rankFormat = getFormatById(formats, rankFormatId)
-  const rankPlayers: LeaderboardPlayer[] = rankFormat?.players ?? []
+  const rankPlayers: LeaderboardPlayer[] = useMemo(() => {
+    const players = rankFormat?.players ?? []
+    return players.filter((p) => p.matches > 0).map((p, idx) => ({ ...p, rank: idx + 1 }))
+  }, [rankFormat?.players])
 
   const yourRankPlayer = useMemo(() => {
     if (!viewerIgn) return undefined

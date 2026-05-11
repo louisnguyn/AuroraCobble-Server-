@@ -172,10 +172,11 @@ export function Account() {
     })
   }, [])
 
+  /** Must match `PVP_DAILY_REWARDS` in backend (`apps/Backend/src/index.ts`). */
   const PVP_DAILY_REWARD_BY_RANK: Record<number, number> = {
-    1: 50_000,
-    2: 45_000,
-    3: 40_000,
+    1: 100_000,
+    2: 75_000,
+    3: 50_000,
   }
   const PVP_DAILY_TICKETS_BY_RANK: Record<number, number> = {
     1: 2,
