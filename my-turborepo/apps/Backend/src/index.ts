@@ -54,7 +54,9 @@ import {
   extractPvpRowsFromLeaderboardPayload,
   filterPvpRowsWithPlayedMatchesAndRerank,
   leaderboardPayloadHasSyncedData,
+  listLeaderboardPvpFormatKeys,
   livePvpSnapFromLeaderboardForWebsiteUser,
+  rankedPvpRowsForFormatKey,
   rankedPvpRowsForWebsiteRewards,
   type PvpLeaderboardRow,
 } from "./leaderboardPvpDerived.js";
@@ -5879,42 +5881,60 @@ app.delete("/admin/users/:userId", requireAuth, requireAdmin, async (req, res) =
 
 async function runDailyPvpRankPayout(): Promise<{
   payoutDate: string;
+  /** Ladder tab(s) processed this run (comma-separated if multiple). */
   format: string;
+  ladderResults: Array<{
+    format: string;
+    alreadyProcessed: boolean;
+    paid: Array<{
+      rank: number;
+      username: string;
+      amount: number;
+      tickets?: number;
+      ticket_error?: string;
+    }>;
+    skipped: Array<{ rank: number; username: string; reason: string }>;
+    predictions: { settled: number; wins: number };
+  }>;
   paid: Array<{
     rank: number;
     username: string;
     amount: number;
+    format?: string;
     tickets?: number;
     ticket_error?: string;
   }>;
-  skipped: Array<{ rank: number; username: string; reason: string }>;
+  skipped: Array<{ rank: number; username: string; reason: string; format?: string }>;
   predictions: { settled: number; wins: number };
 }> {
   if (!supabase) {
     throw new Error("Database not configured");
   }
-  const rawRows = extractPvpRowsFromLeaderboardPayload(cobbleStore.leaderboard);
-  if (!rawRows.length) {
-    throw new Error("Leaderboard is empty. Sync /leaderboard first.");
+  const payload = cobbleStore.leaderboard;
+  const formatKeys = listLeaderboardPvpFormatKeys(payload);
+  const targets: Array<{ formatKey: string; rows: PvpLeaderboardRow[] }> = [];
+  if (formatKeys.length > 0) {
+    for (const fk of formatKeys) {
+      const rows = rankedPvpRowsForFormatKey(payload, fk);
+      if (rows.length) targets.push({ formatKey: rows[0]!.formatKey, rows });
+    }
+  } else {
+    const rawRows = extractPvpRowsFromLeaderboardPayload(payload);
+    const rows = filterPvpRowsWithPlayedMatchesAndRerank(rawRows);
+    if (rows.length) targets.push({ formatKey: rows[0]!.formatKey, rows });
   }
-  const rows = filterPvpRowsWithPlayedMatchesAndRerank(rawRows);
-  if (!rows.length) {
+
+  if (targets.length === 0) {
+    const rawRows = extractPvpRowsFromLeaderboardPayload(payload);
+    if (!rawRows.length) {
+      throw new Error("Leaderboard is empty. Sync /leaderboard first.");
+    }
     throw new Error(
       "No PvP leaderboard players have matches > 0 in the synced payload. Top-3 payouts only include players who played at least one ranked match."
     );
   }
+
   const payoutDate = localDateOnly(new Date(), DAILY_RESET_TIMEZONE);
-  const formatKey = rows[0]?.formatKey ?? "singles";
-  const { data: existing } = await supabase
-    .from("user_pvp_daily_payouts")
-    .select("id")
-    .eq("payout_date", payoutDate)
-    .eq("format_key", formatKey);
-  if ((existing?.length ?? 0) > 0) {
-    throw new Error(`Daily payout already processed for ${payoutDate} (${formatKey}).`);
-  }
-  /** Same moment as daily login & rank rewards: calendar date = payoutDate at 00:00 Asia/Ho_Chi_Minh. */
-  const predictions = await resolvePvpTopPredictionsForPayout(payoutDate, formatKey, rows);
   const { data: users, error: usersErr } = await supabase.from("users").select("id, username");
   if (usersErr) {
     throw new Error(usersErr.message);
@@ -5924,79 +5944,146 @@ async function runDailyPvpRankPayout(): Promise<{
     byUsername.set(normalizeName(u.username), { id: u.id });
   }
 
-  const paid: Array<{ rank: number; username: string; amount: number }> = [];
-  const skipped: Array<{ rank: number; username: string; reason: string }> = [];
-  for (const [rankStr, amount] of Object.entries(PVP_DAILY_REWARDS)) {
-    const rank = Number(rankStr);
-    const row = rows.find((r) => r.rank === rank);
-    if (!row) continue;
-    const user = byUsername.get(normalizeName(row.playerName));
-    const now = new Date().toISOString();
-    if (!user) {
+  type PaidRow = {
+    rank: number;
+    username: string;
+    amount: number;
+    format?: string;
+    tickets?: number;
+    ticket_error?: string;
+  };
+  type SkippedRow = { rank: number; username: string; reason: string; format?: string };
+  const ladderResults: Array<{
+    format: string;
+    alreadyProcessed: boolean;
+    paid: PaidRow[];
+    skipped: SkippedRow[];
+    predictions: { settled: number; wins: number };
+  }> = [];
+  let anyNewPayout = false;
+
+  for (const { formatKey, rows } of targets) {
+    const { data: existing } = await supabase
+      .from("user_pvp_daily_payouts")
+      .select("id")
+      .eq("payout_date", payoutDate)
+      .eq("format_key", formatKey);
+    if ((existing?.length ?? 0) > 0) {
+      ladderResults.push({
+        format: formatKey,
+        alreadyProcessed: true,
+        paid: [],
+        skipped: [],
+        predictions: { settled: 0, wins: 0 },
+      });
+      continue;
+    }
+    anyNewPayout = true;
+
+    /** Same moment as daily login & rank rewards: calendar date = payoutDate at 00:00 Asia/Ho_Chi_Minh. */
+    const predictions = await resolvePvpTopPredictionsForPayout(payoutDate, formatKey, rows);
+    const paid: PaidRow[] = [];
+    const skipped: SkippedRow[] = [];
+    for (const [rankStr, amount] of Object.entries(PVP_DAILY_REWARDS)) {
+      const rank = Number(rankStr);
+      const row = rows.find((r) => r.rank === rank);
+      if (!row) continue;
+      const user = byUsername.get(normalizeName(row.playerName));
+      const now = new Date().toISOString();
+      if (!user) {
+        await supabase.from("user_pvp_daily_payouts").insert({
+          payout_date: payoutDate,
+          format_key: row.formatKey,
+          rank_position: rank,
+          minecraft_username: row.playerName,
+          user_id: null,
+          amount,
+          ticket_bonus: 0,
+          status: "skipped",
+          note: "No matching website username",
+          paid_at: now,
+          updated_at: now,
+        });
+        skipped.push({
+          rank,
+          username: row.playerName,
+          reason: "No matching website username",
+          format: formatKey,
+        });
+        continue;
+      }
+      const ticketBonus = PVP_DAILY_TICKETS_BY_RANK[rank] ?? 0;
+      await incrementUserCurrency(user.id, COBBLEDOLLARS_CURRENCY, amount, {
+        kind: "pvp_rank_daily",
+        detail: `Rank ${rank} — ${row.formatKey} (daily job)`,
+      });
+      let note: string | null = null;
+      let payoutStatus: "success" | "partial" = "success";
+      let ticketError: string | undefined;
+      if (ticketBonus > 0) {
+        await ensureUserTicketsWalletRow(user.id);
+        try {
+          await incrementUserCurrency(user.id, PVP_TICKETS_CURRENCY, ticketBonus, {
+            kind: "pvp_rank_daily",
+            detail: `Rank ${rank} — tickets (daily job)`,
+          });
+          note = `+${ticketBonus} website normal ticket(s) (${PVP_TICKETS_CURRENCY})`;
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          ticketError = msg;
+          payoutStatus = "partial";
+          console.error(`[pvp-daily-payout] Cobble$ paid but tickets failed (rank ${rank}, user ${user.id}):`, msg);
+          note = `Cobble$ OK. Ticket grant failed: ${msg}. Staff can grant ${ticketBonus} ${PVP_TICKETS_CURRENCY} manually.`;
+        }
+      }
       await supabase.from("user_pvp_daily_payouts").insert({
         payout_date: payoutDate,
         format_key: row.formatKey,
         rank_position: rank,
         minecraft_username: row.playerName,
-        user_id: null,
+        user_id: user.id,
         amount,
-        ticket_bonus: 0,
-        status: "skipped",
-        note: "No matching website username",
+        ticket_bonus: ticketBonus,
+        status: payoutStatus,
+        note,
         paid_at: now,
+        claimed_at: now,
         updated_at: now,
       });
-      skipped.push({ rank, username: row.playerName, reason: "No matching website username" });
-      continue;
+      paid.push({
+        rank,
+        username: row.playerName,
+        amount,
+        format: formatKey,
+        ...(ticketBonus > 0 && !ticketError ? { tickets: ticketBonus } : {}),
+        ...(ticketError ? { ticket_error: ticketError } : {}),
+      });
     }
-    const ticketBonus = PVP_DAILY_TICKETS_BY_RANK[rank] ?? 0;
-    await incrementUserCurrency(user.id, COBBLEDOLLARS_CURRENCY, amount, {
-      kind: "pvp_rank_daily",
-      detail: `Rank ${rank} — ${row.formatKey} (daily job)`,
-    });
-    let note: string | null = null;
-    let payoutStatus: "success" | "partial" = "success";
-    let ticketError: string | undefined;
-    if (ticketBonus > 0) {
-      await ensureUserTicketsWalletRow(user.id);
-      try {
-        await incrementUserCurrency(user.id, PVP_TICKETS_CURRENCY, ticketBonus, {
-          kind: "pvp_rank_daily",
-          detail: `Rank ${rank} — tickets (daily job)`,
-        });
-        note = `+${ticketBonus} website normal ticket(s) (${PVP_TICKETS_CURRENCY})`;
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        ticketError = msg;
-        payoutStatus = "partial";
-        console.error(`[pvp-daily-payout] Cobble$ paid but tickets failed (rank ${rank}, user ${user.id}):`, msg);
-        note = `Cobble$ OK. Ticket grant failed: ${msg}. Staff can grant ${ticketBonus} ${PVP_TICKETS_CURRENCY} manually.`;
-      }
-    }
-    await supabase.from("user_pvp_daily_payouts").insert({
-      payout_date: payoutDate,
-      format_key: row.formatKey,
-      rank_position: rank,
-      minecraft_username: row.playerName,
-      user_id: user.id,
-      amount,
-      ticket_bonus: ticketBonus,
-      status: payoutStatus,
-      note,
-      paid_at: now,
-      claimed_at: now,
-      updated_at: now,
-    });
-    paid.push({
-      rank,
-      username: row.playerName,
-      amount,
-      ...(ticketBonus > 0 && !ticketError ? { tickets: ticketBonus } : {}),
-      ...(ticketError ? { ticket_error: ticketError } : {}),
+    ladderResults.push({
+      format: formatKey,
+      alreadyProcessed: false,
+      paid,
+      skipped,
+      predictions,
     });
   }
 
-  return { payoutDate, format: formatKey, paid, skipped, predictions };
+  if (!anyNewPayout) {
+    throw new Error(`Daily payout already processed for ${payoutDate} (all ladders).`);
+  }
+
+  const paid = ladderResults.flatMap((r) => r.paid);
+  const skipped = ladderResults.flatMap((r) => r.skipped);
+  const predictions = ladderResults.reduce(
+    (acc, r) => ({
+      settled: acc.settled + r.predictions.settled,
+      wins: acc.wins + r.predictions.wins,
+    }),
+    { settled: 0, wins: 0 }
+  );
+  const formatLabel = targets.map((t) => t.formatKey).join(",");
+
+  return { payoutDate, format: formatLabel, ladderResults, paid, skipped, predictions };
 }
 
 app.post("/admin/pvp-rank/daily-payout", requireAuth, requireAdmin, async (_req, res) => {
@@ -6552,7 +6639,7 @@ function startDailyPvpAutoPayoutScheduler(): void {
     try {
       const result = await runDailyPvpRankPayout();
       console.log(
-        `[pvp-daily-auto] paid date=${result.payoutDate} format=${result.format} paid=${result.paid.length} skipped=${result.skipped.length}`
+        `[pvp-daily-auto] paid date=${result.payoutDate} formats=${result.format} paid=${result.paid.length} skipped=${result.skipped.length}`
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
