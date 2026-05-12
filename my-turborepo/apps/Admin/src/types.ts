@@ -72,7 +72,7 @@ export interface LeaderboardEntry {
   [key: string]: unknown
 }
 
-/** GET /minecraft/cobbledollars-leaderboard — also GET /minecraft/pco-leaderboard */
+/** GET /minecraft/cobbledollars-leaderboard, /minecraft/pco-leaderboard, /leaderboard/website-cobbledollars */
 export interface CobbleDollarsLeaderboardResponse {
   ok: boolean
   disabled?: boolean

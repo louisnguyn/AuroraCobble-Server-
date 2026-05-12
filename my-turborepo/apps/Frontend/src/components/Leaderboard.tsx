@@ -16,14 +16,14 @@ import { RankedApiFeed } from './RankedApiFeed.tsx'
 type MainSection = 'ranks' | 'economy' | 'battle' | 'ranked'
 type RankFormatId = 'singles' | 'doubles'
 type BattleModeId = 'singles' | 'doubles' | 'co-op' | 'boss'
-type EconomyKind = 'cobble' | 'pco'
+type EconomyKind = 'cobble' | 'website_cobble' | 'pco'
 
 const MAIN_SECTIONS: { id: MainSection; label: string; description: string }[] = [
   { id: 'ranks', label: 'Ranks', description: 'PvP ELO & tiers' },
   {
     id: 'economy',
     label: 'Economy',
-    description: 'In-game Cobble$ or PCO top 10',
+    description: 'Website Cobble$, in-game Cobble$, or PCO top 10',
   },
   { id: 'battle', label: 'Battle Tower', description: 'Floors & streaks' },
   {
@@ -245,7 +245,7 @@ export function Leaderboard() {
   const viewerIgn = user?.username?.trim() ?? null
 
   const [mainSection, setMainSection] = useState<MainSection>('ranks')
-  const [economyKind, setEconomyKind] = useState<EconomyKind>('cobble')
+  const [economyKind, setEconomyKind] = useState<EconomyKind>('website_cobble')
   const [rankFormatId, setRankFormatId] = useState<RankFormatId>('singles')
   const [battleMode, setBattleMode] = useState<BattleModeId>('singles')
 
@@ -556,23 +556,28 @@ export function Leaderboard() {
         </section>
       )}
 
-      {/* ——— Economy: Cobble$ vs PCO ——— */}
+      {/* ——— Economy: website / in-game Cobble$ vs PCO ——— */}
       {mainSection === 'economy' && (
         <section className="space-y-4" aria-labelledby="economy-heading">
           <h2 id="economy-heading" className="text-lg font-semibold m-0 text-[#e2e8f0]">
             Economy
           </h2>
           <div className="flex flex-wrap gap-2" role="tablist" aria-label="Economy currency">
+            <SubTab active={economyKind === 'website_cobble'} onClick={() => setEconomyKind('website_cobble')}>
+              Website C$
+            </SubTab>
             <SubTab active={economyKind === 'cobble'} onClick={() => setEconomyKind('cobble')}>
-              Cobble$
+              In-game C$
             </SubTab>
             <SubTab active={economyKind === 'pco'} onClick={() => setEconomyKind('pco')}>
               PCO
             </SubTab>
           </div>
           <p className="text-sm text-muted m-0">
-            {economyKind === 'cobble' ? (
-              <>Richest players by in-game Cobble$. Your website wallet is under Account → C$ balance.</>
+            {economyKind === 'website_cobble' ? (
+              <>Top site wallet balances (same Cobble$ you see under Account). In-game boards use RCON below.</>
+            ) : economyKind === 'cobble' ? (
+              <>Richest players by in-game Cobble$ (Minecraft server). Deposit from your website wallet under Account.</>
             ) : (
               <>Top 10 by PCO in-game. Separate from website Cobble$.</>
             )}

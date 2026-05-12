@@ -3,6 +3,7 @@ import {
   fetchBattleTowerLeaderboard,
   fetchCobbleDollarsLeaderboard,
   fetchPcoLeaderboard,
+  fetchWebsiteCobbledollarsLeaderboard,
   fetchLeaderboard,
 } from '../api'
 import { ignNamesMatch, scrollElementIntoViewCentered } from '../ignMatch'
@@ -19,11 +20,11 @@ import { normalizePvpTierSlugForAssets, PvPTierBadge } from './PvPTierBadge.tsx'
 type MainSection = 'ranks' | 'economy' | 'battle'
 type RankFormatId = 'singles' | 'doubles'
 type BattleModeId = 'singles' | 'doubles' | 'co-op' | 'boss'
-type EconomyKind = 'cobble' | 'pco'
+type EconomyKind = 'cobble' | 'website_cobble' | 'pco'
 
 const MAIN_SECTIONS: { id: MainSection; label: string; description: string }[] = [
   { id: 'ranks', label: 'Ranks', description: 'PvP ELO & tiers' },
-  { id: 'economy', label: 'Economy', description: 'Cobble$ or PCO top 10 (RCON)' },
+  { id: 'economy', label: 'Economy', description: 'Website or in-game Cobble$, or PCO top 10' },
   { id: 'battle', label: 'Battle Tower', description: 'Floors & streaks' },
 ]
 
@@ -243,7 +244,7 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
   const battleStreakYouRef = useRef<HTMLLIElement>(null)
 
   const [mainSection, setMainSection] = useState<MainSection>('ranks')
-  const [economyKind, setEconomyKind] = useState<EconomyKind>('cobble')
+  const [economyKind, setEconomyKind] = useState<EconomyKind>('website_cobble')
   const [rankFormatId, setRankFormatId] = useState<RankFormatId>('singles')
   const [battleMode, setBattleMode] = useState<BattleModeId>('singles')
 
@@ -273,7 +274,12 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
     let cancelled = false
     setCdLoading(true)
     setCdError(null)
-    const api = economyKind === 'pco' ? fetchPcoLeaderboard : fetchCobbleDollarsLeaderboard
+    const api =
+      economyKind === 'pco'
+        ? fetchPcoLeaderboard
+        : economyKind === 'website_cobble'
+          ? fetchWebsiteCobbledollarsLeaderboard
+          : fetchCobbleDollarsLeaderboard
     api()
       .then((d) => {
         if (!cancelled) setCdData(d)
@@ -359,6 +365,23 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
   }, [mainSection, btData, battleApiMode, battleFloorYou, battleStreakYou])
 
   const mainDescription = MAIN_SECTIONS.find((s) => s.id === mainSection)?.description ?? ''
+
+  const econTab = useMemo(() => {
+    const isPco = economyKind === 'pco'
+    const isWebsite = economyKind === 'website_cobble'
+    return {
+      isPco,
+      isWebsite,
+      loadKind: isPco ? 'PCO' : isWebsite ? 'website Cobble$' : 'in-game Cobble$',
+      title: isPco ? 'In-game PCO (top 10)' : isWebsite ? 'Website Cobble$ (top 10)' : 'In-game Cobble$ (top 10)',
+      blurb: isWebsite
+        ? 'Top 10 site wallet balances (GET /leaderboard/website-cobbledollars — same as public Leaderboard).'
+        : isPco
+          ? 'PCO top 10 from pco top (RCON). Separate from website Cobble$.'
+          : 'In-game Cobble$ top 10 (RCON; same public endpoint as the website).',
+      balanceUnit: isPco ? 'PCO' : 'Cobble$',
+    }
+  }, [economyKind])
 
   return (
     <div className="rounded-2xl border border-amber-500/20 bg-gradient-to-br from-stone-950/50 via-slate-950/40 to-slate-950/60 p-5 sm:p-6 shadow-xl shadow-black/20">
@@ -532,42 +555,41 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
             Economy
           </h3>
           <div className="flex flex-wrap gap-2" role="tablist" aria-label="Economy currency">
+            <SubTab active={economyKind === 'website_cobble'} onClick={() => setEconomyKind('website_cobble')}>
+              Website C$
+            </SubTab>
             <SubTab active={economyKind === 'cobble'} onClick={() => setEconomyKind('cobble')}>
-              Cobble$
+              In-game C$
             </SubTab>
             <SubTab active={economyKind === 'pco'} onClick={() => setEconomyKind('pco')}>
               PCO
             </SubTab>
           </div>
-          <p className="text-sm text-slate-500 m-0">
-            {economyKind === 'cobble'
-              ? 'In-game Cobble$ top 10 (same public endpoint as the website).'
-              : 'PCO top 10 from pco top (RCON). Separate from website Cobble$.'}
-          </p>
+          <p className="text-sm text-slate-500 m-0">{econTab.blurb}</p>
           {cdLoading ? (
-            <div className={panelClass}>
-              Loading in-game {economyKind === 'pco' ? 'PCO' : 'Cobble$'} leaderboard…
-            </div>
+            <div className={panelClass}>Loading {econTab.loadKind} leaderboard…</div>
           ) : cdError ? (
             <div className={`${panelClass} text-red-300`}>Error: {cdError}</div>
           ) : !cdData ? (
             <div className={panelClass}>No data.</div>
           ) : cdData.disabled ? (
             <div className={panelClass}>
-              {economyKind === 'pco' ? 'PCO' : 'Cobble$'} leaderboard is disabled on this deployment.
+              {econTab.isPco ? 'PCO' : econTab.isWebsite ? 'Website Cobble$' : 'In-game Cobble$'} leaderboard is
+              disabled on this deployment.
             </div>
           ) : cdData.error ? (
-            <div className={`${panelClass} text-red-300 text-sm`}>Could not load: {cdData.error}</div>
+            <div className={`${panelClass} text-red-300 text-sm`}>
+              Could not load{econTab.isWebsite ? ' website' : econTab.isPco ? '' : ' server'} balances:{' '}
+              {cdData.error}
+            </div>
           ) : cdData.top10.length === 0 ? (
             <div className={panelClass}>
-              No {economyKind === 'pco' ? 'PCO' : 'Cobble$'} balances returned yet.
+              No {econTab.isPco ? 'PCO' : 'Cobble$'} balances returned yet.
             </div>
           ) : (
             <>
               <header>
-                <h4 className="text-sm font-semibold m-0 mb-1 text-slate-100">
-                  In-game {economyKind === 'pco' ? 'PCO' : 'Cobble$'} (top 10)
-                </h4>
+                <h4 className="text-sm font-semibold m-0 mb-1 text-slate-100">{econTab.title}</h4>
                 {cdData.updatedAt && (
                   <p className="text-xs text-slate-500 m-0">
                     Last refreshed: {new Date(cdData.updatedAt).toLocaleString()} · ~90s cache
@@ -577,7 +599,7 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
               {cdYourIndex >= 0 && cdData.top10[cdYourIndex] ? (
                 <div
                   className={`rounded-xl border px-4 py-3 mb-3 max-w-2xl ${
-                    economyKind === 'pco'
+                    econTab.isPco
                       ? 'border-cyan-400/40 bg-cyan-500/10'
                       : 'border-amber-400/40 bg-amber-500/10'
                   }`}
@@ -585,7 +607,7 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
                 >
                   <p
                     className={`text-xs font-semibold uppercase tracking-wide m-0 mb-1 ${
-                      economyKind === 'pco' ? 'text-cyan-200' : 'text-amber-200'
+                      econTab.isPco ? 'text-cyan-200' : 'text-amber-200'
                     }`}
                   >
                     Your position
@@ -593,17 +615,17 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
                   <p className="text-sm text-slate-100 m-0">
                     <span className="font-mono font-semibold">{cdData.top10[cdYourIndex].name}</span> — rank{' '}
                     <strong
-                      className={`tabular-nums ${economyKind === 'pco' ? 'text-cyan-200' : 'text-amber-200'}`}
+                      className={`tabular-nums ${econTab.isPco ? 'text-cyan-200' : 'text-amber-200'}`}
                     >
                       {cdYourIndex + 1}
                     </strong>{' '}
                     with{' '}
                     <strong
-                      className={`tabular-nums ${economyKind === 'pco' ? 'text-cyan-200' : 'text-amber-200'}`}
+                      className={`tabular-nums ${econTab.isPco ? 'text-cyan-200' : 'text-amber-200'}`}
                     >
                       {Number(cdData.top10[cdYourIndex].balance).toLocaleString()}
                     </strong>{' '}
-                    {economyKind === 'pco' ? 'PCO' : 'Cobble$'}
+                    {econTab.balanceUnit}
                   </p>
                 </div>
               ) : null}
@@ -614,7 +636,7 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
                     ref={i === cdYourIndex ? cdYouRef : undefined}
                     className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 transition-shadow scroll-mt-24 ${
                       i === cdYourIndex
-                        ? economyKind === 'pco'
+                        ? econTab.isPco
                           ? 'border-cyan-400/50 bg-cyan-500/10 ring-2 ring-cyan-400/35'
                           : 'border-amber-400/50 bg-amber-500/10 ring-2 ring-amber-400/35'
                         : 'border-white/5 bg-black/25'
@@ -623,7 +645,7 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
                     <span className="flex min-w-0 items-center gap-3">
                       <span
                         className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold tabular-nums ${
-                          economyKind === 'pco'
+                          econTab.isPco
                             ? 'bg-cyan-500/15 text-cyan-300'
                             : 'bg-amber-500/15 text-amber-300'
                         }`}
@@ -636,7 +658,7 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
                     </span>
                     <span
                       className={`shrink-0 text-sm font-semibold tabular-nums ${
-                        economyKind === 'pco' ? 'text-cyan-100' : 'text-amber-100'
+                        econTab.isPco ? 'text-cyan-100' : 'text-amber-100'
                       }`}
                     >
                       {Number(row.balance).toLocaleString()}

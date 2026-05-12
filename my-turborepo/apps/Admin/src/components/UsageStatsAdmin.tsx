@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { fetchUsageStats } from '../api'
 import type { UsageStatsResponse } from '../types'
+import { sortTierEntries } from '../usageStatsNormalize'
 
 export function UsageStatsAdmin() {
   const [data, setData] = useState<UsageStatsResponse | null>(null)
@@ -40,20 +41,34 @@ export function UsageStatsAdmin() {
 
   const formats = data?.formats ?? {}
   const formatNames = Object.keys(formats)
+  const hasMeta = Boolean(data?.seasonName ?? data?.serverId ?? data?.timestamp)
 
   return (
     <div className="space-y-6">
       <h2 className="text-xl font-semibold m-0">Usage stats by format</h2>
+      {data && hasMeta && (
+        <div className="rounded-lg bg-surface border border-border px-4 py-3 text-sm text-muted space-y-1">
+          {data.seasonName ? (
+            <p className="m-0 text-slate-200 font-medium">{data.seasonName}</p>
+          ) : null}
+          {data.serverId ? <p className="m-0">Server: {data.serverId}</p> : null}
+          {data.timestamp ? (
+            <p className="m-0">Updated: {new Date(data.timestamp).toLocaleString()}</p>
+          ) : null}
+        </div>
+      )}
       {formatNames.length === 0 ? (
         <div className="rounded-lg bg-surface border border-border p-8 text-center text-muted">
-          No usage data.
+          {hasMeta
+            ? 'No format breakdown in the last sync. If CobbleRanked changed its JSON shape, ensure the API is on the latest version.'
+            : 'No usage data. POST /usage-stats from CobbleRanked (or wait for DB hydrate after deploy).'}
         </div>
       ) : (
         <div className="space-y-4">
           {formatNames.map((formatName) => {
             const format = formats[formatName]
             const tiers = format?.tiers ?? {}
-            const tierEntries = Object.entries(tiers)
+            const tierEntries = sortTierEntries(Object.entries(tiers))
             const totalBattles = tierEntries.reduce((s, [, t]) => s + (t.totalBattles ?? 0), 0)
             const totalPokemon = tierEntries.reduce((s, [, t]) => s + (t.totalPokemon ?? 0), 0)
             return (
@@ -81,13 +96,13 @@ export function UsageStatsAdmin() {
                         {tierEntries.map(([tierName, tier]) => (
                           <tr key={tierName} className="border-b border-border/40">
                             <td className="py-1.5 pr-4">
-                              {tierName} ({tier.minElo}–{tier.maxElo})
+                              {tierName} ({tier.minElo}–{tier.maxElo == null ? '∞' : tier.maxElo})
                             </td>
                             <td className="py-1.5 text-right">
                               {(tier.totalBattles ?? 0).toLocaleString()}
                             </td>
                             <td className="py-1.5 text-right">
-                              {(tier.totalPokemon ?? 0).toLocaleString()}
+                              {(tier.species?.length ?? tier.totalPokemon ?? 0).toLocaleString()}
                             </td>
                           </tr>
                         ))}

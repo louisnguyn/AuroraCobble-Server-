@@ -8,6 +8,7 @@ import {
   toPokeApiName,
 } from '../pokemonApi'
 import type { UsageStatsResponse, FormatUsage, SpeciesUsage } from '../types'
+import { sortTierEntries } from '../usageStatsNormalize'
 
 const FORMAT_ORDER = ['singles', 'doubles', 'triples'] as const
 
@@ -357,7 +358,7 @@ export function UsageStats() {
   const format = getFormatById(formats, formatId)
   const displayName = getFormatDisplayName(formatId)
   const tiers = format?.tiers ?? {}
-  const tierKeys = Object.keys(tiers)
+  const sortedTierEntries = sortTierEntries(Object.entries(tiers))
 
   if (selected) {
     const s = selected.species
@@ -464,13 +465,12 @@ export function UsageStats() {
         ))}
       </div>
 
-      {tierKeys.length === 0 ? (
+      {sortedTierEntries.length === 0 ? (
         <div className="mb-6 rounded-lg p-6 bg-surface border border-border text-center">
           <p className="text-muted m-0">No data for {displayName} yet.</p>
         </div>
       ) : (
-        tierKeys.map((tierKey) => {
-          const tier = tiers[tierKey]
+        sortedTierEntries.map(([tierKey, tier]) => {
           const species = tier?.species ?? []
           const sorted = [...species].sort((a, b) => b.usagePercent - a.usagePercent)
 

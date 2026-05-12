@@ -1,4 +1,6 @@
 // Backend serves CobbleRanked sync at /usage-stats and /api/usage-stats (same for leaderboard, etc.). Set VITE_API_URL in .env.
+import { normalizeUsageStatsResponse } from './usageStatsNormalize.js'
+
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
 function buildUrl(path: string): string {
@@ -38,7 +40,8 @@ async function get<T>(path: string): Promise<T> {
 }
 
 export async function fetchUsageStats() {
-  return get<import('./types').UsageStatsResponse>('/usage-stats')
+  const raw = await get<unknown>('/usage-stats')
+  return normalizeUsageStatsResponse(raw)
 }
 
 export async function fetchLeaderboard() {
@@ -51,6 +54,11 @@ export async function fetchCobbleDollarsLeaderboard() {
 
 export async function fetchPcoLeaderboard() {
   return get<import('./types').CobbleDollarsLeaderboardResponse>('/minecraft/pco-leaderboard')
+}
+
+/** Website wallet Cobble$ top 10 — same JSON shape as in-game economy boards. */
+export async function fetchWebsiteCobbledollarsLeaderboard() {
+  return get<import('./types').CobbleDollarsLeaderboardResponse>('/leaderboard/website-cobbledollars')
 }
 
 export async function fetchBattleTowerLeaderboard(params?: { mode?: string; top?: 10 | 25 | 50 | 100 }) {

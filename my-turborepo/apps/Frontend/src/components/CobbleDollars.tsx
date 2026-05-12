@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { fetchCobbleDollarsLeaderboard, fetchPcoLeaderboard } from '../api'
+import {
+  fetchCobbleDollarsLeaderboard,
+  fetchPcoLeaderboard,
+  fetchWebsiteCobbledollarsLeaderboard,
+} from '../api'
 import type { CobbleDollarsLeaderboardResponse } from '../types'
 import { ignNamesMatch, scrollElementIntoViewCentered } from '../ignMatch'
 
-export type EconomyLeaderboardKind = 'cobble' | 'pco'
+export type EconomyLeaderboardKind = 'cobble' | 'website_cobble' | 'pco'
 
 /** In-game economy top 10 — Leaderboard → Economy. */
 export function CobbleDollars({
@@ -21,7 +25,12 @@ export function CobbleDollars({
     let cancelled = false
     setLoading(true)
     setError(null)
-    const api = kind === 'pco' ? fetchPcoLeaderboard : fetchCobbleDollarsLeaderboard
+    const api =
+      kind === 'pco'
+        ? fetchPcoLeaderboard
+        : kind === 'website_cobble'
+          ? fetchWebsiteCobbledollarsLeaderboard
+          : fetchCobbleDollarsLeaderboard
     api()
       .then((d) => {
         if (!cancelled) setData(d)
@@ -52,17 +61,28 @@ export function CobbleDollars({
 
   const panelClass = 'p-8 text-center pixel-panel'
   const currency = kind === 'pco' ? 'PCO' : 'Cobble$'
-  const title = kind === 'pco' ? 'In-game PCO (top 10)' : 'In-game Cobble$ (top 10)'
+  const title =
+    kind === 'pco'
+      ? 'In-game PCO (top 10)'
+      : kind === 'website_cobble'
+        ? 'Website Cobble$ (top 10)'
+        : 'In-game Cobble$ (top 10)'
   const subtitle =
     kind === 'pco'
       ? 'Richest players by in-game PCO.'
-      : 'Richest players by in-game Cobble$.'
+      : kind === 'website_cobble'
+        ? 'Highest balances on this site (wallet Cobble$, not Minecraft).'
+        : 'Richest players by in-game Cobble$.'
   const balanceClass =
     kind === 'pco' ? 'text-cyan-300' : 'text-[#fbbf24]'
   const ringClass = kind === 'pco' ? 'ring-cyan-400/50' : 'ring-amber-400/60'
 
   if (loading) {
-    return <div className={panelClass}>Loading in-game {currency} leaderboard…</div>
+    return (
+      <div className={panelClass}>
+        Loading {kind === 'website_cobble' ? 'website' : 'in-game'} {currency} leaderboard…
+      </div>
+    )
   }
   if (error) {
     return <div className={`${panelClass} text-error`}>Error: {error}</div>
@@ -79,11 +99,13 @@ export function CobbleDollars({
         </div>
       ) : data.error ? (
         <div className="p-8 text-center pixel-panel-soft text-error text-base">
-          Could not load server balances: {data.error}
+          Could not load {kind === 'website_cobble' ? 'website' : 'server'} balances: {data.error}
         </div>
       ) : data.top10.length === 0 ? (
         <div className="p-8 text-center pixel-panel-soft text-muted text-base">
-          No {currency} balances returned yet. Play on the server to appear on the leaderboard.
+          {kind === 'website_cobble'
+            ? `No website ${currency} balances yet — earn Cobble$ from streaks, PvP payouts, and other site rewards.`
+            : `No ${currency} balances returned yet. Play on the server to appear on the leaderboard.`}
         </div>
       ) : (
         <>

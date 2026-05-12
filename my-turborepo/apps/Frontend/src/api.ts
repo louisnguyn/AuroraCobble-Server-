@@ -1,4 +1,5 @@
 import { getStoredToken } from './authApi'
+import { normalizeUsageStatsResponse } from './usageStatsNormalize.js'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? '/api'
 
@@ -11,7 +12,8 @@ async function get<T>(path: string): Promise<T> {
 }
 
 export async function fetchUsageStats() {
-  return get<import('./types').UsageStatsResponse>('/usage-stats')
+  const raw = await get<unknown>('/usage-stats')
+  return normalizeUsageStatsResponse(raw)
 }
 
 export async function fetchLeaderboard() {
@@ -25,6 +27,11 @@ export async function fetchCobbleDollarsLeaderboard() {
 /** PCO top 10 — same response shape as Cobble$ (RCON `pco top`). */
 export async function fetchPcoLeaderboard() {
   return get<import('./types').CobbleDollarsLeaderboardResponse>('/minecraft/pco-leaderboard')
+}
+
+/** Website wallet Cobble$ top 10 (`user_currency` on the API host). Same shape as in-game economy boards. */
+export async function fetchWebsiteCobbledollarsLeaderboard() {
+  return get<import('./types').CobbleDollarsLeaderboardResponse>('/leaderboard/website-cobbledollars')
 }
 
 export async function fetchBattleTowerLeaderboard(params?: { mode?: string; top?: 10 | 25 | 50 | 100 }) {

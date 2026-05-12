@@ -208,6 +208,18 @@ let pcoPublicCache: {
   };
 } | null = null;
 
+/** Website wallet Cobble$ (`user_currency` + `users`) — same JSON shape as in-game economy leaderboards. */
+let websiteCobbledollarsPublicCache: {
+  at: number;
+  body: {
+    ok: boolean;
+    disabled: boolean;
+    top10: { name: string; balance: number }[];
+    error: string | null;
+    updatedAt: string | null;
+  };
+} | null = null;
+
 type BattleTowerPublicBody = {
   ok: boolean;
   disabled: boolean;
@@ -827,6 +839,95 @@ app.get("/minecraft/cobbledollars-leaderboard", async (_req, res) => {
       error: msg,
       updatedAt: null,
     });
+  }
+});
+
+/** Public website Cobble$ top 10 (`user_currency` cobbledollars + `users.username`). Cached ~90s. No auth. */
+app.get("/leaderboard/website-cobbledollars", async (_req, res) => {
+  if (process.env.WEBSITE_COBBLEDOLLARS_LEADERBOARD_DISABLE === "true") {
+    res.json({
+      ok: false,
+      disabled: true,
+      top10: [],
+      error: null,
+      updatedAt: null,
+    });
+    return;
+  }
+  if (!supabase) {
+    res.status(503).json({
+      ok: false,
+      disabled: false,
+      top10: [],
+      error: "Database not configured",
+      updatedAt: null,
+    });
+    return;
+  }
+  const now = Date.now();
+  if (
+    websiteCobbledollarsPublicCache &&
+    now - websiteCobbledollarsPublicCache.at < COBBLEDOLLARS_PUBLIC_CACHE_TTL_MS
+  ) {
+    res.json(websiteCobbledollarsPublicCache.body);
+    return;
+  }
+  try {
+    const window = 80;
+    const { data: curRows, error: curErr } = await supabase
+      .from("user_currency")
+      .select("user_id, balance")
+      .eq("currency_type", COBBLEDOLLARS_CURRENCY)
+      .order("balance", { ascending: false })
+      .limit(window);
+    if (curErr) {
+      throw new Error(curErr.message);
+    }
+    const seen = new Set<number>();
+    const deduped: { user_id: number; balance: number }[] = [];
+    for (const r of (curRows ?? []) as { user_id: number; balance: number }[]) {
+      const uid = Number(r.user_id);
+      if (!Number.isFinite(uid) || seen.has(uid)) continue;
+      seen.add(uid);
+      deduped.push({ user_id: uid, balance: Math.trunc(Number(r.balance)) || 0 });
+      if (deduped.length >= 10) break;
+    }
+    const ids = deduped.map((d) => d.user_id);
+    const byId = new Map<number, string>();
+    if (ids.length > 0) {
+      const { data: usersData, error: uErr } = await supabase.from("users").select("id, username").in("id", ids);
+      if (uErr) {
+        throw new Error(uErr.message);
+      }
+      for (const u of (usersData ?? []) as { id: number; username: string }[]) {
+        const nm = String(u.username ?? "").trim();
+        if (nm) byId.set(Number(u.id), nm);
+      }
+    }
+    const top10 = deduped.map((d) => ({
+      name: byId.get(d.user_id) ?? `#${d.user_id}`,
+      balance: d.balance,
+    }));
+    const body = {
+      ok: true,
+      disabled: false,
+      top10,
+      error: null as string | null,
+      updatedAt: new Date().toISOString(),
+    };
+    websiteCobbledollarsPublicCache = { at: now, body };
+    res.json(body);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const body = {
+      ok: false,
+      disabled: false,
+      top10: [] as { name: string; balance: number }[],
+      error: msg,
+      updatedAt: null as string | null,
+    };
+    websiteCobbledollarsPublicCache = { at: now, body };
+    res.json(body);
   }
 });
 
