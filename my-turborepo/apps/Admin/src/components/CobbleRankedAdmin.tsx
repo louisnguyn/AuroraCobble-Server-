@@ -62,6 +62,12 @@ function buildMatchEloRefundPlan(m: MatchResultPayload): {
   return { format: normalizeMatchRankedFormat(m), steps, summaryLines }
 }
 
+type RefundConfirmState = {
+  rowKey: string
+  match: MatchResultPayload
+  plan: NonNullable<ReturnType<typeof buildMatchEloRefundPlan>>
+}
+
 function formatTs(iso: string): string {
   try {
     return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
@@ -117,6 +123,7 @@ export function CobbleRankedAdmin() {
   const [reviewBusyKey, setReviewBusyKey] = useState<string | null>(null)
   const [refundBusyKey, setRefundBusyKey] = useState<string | null>(null)
   const [refundFlash, setRefundFlash] = useState<{ rowKey: string; ok: boolean; text: string } | null>(null)
+  const [refundConfirm, setRefundConfirm] = useState<RefundConfirmState | null>(null)
 
   const [eloAmount, setEloAmount] = useState('30')
   const [pickQuery, setPickQuery] = useState('')
@@ -322,29 +329,25 @@ export function CobbleRankedAdmin() {
     }
   }
 
-  const runMatchEloRefund = async (rowKey: string, m: MatchResultPayload) => {
+  const openRefundConfirm = (rowKey: string, m: MatchResultPayload) => {
     setRefundFlash(null)
     const plan = buildMatchEloRefundPlan(m)
     if (!plan) {
       setRefundFlash({
         rowKey,
         ok: false,
-        text: 'No recorded ELO changes on this match (every player needs a non-zero eloChange).',
+        text: 'No recorded ELO changes to refund (no non-zero eloChange on any player in this row).',
       })
       return
     }
-    const matchId = (m.matchId ?? '').trim() || 'unknown'
-    const fmtLabel = plan.format
-    const confirmBody = [
-      'Reverse this match’s ELO on the Minecraft server?',
-      '',
-      ...plan.summaryLines,
-      '',
-      `Format: ${fmtLabel}.`,
-      `${plan.steps.length} server command(s); each step is logged to staff history and Discord on success.`,
-    ].join('\n')
-    if (!window.confirm(confirmBody)) return
+    setRefundConfirm({ rowKey, match: m, plan })
+  }
 
+  const executeMatchEloRefund = async (ctx: RefundConfirmState) => {
+    const { rowKey, match, plan } = ctx
+    setRefundFlash(null)
+    const matchId = (match.matchId ?? '').trim() || 'unknown'
+    const fmtLabel = plan.format
     const reason = `Ranked ELO refund (match ${matchId}, ${fmtLabel}): ${plan.summaryLines.join('; ')}.`
     setRefundBusyKey(rowKey)
     const doneNames: string[] = []
@@ -388,8 +391,11 @@ export function CobbleRankedAdmin() {
       if (tab === 'staff') void loadStaff()
     } finally {
       setRefundBusyKey(null)
+      setRefundConfirm(null)
     }
   }
+
+  const refundModalWorking = refundConfirm != null && refundBusyKey === refundConfirm.rowKey
 
   return (
     <div className="space-y-8">
@@ -736,9 +742,10 @@ export function CobbleRankedAdmin() {
                         reviewBusy ||
                         refundBusyKey === rowUiKey ||
                         refundPlan == null ||
-                        eloBusy !== null
+                        eloBusy !== null ||
+                        refundConfirm != null
                       }
-                      onClick={() => void runMatchEloRefund(rowUiKey, mRow.item)}
+                      onClick={() => openRefundConfirm(rowUiKey, mRow.item)}
                       className="text-sm font-medium px-3 py-1.5 rounded-lg bg-violet-500/15 text-violet-200 border border-violet-400/35 hover:bg-violet-500/25 disabled:opacity-45 disabled:pointer-events-none"
                     >
                       {refundBusyKey === rowUiKey ? 'Refunding…' : 'Refund ELO'}
@@ -773,6 +780,68 @@ export function CobbleRankedAdmin() {
           </ul>
         )}
       </section>
+
+      {refundConfirm ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="refund-elo-title"
+          onClick={() => {
+            if (!refundModalWorking) setRefundConfirm(null)
+          }}
+        >
+          <div
+            className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#12131a] shadow-2xl p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="refund-elo-title" className="text-lg font-semibold text-white m-0">
+              Reverse this match’s ELO?
+            </h3>
+            <p className="text-sm text-slate-400 m-0 leading-relaxed">
+              This runs {refundConfirm.plan.steps.length} Minecraft server command{refundConfirm.plan.steps.length === 1 ? '' : 's'}.
+              Each successful step is logged to staff history and sent to the ranked ELO Discord webhook.
+            </p>
+            <ul className="list-none m-0 p-0 space-y-2">
+              {refundConfirm.plan.summaryLines.map((line, i) => (
+                <li
+                  key={i}
+                  className="font-mono text-xs text-slate-200 bg-black/35 border border-white/10 rounded-lg px-3 py-2.5"
+                >
+                  {line}
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs text-slate-500 m-0">
+              Format{' '}
+              <span className="text-slate-300">{refundConfirm.plan.format}</span>
+              {' · '}
+              Match id{' '}
+              <span className="font-mono text-slate-400">
+                {(refundConfirm.match.matchId ?? '').trim() || 'unknown'}
+              </span>
+            </p>
+            <div className="flex flex-wrap justify-end gap-2 pt-1">
+              <button
+                type="button"
+                disabled={refundModalWorking}
+                onClick={() => setRefundConfirm(null)}
+                className="px-4 py-2 rounded-xl text-sm border border-white/15 text-slate-300 hover:bg-white/10 disabled:opacity-45 disabled:pointer-events-none"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={refundModalWorking}
+                onClick={() => void executeMatchEloRefund(refundConfirm)}
+                className="px-4 py-2 rounded-xl text-sm font-medium bg-violet-600/35 border border-violet-400/45 text-violet-100 hover:bg-violet-600/50 disabled:opacity-45 disabled:pointer-events-none"
+              >
+                {refundModalWorking ? 'Applying…' : 'Confirm refund'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
