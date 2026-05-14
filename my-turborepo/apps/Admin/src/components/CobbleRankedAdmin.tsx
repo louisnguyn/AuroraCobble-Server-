@@ -5,6 +5,7 @@ import {
   fetchAdminUsers,
   fetchRankedBattleStaffHistory,
   setAdminCobbleRankedReview,
+  setAdminCobbleRankedReviewBundle,
   type AdminUser,
   type CobbleRankedFeedEnvelope,
   type RankedBattleStaffEvent,
@@ -12,7 +13,54 @@ import {
 import type { BattleReplayPayload, MatchResultPayload } from '../types'
 import { AdminBattleReplayCard, AdminMatchResultCard, AdminSubTab } from './AdminRankedFeedCards.tsx'
 
-type Tab = 'matches' | 'replays' | 'staff'
+type Tab = 'feed' | 'staff'
+
+function extractMatchIdFromPayload(body: unknown): string {
+  if (!body || typeof body !== 'object') return ''
+  const mid = (body as { matchId?: unknown }).matchId
+  return typeof mid === 'string' ? mid.trim() : ''
+}
+
+function normalizeMatchRankedFormat(m: MatchResultPayload): 'singles' | 'doubles' {
+  const f = (m.format ?? '').trim().toLowerCase()
+  if (f.includes('double')) return 'doubles'
+  return 'singles'
+}
+
+type MatchEloRefundStep = {
+  minecraft_username: string
+  action: 'add' | 'remove'
+  amount: number
+  originalDelta: number
+}
+
+/** Build server commands that undo each player's recorded `eloChange` for this match. */
+function buildMatchEloRefundPlan(m: MatchResultPayload): {
+  format: 'singles' | 'doubles'
+  steps: MatchEloRefundStep[]
+  summaryLines: string[]
+} | null {
+  const steps: MatchEloRefundStep[] = []
+  const summaryLines: string[] = []
+  for (const p of m.players ?? []) {
+    const ign = (p.playerName ?? '').trim()
+    const raw = p.eloChange
+    if (!ign || raw == null || !Number.isFinite(raw)) continue
+    const delta = Math.trunc(raw)
+    if (delta === 0) continue
+    const amount = Math.abs(delta)
+    if (amount < 1) continue
+    if (delta > 0) {
+      steps.push({ minecraft_username: ign, action: 'remove', amount, originalDelta: delta })
+      summaryLines.push(`${ign}: remove ${amount} (recorded +${delta})`)
+    } else {
+      steps.push({ minecraft_username: ign, action: 'add', amount, originalDelta: delta })
+      summaryLines.push(`${ign}: add ${amount} (recorded ${delta})`)
+    }
+  }
+  if (steps.length === 0) return null
+  return { format: normalizeMatchRankedFormat(m), steps, summaryLines }
+}
 
 function formatTs(iso: string): string {
   try {
@@ -34,7 +82,13 @@ function staffEventSummary(ev: RankedBattleStaffEvent): { action: string; detail
         ? 'Battle replay'
         : ev.review_feed_kind === 'match_result'
           ? 'Match result'
-          : 'Feed item'
+          : typeof ev.review_feed_kind === 'string' &&
+              ev.review_feed_kind.includes('match_result') &&
+              ev.review_feed_kind.includes('battle_replay')
+            ? 'Match result + replay'
+            : ev.review_feed_kind
+              ? `Feed (${ev.review_feed_kind})`
+              : 'Feed item'
     const flag = ev.review_reviewed ? 'Marked reviewed' : 'Cleared reviewed'
     const key = ev.review_item_key ? truncateKey(ev.review_item_key) : '—'
     return { action: flag, details: `${kindLabel} · ${key}` }
@@ -52,14 +106,17 @@ function staffEventSummary(ev: RankedBattleStaffEvent): { action: string; detail
 }
 
 export function CobbleRankedAdmin() {
-  const [tab, setTab] = useState<Tab>('matches')
+  const [tab, setTab] = useState<Tab>('feed')
   const [matches, setMatches] = useState<CobbleRankedFeedEnvelope<MatchResultPayload>[]>([])
   const [replays, setReplays] = useState<CobbleRankedFeedEnvelope<BattleReplayPayload>[]>([])
   const [reviewedKeys, setReviewedKeys] = useState<Set<string>>(new Set())
   const [attentionOnly, setAttentionOnly] = useState(false)
+  const [expandedReplayKey, setExpandedReplayKey] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [reviewBusyKey, setReviewBusyKey] = useState<string | null>(null)
+  const [refundBusyKey, setRefundBusyKey] = useState<string | null>(null)
+  const [refundFlash, setRefundFlash] = useState<{ rowKey: string; ok: boolean; text: string } | null>(null)
 
   const [eloAmount, setEloAmount] = useState('30')
   const [pickQuery, setPickQuery] = useState('')
@@ -88,6 +145,7 @@ export function CobbleRankedAdmin() {
         setMatches(d.matches ?? [])
         setReplays(d.replays ?? [])
         setReviewedKeys(new Set(d.reviewedKeys ?? []))
+        setExpandedReplayKey(null)
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load'))
       .finally(() => setLoading(false))
@@ -149,14 +207,64 @@ export function CobbleRankedAdmin() {
 
   const isReviewed = useCallback((k: string) => reviewedKeys.has(k), [reviewedKeys])
 
-  const toggleReview = async (itemKey: string, feed_kind: 'match_result' | 'battle_replay', next: boolean) => {
-    setReviewBusyKey(itemKey)
+  type FeedMergedPair = {
+    kind: 'pair'
+    matchRow: CobbleRankedFeedEnvelope<MatchResultPayload>
+    replayRow: CobbleRankedFeedEnvelope<BattleReplayPayload> | null
+  }
+  type FeedMergedReplayOnly = { kind: 'replay_only'; replayRow: CobbleRankedFeedEnvelope<BattleReplayPayload> }
+  type FeedMergedRow = FeedMergedPair | FeedMergedReplayOnly
+
+  const feedRows = useMemo((): FeedMergedRow[] => {
+    const replayByMatchId = new Map<string, CobbleRankedFeedEnvelope<BattleReplayPayload>>()
+    for (const r of replays) {
+      const mid = extractMatchIdFromPayload(r.item)
+      if (mid) replayByMatchId.set(mid, r)
+    }
+    const usedReplayKeys = new Set<string>()
+    const out: FeedMergedRow[] = []
+    for (const mRow of matches) {
+      const mid = extractMatchIdFromPayload(mRow.item)
+      const replay = mid ? replayByMatchId.get(mid) : undefined
+      if (replay) usedReplayKeys.add(replay.key)
+      out.push({ kind: 'pair', matchRow: mRow, replayRow: replay ?? null })
+    }
+    for (const r of replays) {
+      if (!usedReplayKeys.has(r.key)) out.push({ kind: 'replay_only', replayRow: r })
+    }
+    return out
+  }, [matches, replays])
+
+  const visibleFeedRows = useMemo(() => {
+    if (!attentionOnly) return feedRows
+    return feedRows.filter((row) => {
+      if (row.kind === 'pair') {
+        const rep = row.replayRow
+        return row.matchRow.needsAttention || (rep?.needsAttention ?? false)
+      }
+      return row.replayRow.needsAttention
+    })
+  }, [feedRows, attentionOnly])
+
+  const toggleMergedReview = async (
+    entries: { item_key: string; feed_kind: 'match_result' | 'battle_replay' }[],
+    next: boolean
+  ) => {
+    if (entries.length === 0) return
+    const busy = [...entries.map((e) => e.item_key)].sort().join('|')
+    setReviewBusyKey(busy)
     try {
-      await setAdminCobbleRankedReview({ item_key: itemKey, feed_kind, reviewed: next })
+      if (entries.length === 1) {
+        await setAdminCobbleRankedReview({ ...entries[0]!, reviewed: next })
+      } else {
+        await setAdminCobbleRankedReviewBundle({ reviewed: next, entries })
+      }
       setReviewedKeys((prev) => {
         const n = new Set(prev)
-        if (next) n.add(itemKey)
-        else n.delete(itemKey)
+        for (const e of entries) {
+          if (next) n.add(e.item_key)
+          else n.delete(e.item_key)
+        }
         return n
       })
       if (tab === 'staff') void loadStaff()
@@ -166,16 +274,6 @@ export function CobbleRankedAdmin() {
       setReviewBusyKey(null)
     }
   }
-
-  const visibleMatches = useMemo(() => {
-    if (!attentionOnly) return matches
-    return matches.filter((m) => m.needsAttention)
-  }, [matches, attentionOnly])
-
-  const visibleReplays = useMemo(() => {
-    if (!attentionOnly) return replays
-    return replays.filter((r) => r.needsAttention)
-  }, [replays, attentionOnly])
 
   const ign = selectedUser?.username.trim() ?? ''
   const userId = selectedUser?.id
@@ -224,13 +322,85 @@ export function CobbleRankedAdmin() {
     }
   }
 
+  const runMatchEloRefund = async (rowKey: string, m: MatchResultPayload) => {
+    setRefundFlash(null)
+    const plan = buildMatchEloRefundPlan(m)
+    if (!plan) {
+      setRefundFlash({
+        rowKey,
+        ok: false,
+        text: 'No recorded ELO changes on this match (every player needs a non-zero eloChange).',
+      })
+      return
+    }
+    const matchId = (m.matchId ?? '').trim() || 'unknown'
+    const fmtLabel = plan.format
+    const confirmBody = [
+      'Reverse this match’s ELO on the Minecraft server?',
+      '',
+      ...plan.summaryLines,
+      '',
+      `Format: ${fmtLabel}.`,
+      `${plan.steps.length} server command(s); each step is logged to staff history and Discord on success.`,
+    ].join('\n')
+    if (!window.confirm(confirmBody)) return
+
+    const reason = `Ranked ELO refund (match ${matchId}, ${fmtLabel}): ${plan.summaryLines.join('; ')}.`
+    setRefundBusyKey(rowKey)
+    const doneNames: string[] = []
+    try {
+      for (const step of plan.steps) {
+        try {
+          const out = await adminMinecraftRankedadminElo({
+            action: step.action,
+            amount: step.amount,
+            minecraft_username: step.minecraft_username,
+            format: plan.format,
+            reason,
+          })
+          if (!out.ok) {
+            const partial = doneNames.length ? ` Applied for ${doneNames.join(', ')}; then failed.` : ''
+            setRefundFlash({
+              rowKey,
+              ok: false,
+              text: `${partial} ${step.minecraft_username}: ${out.error ?? 'Server rejected the change.'}`.trim(),
+            })
+            if (tab === 'staff') void loadStaff()
+            return
+          }
+          doneNames.push(step.minecraft_username)
+        } catch (e) {
+          const partial = doneNames.length ? `Applied for ${doneNames.join(', ')}; then failed.` : 'Failed immediately.'
+          setRefundFlash({
+            rowKey,
+            ok: false,
+            text: `${partial} ${step.minecraft_username}: ${e instanceof Error ? e.message : String(e)}`,
+          })
+          if (tab === 'staff') void loadStaff()
+          return
+        }
+      }
+      setRefundFlash({
+        rowKey,
+        ok: true,
+        text: `Refund completed for ${doneNames.join(', ')}.`,
+      })
+      if (tab === 'staff') void loadStaff()
+    } finally {
+      setRefundBusyKey(null)
+    }
+  }
+
   return (
     <div className="space-y-8">
       <div>
         <h1 className="text-xl font-semibold text-white m-0 mb-2">Ranked Battle</h1>
         <p className="text-sm text-slate-500 m-0 max-w-2xl">
-          Synced match feed from the game mirror. Flag suspicious rows and mark them reviewed. ELO changes apply on the
-          Minecraft server; staff actions are listed under Staff history (after the database migration is applied).
+          Synced match feed from the game mirror. Rows that share the same{' '}
+          <span className="font-mono text-slate-400">matchId</span> are merged: one Reviewed checkbox marks the match
+          result and its replay together. When a replay exists, use View replay to expand it. Refund ELO on a match card
+          reverses each player’s recorded delta in one confirmation. Staff history lists audit actions. ELO changes
+          apply on the Minecraft server.
         </p>
       </div>
 
@@ -238,7 +408,7 @@ export function CobbleRankedAdmin() {
         <h2 className="text-sm font-semibold text-white m-0">ELO adjustment</h2>
         <p className="text-xs text-slate-500 m-0 max-w-2xl">
           Pick the player’s website account, choose singles or doubles, enter why you’re changing ELO (audit + Discord),
-          then add or remove.
+          then add or remove. To undo a whole battle’s logged ELO at once, use Refund ELO on that match in the feed below.
         </p>
         <div className="flex flex-wrap items-end gap-3">
           <div>
@@ -375,18 +545,15 @@ export function CobbleRankedAdmin() {
       <section className="space-y-4">
         <div className="flex flex-wrap gap-3 items-center justify-between">
           <div className="flex flex-wrap gap-2">
-            <AdminSubTab active={tab === 'matches'} onClick={() => setTab('matches')}>
-              Match results ({matches.length})
-            </AdminSubTab>
-            <AdminSubTab active={tab === 'replays'} onClick={() => setTab('replays')}>
-              Battle replays ({replays.length})
+            <AdminSubTab active={tab === 'feed'} onClick={() => setTab('feed')}>
+              Match feed ({feedRows.length})
             </AdminSubTab>
             <AdminSubTab active={tab === 'staff'} onClick={() => setTab('staff')}>
               Staff history
             </AdminSubTab>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            {tab !== 'staff' ? (
+            {tab === 'feed' ? (
               <label className="inline-flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
                 <input
                   type="checkbox"
@@ -432,12 +599,7 @@ export function CobbleRankedAdmin() {
                 <tbody>
                   {staffEvents.map((ev) => {
                     const { action, details } = staffEventSummary(ev)
-                    const reasonCell =
-                      ev.event_kind === 'feed_review'
-                        ? '—'
-                        : ev.staff_reason?.trim()
-                          ? ev.staff_reason
-                          : '—'
+                    const reasonCell = ev.staff_reason?.trim() ? ev.staff_reason : '—'
                     return (
                       <tr key={ev.id} className="border-t border-white/10 hover:bg-white/[0.03]">
                         <td className="px-3 py-2 text-slate-400 whitespace-nowrap">{formatTs(ev.created_at)}</td>
@@ -458,18 +620,21 @@ export function CobbleRankedAdmin() {
           <p className="text-slate-500 text-center py-12">Loading…</p>
         ) : error ? (
           <p className="text-rose-400 text-center py-8">{error}</p>
-        ) : tab === 'matches' ? (
-          visibleMatches.length === 0 ? (
-            <p className="text-slate-500 text-center py-8">No match results.</p>
-          ) : (
-            <ul className="space-y-4 list-none m-0 p-0">
-              {visibleMatches.map((row) => {
-                const reviewed = isReviewed(row.key)
+        ) : visibleFeedRows.length === 0 ? (
+          <p className="text-slate-500 text-center py-8">No feed items in this view.</p>
+        ) : (
+          <ul className="space-y-4 list-none m-0 p-0">
+            {visibleFeedRows.map((row) => {
+              if (row.kind === 'replay_only') {
+                const r = row.replayRow
+                const reviewKeys = [r.key]
+                const reviewed = reviewKeys.every((k) => isReviewed(k))
+                const needsAttention = r.needsAttention
                 return (
                   <li
-                    key={row.key}
+                    key={r.key}
                     className={`rounded-2xl border p-4 space-y-3 ${
-                      row.needsAttention
+                      needsAttention
                         ? reviewed
                           ? 'border-amber-500/25 bg-amber-950/10'
                           : 'border-amber-400/55 bg-amber-950/20 ring-1 ring-amber-400/25'
@@ -478,43 +643,54 @@ export function CobbleRankedAdmin() {
                   >
                     <div className="flex flex-wrap items-start gap-3 justify-between">
                       <div className="flex flex-wrap items-center gap-2 min-w-0">
-                        {row.needsAttention ? (
+                        <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-200 border border-cyan-400/35">
+                          Replay only
+                        </span>
+                        {needsAttention ? (
                           <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded bg-amber-500/25 text-amber-200 border border-amber-400/40">
                             Need attention
                           </span>
                         ) : null}
-                        {row.attentionReasons.length > 0 ? (
-                          <span className="text-xs text-amber-200/90">{row.attentionReasons.join(' · ')}</span>
+                        {r.attentionReasons.length > 0 ? (
+                          <span className="text-xs text-amber-200/90">{r.attentionReasons.join(' · ')}</span>
                         ) : null}
                       </div>
                       <label className="flex items-center gap-2 shrink-0 text-xs text-slate-400 cursor-pointer select-none">
                         <input
                           type="checkbox"
                           checked={reviewed}
-                          disabled={reviewBusyKey === row.key}
-                          onChange={(e) => void toggleReview(row.key, 'match_result', e.target.checked)}
+                          disabled={reviewBusyKey === r.key}
+                          onChange={(e) =>
+                            void toggleMergedReview([{ item_key: r.key, feed_kind: 'battle_replay' }], e.target.checked)
+                          }
                           className="rounded border-white/20"
                         />
                         Reviewed
                       </label>
                     </div>
-                    <AdminMatchResultCard m={row.item} />
+                    <AdminBattleReplayCard r={r.item} />
                   </li>
                 )
-              })}
-            </ul>
-          )
-        ) : visibleReplays.length === 0 ? (
-          <p className="text-slate-500 text-center py-8">No battle replays.</p>
-        ) : (
-          <ul className="space-y-4 list-none m-0 p-0">
-            {visibleReplays.map((row) => {
-              const reviewed = isReviewed(row.key)
+              }
+
+              const mRow = row.matchRow
+              const rep = row.replayRow
+              const entries: { item_key: string; feed_kind: 'match_result' | 'battle_replay' }[] = [
+                { item_key: mRow.key, feed_kind: 'match_result' },
+              ]
+              if (rep) entries.push({ item_key: rep.key, feed_kind: 'battle_replay' })
+              const reviewBusy = entries.map((e) => e.item_key).sort().join('|') === reviewBusyKey
+              const reviewed = entries.every((e) => isReviewed(e.item_key))
+              const needsAttention = mRow.needsAttention || (rep?.needsAttention ?? false)
+              const attentionMsgs = [...mRow.attentionReasons, ...(rep?.attentionReasons ?? [])]
+              const rowUiKey = mRow.key
+              const refundPlan = buildMatchEloRefundPlan(mRow.item)
+
               return (
                 <li
-                  key={row.key}
+                  key={rowUiKey}
                   className={`rounded-2xl border p-4 space-y-3 ${
-                    row.needsAttention
+                    needsAttention
                       ? reviewed
                         ? 'border-amber-500/25 bg-amber-950/10'
                         : 'border-amber-400/55 bg-amber-950/20 ring-1 ring-amber-400/25'
@@ -523,27 +699,74 @@ export function CobbleRankedAdmin() {
                 >
                   <div className="flex flex-wrap items-start gap-3 justify-between">
                     <div className="flex flex-wrap items-center gap-2 min-w-0">
-                      {row.needsAttention ? (
+                      {rep ? (
+                        <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-200 border border-emerald-400/30">
+                          Match + replay
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded bg-slate-500/20 text-slate-300 border border-slate-400/25">
+                          Match only
+                        </span>
+                      )}
+                      {needsAttention ? (
                         <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded bg-amber-500/25 text-amber-200 border border-amber-400/40">
                           Need attention
                         </span>
                       ) : null}
-                      {row.attentionReasons.length > 0 ? (
-                        <span className="text-xs text-amber-200/90">{row.attentionReasons.join(' · ')}</span>
+                      {attentionMsgs.length > 0 ? (
+                        <span className="text-xs text-amber-200/90">{[...new Set(attentionMsgs)].join(' · ')}</span>
                       ) : null}
                     </div>
                     <label className="flex items-center gap-2 shrink-0 text-xs text-slate-400 cursor-pointer select-none">
                       <input
                         type="checkbox"
                         checked={reviewed}
-                        disabled={reviewBusyKey === row.key}
-                        onChange={(e) => void toggleReview(row.key, 'battle_replay', e.target.checked)}
+                        disabled={reviewBusy}
+                        onChange={(e) => void toggleMergedReview(entries, e.target.checked)}
                         className="rounded border-white/20"
                       />
                       Reviewed
+                      {rep ? <span className="text-slate-600">(match + replay)</span> : null}
                     </label>
                   </div>
-                  <AdminBattleReplayCard r={row.item} />
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      disabled={
+                        reviewBusy ||
+                        refundBusyKey === rowUiKey ||
+                        refundPlan == null ||
+                        eloBusy !== null
+                      }
+                      onClick={() => void runMatchEloRefund(rowUiKey, mRow.item)}
+                      className="text-sm font-medium px-3 py-1.5 rounded-lg bg-violet-500/15 text-violet-200 border border-violet-400/35 hover:bg-violet-500/25 disabled:opacity-45 disabled:pointer-events-none"
+                    >
+                      {refundBusyKey === rowUiKey ? 'Refunding…' : 'Refund ELO'}
+                    </button>
+                    {refundPlan == null ? (
+                      <span className="text-xs text-slate-600">No non-zero eloChange on this row — manual adjust only.</span>
+                    ) : null}
+                    {refundFlash?.rowKey === rowUiKey ? (
+                      <p className={`text-xs m-0 max-w-xl ${refundFlash.ok ? 'text-emerald-300/95' : 'text-rose-400'}`}>
+                        {refundFlash.text}
+                      </p>
+                    ) : null}
+                  </div>
+                  <AdminMatchResultCard m={mRow.item} />
+                  {rep ? (
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedReplayKey((k) => (k === rowUiKey ? null : rowUiKey))
+                        }
+                        className="text-sm font-medium px-3 py-1.5 rounded-lg bg-cyan-500/15 text-cyan-200 border border-cyan-400/35 hover:bg-cyan-500/25"
+                      >
+                        {expandedReplayKey === rowUiKey ? 'Hide replay' : 'View replay'}
+                      </button>
+                      {expandedReplayKey === rowUiKey ? <AdminBattleReplayCard r={rep.item} /> : null}
+                    </div>
+                  ) : null}
                 </li>
               )
             })}

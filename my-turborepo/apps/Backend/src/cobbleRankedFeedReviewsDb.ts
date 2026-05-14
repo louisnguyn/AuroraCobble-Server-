@@ -52,3 +52,24 @@ export async function upsertFeedReview(
     if (error) throw new Error(error.message);
   }
 }
+
+/** Mark one or more feed rows in one operation (e.g. match result + paired battle replay). */
+export async function upsertFeedReviewBundle(
+  supabase: SupabaseClient,
+  entries: { itemKey: string; feedKind: RankedFeedKind }[],
+  reviewed: boolean,
+  reviewedByUserId: number
+): Promise<void> {
+  const seen = new Set<string>();
+  for (const e of entries) {
+    const k = e.itemKey.trim();
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    await upsertFeedReview(supabase, {
+      itemKey: k,
+      feedKind: e.feedKind,
+      reviewed,
+      reviewedByUserId,
+    });
+  }
+}

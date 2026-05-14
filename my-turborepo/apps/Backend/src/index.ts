@@ -83,7 +83,7 @@ import {
   stableRankedFeedItemKey,
   type RankedFeedKind,
 } from "./cobbleRankedFeedAdmin.js";
-import { fetchReviewedKeySet, upsertFeedReview } from "./cobbleRankedFeedReviewsDb.js";
+import { fetchReviewedKeySet, upsertFeedReview, upsertFeedReviewBundle } from "./cobbleRankedFeedReviewsDb.js";
 import { runRankedAdminEloRcon, type RankedFormatArg } from "./minecraftRankedAdminElo.js";
 import { runBattlePassLuckpermsCommand } from "./minecraftBattlePassLp.js";
 import {
@@ -5439,6 +5439,55 @@ app.post("/admin/cobble-ranked/review", requireAuth, requireAdmin, async (req, r
       reviewReviewed: reviewed,
     });
     res.json({ ok: true, item_key: itemKey, reviewed });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.status(500).json({ error: msg });
+  }
+});
+
+/** Review one or more feed items together (single staff log), e.g. match result + battle replay for same matchId. */
+app.post("/admin/cobble-ranked/review-bundle", requireAuth, requireAdmin, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const staff = res.locals.user!;
+  const body = req.body ?? {};
+  const reviewed = Boolean(body.reviewed);
+  const rawEntries = body.entries;
+  if (!Array.isArray(rawEntries) || rawEntries.length < 1 || rawEntries.length > 4) {
+    res.status(400).json({ error: "entries must be a non-empty array (max 4)" });
+    return;
+  }
+  const entries: { itemKey: string; feedKind: RankedFeedKind }[] = [];
+  for (const row of rawEntries) {
+    if (!row || typeof row !== "object") continue;
+    const o = row as Record<string, unknown>;
+    const ik = typeof o.item_key === "string" ? o.item_key.trim() : "";
+    const fk = o.feed_kind === "battle_replay" ? "battle_replay" : "match_result";
+    if (!ik) continue;
+    entries.push({ itemKey: ik, feedKind: fk });
+  }
+  if (entries.length === 0) {
+    res.status(400).json({ error: "No valid entries (item_key + feed_kind)" });
+    return;
+  }
+  try {
+    await upsertFeedReviewBundle(supabase, entries, reviewed, staff.userId);
+    const kinds = [...new Set(entries.map((e) => e.feedKind))].join("+");
+    const keysShort = entries
+      .map((e) => e.itemKey)
+      .join(" · ")
+      .slice(0, 900);
+    void insertRankedBattleStaffEvent({
+      staffUserId: staff.userId,
+      eventKind: "feed_review",
+      reviewItemKey: keysShort,
+      reviewFeedKind: kinds,
+      reviewReviewed: reviewed,
+      staffReason: entries.length > 1 ? `Bundle (${entries.length} items)` : null,
+    });
+    res.json({ ok: true, reviewed, count: entries.length });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     res.status(500).json({ error: msg });

@@ -539,6 +539,16 @@ export async function setAdminCobbleRankedReview(body: {
   })
 }
 
+export async function setAdminCobbleRankedReviewBundle(body: {
+  reviewed: boolean
+  entries: { item_key: string; feed_kind: 'match_result' | 'battle_replay' }[]
+}): Promise<{ ok: boolean; reviewed: boolean; count: number }> {
+  return fetchJson(`/admin/cobble-ranked/review-bundle`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
 export async function adminSummarizeBattleReplay(replay: BattleReplayPayload): Promise<{ summary: string }> {
   return fetchJson<{ summary: string }>('/admin/ranked-replay/ai-summary', {
     method: 'POST',
