@@ -16,8 +16,12 @@ CREATE TABLE IF NOT EXISTS user_pokemon_shop_purchases (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS uq_user_pokemon_shop_window_slot
-  ON user_pokemon_shop_purchases (user_id, window_start, slot);
+-- One purchase per rotation slot globally (first buyer wins for everyone).
+CREATE UNIQUE INDEX IF NOT EXISTS uq_pokemon_shop_window_slot_global
+  ON user_pokemon_shop_purchases (window_start, slot);
 
 CREATE INDEX IF NOT EXISTS idx_user_pokemon_shop_purchases_user_purchased
   ON user_pokemon_shop_purchases (user_id, purchased_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_user_pokemon_shop_purchases_window
+  ON user_pokemon_shop_purchases (window_start);

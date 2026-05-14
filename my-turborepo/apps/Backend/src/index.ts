@@ -4253,14 +4253,21 @@ app.get("/pokemon-shop/offers", requireAuth, async (req, res) => {
       }).catch(() => {});
     }
   }
-  const { data: purchases } = await supabase
+  const { data: windowPurchases } = await supabase
     .from("user_pokemon_shop_purchases")
-    .select("slot, claimed_at")
-    .eq("user_id", user.userId)
+    .select("slot, user_id, claimed_at")
     .eq("window_start", windowStartIso);
-  const purchasedMap = new Map<number, { claimed_at: string | null }>();
-  for (const p of (purchases ?? []) as { slot: number; claimed_at: string | null }[]) {
-    purchasedMap.set(p.slot, { claimed_at: p.claimed_at });
+  const soldSlots = new Set<number>();
+  const mineBySlot = new Map<number, { claimed_at: string | null }>();
+  for (const p of (windowPurchases ?? []) as {
+    slot: number;
+    user_id: number;
+    claimed_at: string | null;
+  }[]) {
+    soldSlots.add(p.slot);
+    if (p.user_id === user.userId) {
+      mineBySlot.set(p.slot, { claimed_at: p.claimed_at });
+    }
   }
   res.json({
     refreshHours: POKEMON_SHOP_REFRESH_HOURS,
@@ -4270,6 +4277,7 @@ app.get("/pokemon-shop/offers", requireAuth, async (req, res) => {
     offers: offers.map((o) => {
       const listPrice = o.price;
       const price = applyCobbleShopDiscount(listPrice, shopDiscountPercent);
+      const purchasedByYou = mineBySlot.has(o.slot);
       return {
         slot: o.slot,
         category: o.category,
@@ -4278,8 +4286,9 @@ app.get("/pokemon-shop/offers", requireAuth, async (req, res) => {
         listPrice,
         price,
         label: o.label,
-        purchased: purchasedMap.has(o.slot),
-        claimed: Boolean(purchasedMap.get(o.slot)?.claimed_at),
+        soldOut: soldSlots.has(o.slot),
+        purchasedByYou,
+        claimed: Boolean(mineBySlot.get(o.slot)?.claimed_at),
       };
     }),
   });
@@ -4314,15 +4323,22 @@ app.post("/pokemon-shop/buy", requireAuth, async (req, res) => {
   const shopDiscountPercent = getWebsiteShopDiscountPercent(role);
   const payPrice = applyCobbleShopDiscount(offer.price, shopDiscountPercent);
 
-  const { data: already } = await supabase
+  const { data: taken } = await supabase
     .from("user_pokemon_shop_purchases")
-    .select("id")
-    .eq("user_id", user.userId)
+    .select("id, user_id")
     .eq("window_start", start.toISOString())
     .eq("slot", slot)
     .maybeSingle();
-  if (already) {
-    res.status(400).json({ error: "You already purchased this offer in current rotation." });
+  if (taken) {
+    const row = taken as { id: number; user_id: number };
+    if (row.user_id === user.userId) {
+      res.status(400).json({ error: "You already purchased this offer in the current rotation." });
+    } else {
+      res.status(400).json({
+        error: "This Pokémon is sold out for this rotation (another player bought it first).",
+        code: "pokemon_shop_sold_out",
+      });
+    }
     return;
   }
 
@@ -4369,8 +4385,11 @@ app.post("/pokemon-shop/buy", requireAuth, async (req, res) => {
       .from("user_currency")
       .update({ balance: wallet.balance, updated_at: new Date().toISOString() })
       .eq("id", wallet.id);
-    if (/uq_user_pokemon_shop_window_slot|duplicate key/i.test(insErr.message)) {
-      res.status(400).json({ error: "You already purchased this offer in current rotation." });
+    if (/uq_pokemon_shop_window_slot_global|uq_user_pokemon_shop_window_slot|duplicate key/i.test(insErr.message)) {
+      res.status(409).json({
+        error: "This Pokémon was just purchased by another player. Your Cobble$ balance was restored.",
+        code: "pokemon_shop_sold_out",
+      });
       return;
     }
     res.status(500).json({ error: insErr.message });

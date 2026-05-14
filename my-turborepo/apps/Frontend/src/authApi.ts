@@ -601,7 +601,11 @@ export interface PokemonShopOffer {
   /** Cobble$ charged after rank discount. */
   price: number
   label: string
-  purchased: boolean
+  /** Any user bought this slot for the current window (global stock = 1). */
+  soldOut: boolean
+  /** This account bought this slot in the current window. */
+  purchasedByYou: boolean
+  /** Your purchase for this slot is claimed in-game (only if purchasedByYou). */
   claimed: boolean
 }
 

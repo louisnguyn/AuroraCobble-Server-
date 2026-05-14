@@ -1264,7 +1264,10 @@ export function Account() {
 
           <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-3">Pokemon Shop (Shiny)</h2>
           <div className="mb-6 pixel-well p-4">
-            <p className="text-sm text-muted m-0 mb-3">Refresh in: {pokemonCountdown}</p>
+            <p className="text-sm text-muted m-0 mb-3">
+              Refresh in: {pokemonCountdown}. Each slot is <strong className="text-slate-300">one copy site-wide</strong>{' '}
+              per rotation — first buyer takes it.
+            </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {pokemonOffers.map((offer) => (
                 <div key={offer.slot} className="flex items-center justify-between gap-3 rounded-lg border border-border/70 px-3 py-2">
@@ -1287,13 +1290,19 @@ export function Account() {
                     onClick={() => handleBuyPokemon(offer)}
                     disabled={
                       !canUseWebsiteShop ||
-                      offer.purchased ||
+                      offer.soldOut ||
                       pokemonBusy === `buy-${offer.slot}` ||
                       cobbleBalance < offer.price
                     }
                     className="shrink-0 py-2 px-3 pixel-btn-primary disabled:opacity-50 text-base"
                   >
-                    {offer.purchased ? 'Purchased' : pokemonBusy === `buy-${offer.slot}` ? 'Buying…' : 'Buy'}
+                    {offer.soldOut && !offer.purchasedByYou
+                      ? 'Sold out'
+                      : offer.purchasedByYou
+                        ? 'Yours'
+                        : pokemonBusy === `buy-${offer.slot}`
+                          ? 'Buying…'
+                          : 'Buy'}
                   </button>
                 </div>
               ))}
