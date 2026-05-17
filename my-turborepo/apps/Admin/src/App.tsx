@@ -63,7 +63,8 @@ export default function App() {
       return
     }
     fetchMe()
-      .then(({ user: u }) => {
+      .then(({ user: u, token: refreshed }) => {
+        if (refreshed) setToken(refreshed)
         if (u.is_admin) setUser(u)
         else {
           clearToken()

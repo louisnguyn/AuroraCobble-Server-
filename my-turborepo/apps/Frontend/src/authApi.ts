@@ -77,8 +77,8 @@ export async function login(email: string, password: string): Promise<AuthRespon
   })
 }
 
-export async function fetchMe(): Promise<{ user: AuthUser }> {
-  return fetchApi<{ user: AuthUser }>('/auth/me')
+export async function fetchMe(): Promise<{ user: AuthUser; token?: string }> {
+  return fetchApi<{ user: AuthUser; token?: string }>('/auth/me')
 }
 
 export async function changePassword(currentPassword: string, newPassword: string): Promise<{ ok: boolean }> {

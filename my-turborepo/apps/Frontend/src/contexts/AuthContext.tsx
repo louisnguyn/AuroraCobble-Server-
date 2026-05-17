@@ -46,8 +46,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const token = getStoredToken()
     if (!token) return
     try {
-      const { user } = await fetchMe()
-      setState((s) => ({ ...s, user, token }))
+      const { user, token: refreshed } = await fetchMe()
+      if (refreshed) setToken(refreshed)
+      setState((s) => ({ ...s, user, token: refreshed ?? token }))
     } catch {
       clearToken()
       setState((s) => ({ ...s, token: null, user: null }))
@@ -61,7 +62,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return
     }
     fetchMe()
-      .then(({ user }) => setState((s) => ({ ...s, user, token, loading: false })))
+      .then(({ user, token: refreshed }) => {
+        if (refreshed) setToken(refreshed)
+        setState((s) => ({ ...s, user, token: refreshed ?? token, loading: false }))
+      })
       .catch(() => {
         clearToken()
         setState((s) => ({ ...s, token: null, user: null, loading: false }))

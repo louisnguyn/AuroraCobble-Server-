@@ -6,6 +6,7 @@ import {
   adminResetPassword,
   createUser,
   findUserByEmail,
+  findUserById,
   verifyPassword,
   signToken,
   verifyToken,
@@ -589,24 +590,38 @@ declare global {
 }
 /* eslint-enable @typescript-eslint/no-namespace */
 
-function requireAuth(
+async function requireAuth(
   req: express.Request,
   res: express.Response,
   next: express.NextFunction
 ) {
-  const auth = req.headers.authorization;
-  const token = auth?.startsWith("Bearer ") ? auth.slice(7) : null;
-  if (!token) {
-    res.status(401).json({ error: "Login required" });
-    return;
+  try {
+    const auth = req.headers.authorization;
+    const token = auth?.startsWith("Bearer ") ? auth.slice(7) : null;
+    if (!token) {
+      res.status(401).json({ error: "Login required" });
+      return;
+    }
+    const payload = verifyToken(token);
+    if (!payload) {
+      res.status(401).json({ error: "Invalid or expired token" });
+      return;
+    }
+    const row = await findUserById(payload.userId);
+    if (!row) {
+      res.status(401).json({ error: "User not found" });
+      return;
+    }
+    res.locals.user = {
+      userId: row.id,
+      email: row.email,
+      username: row.username,
+      isAdmin: !!row.is_admin,
+    };
+    next();
+  } catch (e) {
+    next(e);
   }
-  const payload = verifyToken(token);
-  if (!payload) {
-    res.status(401).json({ error: "Invalid or expired token" });
-    return;
-  }
-  res.locals.user = payload;
-  next();
 }
 
 function requireAdmin(
@@ -1187,8 +1202,12 @@ app.post("/auth/login", async (req, res) => {
   });
 });
 
-app.get("/auth/me", requireAuth, async (_req, res) => {
+app.get("/auth/me", requireAuth, async (req, res) => {
   const tokenUser = res.locals.user!;
+  const authHeader = req.headers.authorization;
+  const rawToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  const jwtPayload = rawToken ? verifyToken(rawToken) : null;
+
   if (supabase) {
     const { data: row, error } = await supabase
       .from("users")
@@ -1204,15 +1223,31 @@ app.get("/auth/me", requireAuth, async (_req, res) => {
         minecraft_verified_at: string | null;
         minecraft_role?: string | null;
       };
+      const user = {
+        id: r.id,
+        email: r.email,
+        username: r.username,
+        is_admin: !!r.is_admin,
+        minecraft_verified_at: r.minecraft_verified_at ?? null,
+        minecraft_role: readMinecraftRoleField(r),
+      };
+      const staleJwt =
+        jwtPayload != null &&
+        (jwtPayload.username !== r.username ||
+          jwtPayload.email !== r.email ||
+          !!jwtPayload.isAdmin !== !!r.is_admin);
       res.json({
-        user: {
-          id: r.id,
-          email: r.email,
-          username: r.username,
-          is_admin: !!r.is_admin,
-          minecraft_verified_at: r.minecraft_verified_at ?? null,
-          minecraft_role: readMinecraftRoleField(r),
-        },
+        user,
+        ...(staleJwt
+          ? {
+              token: signToken({
+                userId: r.id,
+                email: r.email,
+                username: r.username,
+                isAdmin: !!r.is_admin,
+              }),
+            }
+          : {}),
       });
       return;
     }

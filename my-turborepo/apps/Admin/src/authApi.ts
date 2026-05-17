@@ -61,8 +61,8 @@ export async function login(email: string, password: string): Promise<AuthRespon
   })
 }
 
-export async function fetchMe(): Promise<{ user: AuthUser }> {
-  return fetchJson<{ user: AuthUser }>('/auth/me')
+export async function fetchMe(): Promise<{ user: AuthUser; token?: string }> {
+  return fetchJson<{ user: AuthUser; token?: string }>('/auth/me')
 }
 
 // Admin APIs (require admin token)
