@@ -40,6 +40,16 @@ import { RoleBadge } from './RoleBadge.tsx'
 import { AccountRankHistory } from './AccountRankHistory.tsx'
 import { normalizePvpTierSlugForAssets, pvpTierHumanName, PvPTierBadge } from './PvPTierBadge.tsx'
 
+function formatPokemonShopCategory(category: string): string {
+  const labels: Record<string, string> = {
+    legend_high: 'Legend (high tier)',
+    legend_low: 'Legend (low tier)',
+    pseudo_legend: 'Pseudo-legend',
+    ultra_beast: 'Ultra Beast',
+  }
+  return labels[category] ?? category.replace(/_/g, ' ')
+}
+
 function perksForMinecraftRole(
   cat: {
     purchasable: RoleCatalogEntry[]
@@ -517,7 +527,9 @@ export function Account() {
     setPokemonBusy(`buy-${offer.slot}`)
     try {
       const res = await buyPokemonShopOffer(offer.slot)
-      setPokemonSuccess(`Purchased Shiny ${res.species}. Claim it from purchase list below.`)
+      setPokemonSuccess(
+        `Purchased ${res.shiny ? 'Shiny' : 'Normal'} ${displayItemName(res.species)}. Claim it from the list below.`
+      )
       const [currencies] = await Promise.all([fetchUserCurrencies(), refreshPokemonShop()])
       setCobbleBalance(currencies.currencies.find((c) => c.currency_type === 'cobbledollars')?.balance ?? 0)
     } catch (err) {
@@ -1262,19 +1274,25 @@ export function Account() {
             {shopError && <p className="text-sm text-error mt-3 mb-0">{shopError}</p>}
           </div>
 
-          <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-3">Pokemon Shop (Shiny)</h2>
+          <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-3">Pokemon Shop</h2>
           <div className="mb-6 pixel-well p-4">
             <p className="text-sm text-muted m-0 mb-3">
               Refresh in: {pokemonCountdown}. Each slot is <strong className="text-slate-300">one copy site-wide</strong>{' '}
-              per rotation — first buyer takes it.
+              per rotation — 6 slots; first buyer takes each. Each slot rolls shiny or normal (~35% shiny).
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {pokemonOffers.map((offer) => (
-                <div key={offer.slot} className="flex items-center justify-between gap-3 rounded-lg border border-border/70 px-3 py-2">
+                <div
+                  key={offer.slot}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border/70 px-3 py-2"
+                >
                   <div className="min-w-0">
-                    <p className="text-sm text-[#e2e8f0] m-0">Shiny {displayItemName(offer.species)}</p>
+                    <p className="text-sm text-[#e2e8f0] m-0">
+                      {offer.shiny ? 'Shiny ' : 'Normal '}
+                      {displayItemName(offer.species)}
+                    </p>
                     <p className="text-xs text-muted m-0">
-                      {offer.category.replace(/_/g, ' ')} ·{' '}
+                      {formatPokemonShopCategory(offer.category)} ·{' '}
                       {shopDiscountPercent > 0 && offer.price < offer.listPrice ? (
                         <>
                           <span className="line-through opacity-70">{offer.listPrice.toLocaleString()}</span>{' '}
@@ -1317,7 +1335,8 @@ export function Account() {
                   <div key={p.id} className="flex items-center justify-between gap-3 rounded-lg border border-border/70 px-3 py-2">
                     <div className="min-w-0">
                       <p className="text-sm text-[#e2e8f0] m-0">
-                        {p.shiny ? 'Shiny ' : ''}{displayItemName(p.species)}
+                        {p.shiny ? 'Shiny ' : 'Normal '}
+                        {displayItemName(p.species)}
                       </p>
                       <p className="text-xs text-muted m-0">
                         {new Date(p.purchasedAt).toLocaleString()} · {p.price.toLocaleString()} Cobble$

@@ -13,7 +13,7 @@ import {
 const LEDGER_KIND_LABEL: Record<string, string> = {
   deposit_to_server: 'Sent to game',
   shop: 'Item shop',
-  pokemon_shop: 'Shiny Pokémon shop',
+  pokemon_shop: 'Pokémon shop',
   role_shop: 'Rank shop',
   daily_login: 'Daily streak',
   pvp_rank_daily: 'PvP leaderboard reward',

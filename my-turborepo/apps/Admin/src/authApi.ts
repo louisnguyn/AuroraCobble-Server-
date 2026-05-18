@@ -406,6 +406,19 @@ export async function runAdminBossSpawnNow(): Promise<{
   })
 }
 
+export async function refreshAdminPokemonShop(): Promise<{
+  ok: boolean
+  windowStart: string
+  windowEnd: string
+  refreshHours: number
+  offers: { slot: number; category: string; species: string; shiny: boolean; listPrice: number; label: string }[]
+}> {
+  return fetchJson('/admin/pokemon-shop/refresh', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+}
+
 // --- Tournaments (admin API; public bracket lives on the main site) ---
 
 export interface TournamentBracketSlot {

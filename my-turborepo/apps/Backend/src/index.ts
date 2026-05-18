@@ -263,11 +263,16 @@ const DISCORD_GACHA_WEBHOOK_URL =
   process.env.DISCORD_GACHA_WEBHOOK_URL?.trim() || DISCORD_WEBHOOK_URL;
 /** Ranked staff ELO add/remove announcements only (no fallback—set explicitly). */
 const DISCORD_RANKED_ELO_WEBHOOK_URL = process.env.DISCORD_RANKED_ELO_WEBHOOK_URL?.trim() || null;
+/** Pokémon shop refresh + purchases; defaults to DISCORD_WEBHOOK_URL if unset. */
+const DISCORD_POKEMON_SHOP_WEBHOOK_URL =
+  process.env.DISCORD_POKEMON_SHOP_WEBHOOK_URL?.trim() || DISCORD_WEBHOOK_URL;
 console.log(
   "[Discord] default:",
   DISCORD_WEBHOOK_URL ? "yes" : "no",
   "| gacha:",
   DISCORD_GACHA_WEBHOOK_URL ? "yes" : "no",
+  "| pokemon shop:",
+  DISCORD_POKEMON_SHOP_WEBHOOK_URL ? "yes" : "no",
   "| ranked elo:",
   DISCORD_RANKED_ELO_WEBHOOK_URL ? "yes" : "no"
 );
@@ -522,8 +527,26 @@ async function notifyDiscordCobbleLedger(
       break;
     }
     case "pokemon_shop": {
-      content = `${username} bought ${detail ?? "shiny"} for ${amountStr} Cobble$ (new balance ${balanceAfterStr})`;
-      break;
+      content = `${username} bought ${detail ?? "pokemon"} for ${amountStr} Cobble$ (new balance ${balanceAfterStr})`;
+      void notifyDiscordEmbed(
+        {
+          title: "Pokémon Shop Purchase",
+          color: 0xa855f7,
+          fields: [
+            { name: "Player", value: clampDiscordText(username, 128), inline: true },
+            { name: "Paid", value: `${amountStr} Cobble$`, inline: true },
+            { name: "Balance", value: `${balanceAfterStr} Cobble$`, inline: true },
+            {
+              name: "Pokémon",
+              value: clampDiscordText(detail ?? "—", 1024),
+              inline: false,
+            },
+          ],
+          timestamp: new Date().toISOString(),
+        },
+        DISCORD_POKEMON_SHOP_WEBHOOK_URL
+      ).catch(() => {});
+      return;
     }
     case "role_shop": {
       content = `${username} bought rank ${detail ?? "role"} for ${amountStr} Cobble$ (new balance ${balanceAfterStr})`;
@@ -3353,7 +3376,7 @@ const SHOP_ITEMS = [
   { itemKey: "exp_candy_xl", label: "EXP Candy XL", cost: 70_000 },
   { itemKey: "ancient_origin_ball", label: "Ancient Origin Ball", cost: 1_000_000 },
   { itemKey: "master_ball", label: "Master Ball", cost: 500_000 },
-  { itemKey: "gold_bottle_cap", label: "Gold Bottle Cap", cost: 8_000_000 },
+  { itemKey: "gold_bottle_cap", label: "Gold Bottle Cap", cost: 11_000_000 },
 ] as const;
 
 /** Cobble$ after integer percent-off (rank shop discount). */
@@ -3373,11 +3396,14 @@ async function getUserMinecraftRoleForShop(userId: number): Promise<string> {
 }
 
 const POKEMON_SHOP_REFRESH_HOURS = 12;
-const POKEMON_SHOP_OFFER_COUNT = 4;
+const POKEMON_SHOP_OFFER_COUNT = 6;
+/** Per-slot chance an offer is shiny (0–1). Remaining rolls are normal. */
+const POKEMON_SHOP_SHINY_CHANCE = 0.35;
 const POKEMON_SHOP_CATEGORIES = {
   mythic: {
-    price: 7_500_000,
-    weight: 5,
+    priceShiny: 20_000_000,
+    priceNormal: 8_000_000,
+    weight: 4,
     species: [
       "mew", "celebi", "jirachi", "deoxys", "manaphy", "phione", "darkrai", "shaymin",
       "arceus", "victini", "keldeo", "meloetta", "genesect", "diancie", "hoopa", "volcanion",
@@ -3385,16 +3411,18 @@ const POKEMON_SHOP_CATEGORIES = {
     ],
   },
   pseudo_legend: {
-    price: 3_000_000,
-    weight: 36,
+    priceShiny: 5_000_000,
+    priceNormal: 2_000_000,
+    weight: 40,
     species: [
       "dragonite", "tyranitar", "salamence", "metagross", "garchomp", "hydreigon",
       "goodra", "kommo-o", "dragapult", "baxcalibur"
     ],
   },
   paradox: {
-    price: 4_000_000,
-    weight: 32,
+    priceShiny: 9_000_000,
+    priceNormal: 4_000_000,
+    weight: 25,
     species: [
       "greattusk", "screamtail", "brutebonnet", "fluttermane", "slitherwing", "sandyshocks",
       "irontreads", "ironbundle", "ironhands", "ironjugulis", "ironmoth", "ironthorns",
@@ -3403,29 +3431,50 @@ const POKEMON_SHOP_CATEGORIES = {
     ],
   },
   ultra_beast: {
-    price: 5_000_000,
-    weight: 26,
+    priceShiny: 9_000_000,
+    priceNormal: 4_000_000,
+    weight: 25,
     species: [
       "nihilego", "buzzwole", "pheromosa", "xurkitree", "celesteela", "kartana", "guzzlord",
       "poipole", "naganadel", "stakataka", "blacephalon"
     ],
   },
-  legend: {
-    price: 10_000_000,
-    weight: 1,
+  legend_high: {
+    priceShiny: 35_000_000,
+    priceNormal: 15_000_000,
+    weight: 2,
     species: [
-      "articuno", "zapdos", "moltres", "mewtwo", "raikou", "entei", "suicune", "lugia", "hooh",
-      "regirock", "regice", "registeel", "latias", "latios", "kyogre", "groudon", "rayquaza",
-      "uxie", "mesprit", "azelf", "dialga", "palkia", "heatran", "giratina", "cresselia",
-      "cobalion", "terrakion", "virizion", "tornadus", "thundurus", "reshiram", "zekrom",
-      "landorus", "kyurem", "xerneas", "yveltal", "zygarde", "tapukoko", "tapulele",
-      "tapubulu", "tapufini", "cosmog", "cosmoem", "solgaleo", "lunala", "necrozma",
-      "zacian", "zamazenta", "eternatus", "kubfu", "urshifu", "regieleki", "regidrago",
-      "glastrier", "spectrier", "calyrex", "koraidon", "miraidon"
+      "mewtwo", "lugia", "hooh", "latias", "latios", "kyogre", "groudon", "rayquaza",
+      "dialga", "palkia", "heatran", "giratina", "reshiram", "zekrom", "kyurem",
+      "xerneas", "yveltal", "zygarde", "solgaleo", "lunala", "necrozma",
+      "zacian", "zamazenta", "eternatus", "urshifu", "regieleki", "calyrex",
+      "koraidon", "miraidon",
+    ],
+  },
+  legend_low: {
+    priceShiny: 25_000_000,
+    priceNormal: 10_000_000,
+    weight: 4,
+    species: [
+      "articuno", "zapdos", "moltres", "raikou", "entei", "suicune",
+      "regirock", "regice", "registeel", "uxie", "mesprit", "azelf", "cresselia",
+      "cobalion", "terrakion", "virizion", "tornadus", "thundurus", "landorus",
+      "tapukoko", "tapulele", "tapubulu", "tapufini",
+      "cosmog", "cosmoem", "kubfu", "regidrago", "glastrier", "spectrier",
+      "enamorus",
     ],
   },
 } as const;
 type PokemonShopCategory = keyof typeof POKEMON_SHOP_CATEGORIES;
+type PokemonShopCategoryDef = (typeof POKEMON_SHOP_CATEGORIES)[PokemonShopCategory];
+
+function pokemonShopPriceForVariant(def: PokemonShopCategoryDef, shiny: boolean): number {
+  return shiny ? def.priceShiny : def.priceNormal;
+}
+
+function pokemonShopOfferLabel(species: string, shiny: boolean): string {
+  return shiny ? `Shiny ${species}` : species;
+}
 
 function hashString(input: string): number {
   let h = 2166136261;
@@ -3453,15 +3502,73 @@ function currentPokemonShopWindow(now: Date = new Date()): { start: Date; end: D
   return { start: new Date(startMs), end: new Date(startMs + period) };
 }
 
-function buildPokemonShopOffers(windowStartIso: string) {
-  const categories = Object.keys(POKEMON_SHOP_CATEGORIES) as PokemonShopCategory[];
-  const rng = mulberry32(hashString(`pokemon-shop:${windowStartIso}`));
-  const categoryPool = [...categories];
+/** Admin force-refresh sets a new window until the usual 12h period ends. */
+let pokemonShopWindowStartOverrideMs: number | null = null;
+let pokemonShopLastNotifiedWindowStartIso = "";
 
-  // Weighted pick without replacement: rarer categories (legend/mythic) roll less often.
-  const pickedCategories: PokemonShopCategory[] = [];
-  while (pickedCategories.length < Math.min(POKEMON_SHOP_OFFER_COUNT, categoryPool.length)) {
-    const totalWeight = categoryPool.reduce((sum, c) => sum + Math.max(0, POKEMON_SHOP_CATEGORIES[c].weight), 0);
+function getPokemonShopWindow(now: Date = new Date()): { start: Date; end: Date } {
+  const period = POKEMON_SHOP_REFRESH_HOURS * 60 * 60 * 1000;
+  const nowMs = now.getTime();
+  if (pokemonShopWindowStartOverrideMs != null) {
+    const overrideEndMs = pokemonShopWindowStartOverrideMs + period;
+    if (nowMs < overrideEndMs) {
+      return {
+        start: new Date(pokemonShopWindowStartOverrideMs),
+        end: new Date(overrideEndMs),
+      };
+    }
+    pokemonShopWindowStartOverrideMs = null;
+  }
+  return currentPokemonShopWindow(now);
+}
+
+function forcePokemonShopWindowRefresh(): { start: Date; end: Date } {
+  const period = POKEMON_SHOP_REFRESH_HOURS * 60 * 60 * 1000;
+  const nowMs = Date.now();
+  pokemonShopWindowStartOverrideMs = nowMs;
+  return { start: new Date(nowMs), end: new Date(nowMs + period) };
+}
+
+type PokemonShopBuiltOffer = ReturnType<typeof buildPokemonShopOffers>[number];
+
+function notifyPokemonShopRefreshIfNeeded(
+  windowStartIso: string,
+  offers: PokemonShopBuiltOffer[]
+): void {
+  if (pokemonShopLastNotifiedWindowStartIso === windowStartIso) return;
+  pokemonShopLastNotifiedWindowStartIso = windowStartIso;
+  if (!offers.length) return;
+  const offerLines = offers
+    .map(
+      (o) =>
+        `#${o.slot} ${o.label}${o.shiny ? "" : " (normal)"} (${o.category}) - ${o.price.toLocaleString()} Cobble$`
+    )
+    .join("\n");
+  void notifyDiscordEmbed(
+    {
+      title: "Pokemon Shop Refreshed",
+      color: 0xef4444,
+      fields: [
+        { name: "Window Start", value: clampDiscordText(windowStartIso, 1024), inline: false },
+        { name: "Offers", value: clampDiscordText(offerLines, 1024), inline: false },
+      ],
+      timestamp: new Date().toISOString(),
+    },
+    DISCORD_POKEMON_SHOP_WEBHOOK_URL
+  ).catch(() => {});
+}
+
+function pickPokemonShopCategories(count: number, rng: () => number): PokemonShopCategory[] {
+  const categories = Object.keys(POKEMON_SHOP_CATEGORIES) as PokemonShopCategory[];
+  const categoryPool = [...categories];
+  const picked: PokemonShopCategory[] = [];
+
+  // Weighted pick without replacement: rarer categories (legend_high/mythic) roll less often.
+  while (picked.length < Math.min(count, categoryPool.length)) {
+    const totalWeight = categoryPool.reduce(
+      (sum, c) => sum + Math.max(0, POKEMON_SHOP_CATEGORIES[c].weight),
+      0
+    );
     if (totalWeight <= 0) break;
     let roll = rng() * totalWeight;
     let pickIndex = 0;
@@ -3473,37 +3580,48 @@ function buildPokemonShopOffers(windowStartIso: string) {
         break;
       }
     }
-    const [picked] = categoryPool.splice(pickIndex, 1);
-    if (picked) pickedCategories.push(picked);
+    const [pickedCategory] = categoryPool.splice(pickIndex, 1);
+    if (pickedCategory) picked.push(pickedCategory);
   }
+  while (picked.length < count && categories.length > 0) {
+    picked.push(categories[Math.floor(rng() * categories.length)]!);
+  }
+  return picked;
+}
+
+function buildPokemonShopOffer(
+  category: PokemonShopCategory,
+  slot: number,
+  shiny: boolean,
+  rng: () => number
+) {
+  const def = POKEMON_SHOP_CATEGORIES[category];
+  const pickIdx = Math.floor(rng() * def.species.length);
+  const species = def.species[pickIdx] ?? def.species[0]!;
+  return {
+    slot,
+    category,
+    species,
+    shiny,
+    price: pokemonShopPriceForVariant(def, shiny),
+    label: pokemonShopOfferLabel(species, shiny),
+  };
+}
+
+function buildPokemonShopOffers(windowStartIso: string) {
+  const rng = mulberry32(hashString(`pokemon-shop:${windowStartIso}`));
+  const pickedCategories = pickPokemonShopCategories(POKEMON_SHOP_OFFER_COUNT, rng);
 
   const offers = pickedCategories.map((category, i) => {
-    const def = POKEMON_SHOP_CATEGORIES[category];
-    const pickIdx = Math.floor(rng() * def.species.length);
-    const species = def.species[pickIdx] ?? def.species[0]!;
-    return {
-      slot: i + 1,
-      category,
-      species,
-      shiny: true,
-      price: def.price,
-      label: `Shiny ${species}`,
-    };
+    const shiny = rng() < POKEMON_SHOP_SHINY_CHANCE;
+    return buildPokemonShopOffer(category, i + 1, shiny, rng);
   });
-  // Safety net: always return requested offer count (reuse random categories if needed).
+
+  const categories = Object.keys(POKEMON_SHOP_CATEGORIES) as PokemonShopCategory[];
   while (offers.length < POKEMON_SHOP_OFFER_COUNT && categories.length > 0) {
     const category = categories[Math.floor(rng() * categories.length)]!;
-    const def = POKEMON_SHOP_CATEGORIES[category];
-    const pickIdx = Math.floor(rng() * def.species.length);
-    const species = def.species[pickIdx] ?? def.species[0]!;
-    offers.push({
-      slot: offers.length + 1,
-      category,
-      species,
-      shiny: true,
-      price: def.price,
-      label: `Shiny ${species}`,
-    });
+    const shiny = rng() < POKEMON_SHOP_SHINY_CHANCE;
+    offers.push(buildPokemonShopOffer(category, offers.length + 1, shiny, rng));
   }
   return offers;
 }
@@ -4257,37 +4375,19 @@ app.post("/shop/buy", requireAuth, async (req, res) => {
   }
 });
 
-let pokemonShopLastNotifiedWindowStartIso = "";
 app.get("/pokemon-shop/offers", requireAuth, async (req, res) => {
   const user = res.locals.user!;
   if (!supabase) {
     res.status(503).json({ error: "Database not configured" });
     return;
   }
-  const { start, end } = currentPokemonShopWindow();
+  const { start, end } = getPokemonShopWindow();
   const windowStartIso = start.toISOString();
   const offers = buildPokemonShopOffers(windowStartIso);
   const role = await getUserMinecraftRoleForShop(user.userId);
   const shopDiscountPercent = getWebsiteShopDiscountPercent(role);
 
-  if (pokemonShopLastNotifiedWindowStartIso !== windowStartIso) {
-    pokemonShopLastNotifiedWindowStartIso = windowStartIso;
-    const shinyOffers = offers.filter((o) => o.shiny);
-    if (shinyOffers.length) {
-      const offerLines = shinyOffers
-        .map((o) => `#${o.slot} ${o.label} (${o.category}) - ${o.price.toLocaleString()} Cobble$`)
-        .join("\n");
-      void notifyDiscordEmbed({
-        title: "Pokemon Shop Refreshed",
-        color: 0xef4444,
-        fields: [
-          { name: "Window Start", value: clampDiscordText(windowStartIso, 1024), inline: false },
-          { name: "Shiny Offers", value: clampDiscordText(offerLines, 1024), inline: false },
-        ],
-        timestamp: new Date().toISOString(),
-      }).catch(() => {});
-    }
-  }
+  notifyPokemonShopRefreshIfNeeded(windowStartIso, offers);
   const { data: windowPurchases } = await supabase
     .from("user_pokemon_shop_purchases")
     .select("slot, user_id, claimed_at")
@@ -4347,7 +4447,7 @@ app.post("/pokemon-shop/buy", requireAuth, async (req, res) => {
     res.status(400).json({ error: "Invalid slot" });
     return;
   }
-  const { start } = currentPokemonShopWindow();
+  const { start } = getPokemonShopWindow();
   const offers = buildPokemonShopOffers(start.toISOString());
   const offer = offers.find((o) => o.slot === slot);
   if (!offer) {
@@ -4411,7 +4511,7 @@ app.post("/pokemon-shop/buy", requireAuth, async (req, res) => {
     species: offer.species,
     category: offer.category,
     price: payPrice,
-    shiny: true,
+    shiny: offer.shiny,
     purchased_at: now,
     updated_at: now,
   });
@@ -4431,21 +4531,18 @@ app.post("/pokemon-shop/buy", requireAuth, async (req, res) => {
     return;
   }
 
-  await recordCobbledollarLedger(
-    user.userId,
-    -payPrice,
-    newBalance,
-    "pokemon_shop",
+  const variantLabel = offer.shiny ? "Shiny" : "Normal";
+  const pokemonShopDetail =
     shopDiscountPercent > 0
-      ? `${offer.species} (shiny) (−${shopDiscountPercent}% rank)`
-      : `${offer.species} (shiny)`
-  );
+      ? `Slot ${slot}: ${variantLabel} ${offer.species} (${offer.category}) · −${shopDiscountPercent}% rank`
+      : `Slot ${slot}: ${variantLabel} ${offer.species} (${offer.category})`;
+  await recordCobbledollarLedger(user.userId, -payPrice, newBalance, "pokemon_shop", pokemonShopDetail);
 
   res.json({
     ok: true,
     slot: offer.slot,
     species: offer.species,
-    shiny: true,
+    shiny: offer.shiny,
     price: payPrice,
     listPrice: offer.price,
     shopDiscountPercent,
@@ -6325,6 +6422,27 @@ app.post("/admin/minecraft/boss-spawn/run-now", requireAuth, requireAdmin, async
     }
     res.status(500).json({ error: msg });
   }
+});
+
+app.post("/admin/pokemon-shop/refresh", requireAuth, requireAdmin, async (_req, res) => {
+  const { start, end } = forcePokemonShopWindowRefresh();
+  const windowStartIso = start.toISOString();
+  const offers = buildPokemonShopOffers(windowStartIso);
+  notifyPokemonShopRefreshIfNeeded(windowStartIso, offers);
+  res.json({
+    ok: true,
+    windowStart: windowStartIso,
+    windowEnd: end.toISOString(),
+    refreshHours: POKEMON_SHOP_REFRESH_HOURS,
+    offers: offers.map((o) => ({
+      slot: o.slot,
+      category: o.category,
+      species: o.species,
+      shiny: o.shiny,
+      listPrice: o.price,
+      label: o.label,
+    })),
+  });
 });
 
 app.get("/admin/users/:userId/currency", requireAuth, requireAdmin, async (req, res) => {

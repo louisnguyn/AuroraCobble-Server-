@@ -1,5 +1,5 @@
 -- Run in Supabase SQL Editor.
--- Purchases from rotating 4-hour shiny Pokemon shop.
+-- Purchases from rotating Pokemon shop (6 mixed shiny/normal slots per window).
 
 CREATE TABLE IF NOT EXISTS user_pokemon_shop_purchases (
   id bigserial PRIMARY KEY,
