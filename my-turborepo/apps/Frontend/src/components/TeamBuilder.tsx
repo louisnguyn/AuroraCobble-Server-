@@ -828,7 +828,7 @@ export function TeamBuilder() {
           {saveOk ? <p className="text-emerald-300 m-0">{saveOk}</p> : null}
           {saveError ? <p className="text-red-400 m-0">{saveError}</p> : null}
           {pokepasteUrl ? (
-            <p className="m-0 text-muted">
+            <p className="m-0">
               <a
                 href={pokepasteUrl}
                 target="_blank"
@@ -836,15 +836,6 @@ export function TeamBuilder() {
                 className="text-accent hover:underline break-all"
               >
                 {pokepasteUrl}
-              </a>
-              {' · '}
-              <a
-                href="https://play.pokemonshowdown.com/teambuilder"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-accent hover:underline"
-              >
-                Open Showdown teambuilder
               </a>
             </p>
           ) : null}

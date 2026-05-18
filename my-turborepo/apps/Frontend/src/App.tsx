@@ -11,6 +11,7 @@ import { AuthModal } from './components/AuthModal.tsx'
 import { Account } from './components/Account.tsx'
 import { Spawn } from './components/Spawn.tsx'
 import { Tournament } from './components/Tournament.tsx'
+import { TournamentPredictionsPage } from './components/TournamentPredictionsPage.tsx'
 import { TournamentTeamCompare } from './components/TournamentTeamCompare.tsx'
 import { TournamentTeamDetail } from './components/TournamentTeamDetail.tsx'
 import { TeamBuilder } from './components/TeamBuilder.tsx'
@@ -141,6 +142,7 @@ function AppContent() {
   )
   const [tournamentNav, setTournamentNav] = useState<{
     slug: string
+    view?: 'predictions'
     participantId?: number
     compareWithId?: number
     comparePickFirst?: number
@@ -271,7 +273,12 @@ function AppContent() {
         {page === 'account' && <Account />}
         {page === 'profile' && <Profile slugFromHashOrNav={hashProfileSlug} />}
         {page === 'tournament' &&
-          (tournamentNav.participantId != null && tournamentNav.compareWithId != null ? (
+          (tournamentNav.view === 'predictions' ? (
+            <TournamentPredictionsPage
+              slug={tournamentNav.slug}
+              onBack={() => setTournamentNav({ slug: tournamentNav.slug })}
+            />
+          ) : tournamentNav.participantId != null && tournamentNav.compareWithId != null ? (
             <TournamentTeamCompare
               slug={tournamentNav.slug}
               participantIdA={tournamentNav.participantId}
@@ -294,6 +301,9 @@ function AppContent() {
             <Tournament
               slug={tournamentNav.slug}
               onSlugChange={(s) => setTournamentNav({ slug: s })}
+              onOpenPredictions={() =>
+                setTournamentNav({ slug: tournamentNav.slug, view: 'predictions' })
+              }
               comparePickFirst={tournamentNav.comparePickFirst}
               onCancelComparePick={() => setTournamentNav({ slug: tournamentNav.slug })}
               onComparePair={(a, b) =>

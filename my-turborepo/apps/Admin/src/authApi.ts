@@ -533,6 +533,48 @@ export async function adminFetchTournamentPredictionSettings(): Promise<{
   return fetchJson('/admin/tournament-prediction/settings')
 }
 
+export interface AdminTournamentPredictionBetEntry {
+  id: number
+  userId: number
+  username: string
+  stakeChampion: number
+  pickChampionParticipantId: number | null
+  pickChampionLabel: string | null
+  resultChampion: string
+  payoutChampion: number | null
+  stakeRunnerUp: number
+  pickRunnerUpParticipantId: number | null
+  pickRunnerUpLabel: string | null
+  resultRunnerUp: string
+  payoutRunnerUp: number | null
+  totalStake: number
+  createdAt: string
+  resolvedAt: string | null
+}
+
+export interface AdminTournamentPredictionPickSummary {
+  participantId: number
+  displayName: string
+  seedRank: number
+  totalStake: number
+  betCount: number
+}
+
+export async function adminFetchTournamentPredictionBets(tournamentId: number): Promise<{
+  tournament: { id: number; slug: string; title: string }
+  entries: AdminTournamentPredictionBetEntry[]
+  summary: {
+    champion: AdminTournamentPredictionPickSummary[]
+    runnerUp: AdminTournamentPredictionPickSummary[]
+    totalEntries: number
+    totalStaked: number
+  }
+}> {
+  return fetchJson(
+    `/admin/tournament-prediction/bets?tournamentId=${encodeURIComponent(String(tournamentId))}`
+  )
+}
+
 export async function adminUpdateTournamentPredictionSettings(body: {
   tournamentId: number | null
   predictionsLockedAt?: string | null

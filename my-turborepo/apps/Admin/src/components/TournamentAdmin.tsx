@@ -8,8 +8,11 @@ import {
   adminPatchTournament,
   adminSetMatchWinner,
   adminUpsertParticipant,
+  adminFetchTournamentPredictionBets,
   adminFetchTournamentPredictionSettings,
   adminUpdateTournamentPredictionSettings,
+  type AdminTournamentPredictionBetEntry,
+  type AdminTournamentPredictionPickSummary,
   type TournamentBracketMatch,
   type TournamentBracketSlot,
 } from '../authApi'
@@ -136,6 +139,20 @@ export function TournamentAdmin() {
   const [predChampMult, setPredChampMult] = useState('2')
   const [predRuMult, setPredRuMult] = useState('2')
   const [predSaving, setPredSaving] = useState(false)
+  const [betHistoryTournamentId, setBetHistoryTournamentId] = useState<string>('')
+  const [betHistoryLoading, setBetHistoryLoading] = useState(false)
+  const [betHistoryEntries, setBetHistoryEntries] = useState<AdminTournamentPredictionBetEntry[]>([])
+  const [betHistoryChampSummary, setBetHistoryChampSummary] = useState<
+    AdminTournamentPredictionPickSummary[]
+  >([])
+  const [betHistoryRuSummary, setBetHistoryRuSummary] = useState<AdminTournamentPredictionPickSummary[]>(
+    []
+  )
+  const [betHistoryMeta, setBetHistoryMeta] = useState<{
+    title: string
+    totalEntries: number
+    totalStaked: number
+  } | null>(null)
 
   const qfDraftIsPermutation = new Set(qfQualDraft).size === 4
 
@@ -193,6 +210,41 @@ export function TournamentAdmin() {
   useEffect(() => {
     if (selectedId != null) loadBracket(selectedId)
   }, [selectedId, loadBracket])
+
+  useEffect(() => {
+    if (predTournamentId && !betHistoryTournamentId) {
+      setBetHistoryTournamentId(predTournamentId)
+    }
+  }, [predTournamentId, betHistoryTournamentId])
+
+  const loadBetHistory = useCallback(async () => {
+    const tid = betHistoryTournamentId ? parseInt(betHistoryTournamentId, 10) : NaN
+    if (!Number.isFinite(tid)) {
+      setErr('Choose a tournament to load bet history.')
+      return
+    }
+    setBetHistoryLoading(true)
+    setErr(null)
+    try {
+      const r = await adminFetchTournamentPredictionBets(tid)
+      setBetHistoryEntries(r.entries)
+      setBetHistoryChampSummary(r.summary.champion)
+      setBetHistoryRuSummary(r.summary.runnerUp)
+      setBetHistoryMeta({
+        title: r.tournament.title,
+        totalEntries: r.summary.totalEntries,
+        totalStaked: r.summary.totalStaked,
+      })
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Bet history failed')
+      setBetHistoryEntries([])
+      setBetHistoryChampSummary([])
+      setBetHistoryRuSummary([])
+      setBetHistoryMeta(null)
+    } finally {
+      setBetHistoryLoading(false)
+    }
+  }, [betHistoryTournamentId])
 
   const handleParsePreview = async () => {
     setErr(null)
@@ -440,6 +492,189 @@ export function TournamentAdmin() {
         >
           {predSaving ? 'Saving…' : 'Save prediction settings'}
         </button>
+      </section>
+
+      <section className={cardClass}>
+        <h3 className="text-sm font-semibold text-cyan-200 m-0 tracking-wide uppercase">Prediction bet history</h3>
+        <p className="text-xs text-muted m-0 leading-relaxed">
+          All website bets for a tournament — who staked how much on champion and runner-up picks.
+        </p>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="flex-1 min-w-[12rem] block space-y-1">
+            <span className="text-xs text-slate-400">Tournament</span>
+            <select
+              className={selectClass}
+              value={betHistoryTournamentId}
+              onChange={(e) => setBetHistoryTournamentId(e.target.value)}
+            >
+              <option value="">Choose tournament…</option>
+              {tournaments.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.title} · {t.slug}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            onClick={() => void loadBetHistory()}
+            disabled={betHistoryLoading || !betHistoryTournamentId}
+            className={btnSecondary}
+          >
+            {betHistoryLoading ? 'Loading…' : 'Load bets'}
+          </button>
+          <button
+            type="button"
+            disabled={!predTournamentId}
+            className={btnGhost}
+            onClick={() => {
+              if (predTournamentId) {
+                setBetHistoryTournamentId(predTournamentId)
+              }
+            }}
+          >
+            Use active prediction tournament
+          </button>
+        </div>
+
+        {betHistoryMeta ? (
+          <p className="text-xs text-slate-300 m-0">
+            <span className="font-medium text-[#f5efe6]">{betHistoryMeta.title}</span> —{' '}
+            {betHistoryMeta.totalEntries} bet{betHistoryMeta.totalEntries === 1 ? '' : 's'},{' '}
+            {betHistoryMeta.totalStaked.toLocaleString()} Cobble$ total staked
+          </p>
+        ) : null}
+
+        {(betHistoryChampSummary.length > 0 || betHistoryRuSummary.length > 0) && (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {betHistoryChampSummary.length > 0 ? (
+              <div className="rounded-xl border border-violet-500/25 bg-[#151524]/60 p-3 space-y-2">
+                <p className="text-xs font-semibold text-cyan-200/95 m-0">Champion — total staked per pick</p>
+                <ul className="list-none m-0 p-0 space-y-1 text-sm">
+                  {betHistoryChampSummary.map((s) => (
+                    <li key={s.participantId} className="flex justify-between gap-2 text-slate-200">
+                      <span>
+                        #{s.seedRank} {s.displayName}{' '}
+                        <span className="text-muted text-xs">({s.betCount})</span>
+                      </span>
+                      <span className="tabular-nums text-amber-200/90 shrink-0">
+                        {s.totalStake.toLocaleString()}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {betHistoryRuSummary.length > 0 ? (
+              <div className="rounded-xl border border-violet-500/25 bg-[#151524]/60 p-3 space-y-2">
+                <p className="text-xs font-semibold text-cyan-200/95 m-0">Runner-up — total staked per pick</p>
+                <ul className="list-none m-0 p-0 space-y-1 text-sm">
+                  {betHistoryRuSummary.map((s) => (
+                    <li key={s.participantId} className="flex justify-between gap-2 text-slate-200">
+                      <span>
+                        #{s.seedRank} {s.displayName}{' '}
+                        <span className="text-muted text-xs">({s.betCount})</span>
+                      </span>
+                      <span className="tabular-nums text-amber-200/90 shrink-0">
+                        {s.totalStake.toLocaleString()}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        {betHistoryMeta && betHistoryEntries.length === 0 ? (
+          <p className="text-sm text-muted m-0">No bets for this tournament yet.</p>
+        ) : null}
+
+        {betHistoryEntries.length > 0 ? (
+          <div className="overflow-x-auto rounded-xl border border-violet-500/25">
+            <table className="w-full text-left text-sm border-collapse min-w-[52rem]">
+              <thead>
+                <tr className="border-b border-violet-500/30 bg-[#151524]/80 text-xs uppercase tracking-wide text-slate-400">
+                  <th className="px-3 py-2 font-medium">User</th>
+                  <th className="px-3 py-2 font-medium">Champion pick</th>
+                  <th className="px-3 py-2 font-medium text-right">Stake</th>
+                  <th className="px-3 py-2 font-medium">Result</th>
+                  <th className="px-3 py-2 font-medium">Runner-up pick</th>
+                  <th className="px-3 py-2 font-medium text-right">Stake</th>
+                  <th className="px-3 py-2 font-medium">Result</th>
+                  <th className="px-3 py-2 font-medium text-right">Total</th>
+                  <th className="px-3 py-2 font-medium">When</th>
+                </tr>
+              </thead>
+              <tbody>
+                {betHistoryEntries.map((row) => (
+                  <tr
+                    key={row.id}
+                    className="border-b border-white/5 last:border-0 hover:bg-white/[0.03]"
+                  >
+                    <td className="px-3 py-2 text-[#f5efe6] font-medium whitespace-nowrap">
+                      {row.username}
+                    </td>
+                    <td className="px-3 py-2 text-slate-200">
+                      {row.stakeChampion > 0 ? (row.pickChampionLabel ?? '—') : '—'}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-amber-200/90">
+                      {row.stakeChampion > 0 ? row.stakeChampion.toLocaleString() : '—'}
+                    </td>
+                    <td className="px-3 py-2 text-xs">
+                      {row.stakeChampion > 0 ? (
+                        <span
+                          className={
+                            row.resultChampion === 'won'
+                              ? 'text-emerald-300'
+                              : row.resultChampion === 'lost'
+                                ? 'text-rose-300'
+                                : 'text-slate-400'
+                          }
+                        >
+                          {row.resultChampion}
+                          {row.payoutChampion ? ` (+${row.payoutChampion.toLocaleString()})` : ''}
+                        </span>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-slate-200">
+                      {row.stakeRunnerUp > 0 ? (row.pickRunnerUpLabel ?? '—') : '—'}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-amber-200/90">
+                      {row.stakeRunnerUp > 0 ? row.stakeRunnerUp.toLocaleString() : '—'}
+                    </td>
+                    <td className="px-3 py-2 text-xs">
+                      {row.stakeRunnerUp > 0 ? (
+                        <span
+                          className={
+                            row.resultRunnerUp === 'won'
+                              ? 'text-emerald-300'
+                              : row.resultRunnerUp === 'lost'
+                                ? 'text-rose-300'
+                                : 'text-slate-400'
+                          }
+                        >
+                          {row.resultRunnerUp}
+                          {row.payoutRunnerUp ? ` (+${row.payoutRunnerUp.toLocaleString()})` : ''}
+                        </span>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums font-medium text-[#f5efe6]">
+                      {row.totalStake.toLocaleString()}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-muted whitespace-nowrap">
+                      {new Date(row.createdAt).toLocaleString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
       </section>
 
       <section className={cardClass}>

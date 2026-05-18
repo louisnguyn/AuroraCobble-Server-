@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import {
   buyPokemonShopOffer,
@@ -36,7 +36,6 @@ import { isAccountVerified, VerifiedAccountBadge } from './VerifiedAccountBadge.
 import { RoleBadge } from './RoleBadge.tsx'
 import { AccountRankHistory } from './AccountRankHistory.tsx'
 import { normalizePvpTierSlugForAssets, pvpTierHumanName, PvPTierBadge } from './PvPTierBadge.tsx'
-import { TournamentPredictionPanel } from './TournamentPredictionPanel.tsx'
 
 function formatPokemonShopCategory(category: string): string {
   const labels: Record<string, string> = {
@@ -105,7 +104,7 @@ function RolePerksSummary({ perks }: { perks: RoleWebsitePerks }) {
 }
 
 export function Account() {
-  type AccountTab = 'account' | 'daily' | 'predict' | 'shop' | 'ranks' | 'inventory' | 'cobble' | 'history'
+  type AccountTab = 'account' | 'daily' | 'shop' | 'ranks' | 'inventory' | 'cobble' | 'history'
   const { isAuthenticated, user, refreshUser } = useAuth()
   const canUseWebsiteShop = Boolean(user?.is_admin) || isAccountVerified(user)
   const [showAuth, setShowAuth] = useState(false)
@@ -628,7 +627,6 @@ export function Account() {
           [
             ['daily', 'Daily'],
             ['history', 'Rank history'],
-            ['predict', 'Tournament'],
             ['shop', 'Shop'],
             ['ranks', 'Ranks'],
             ['inventory', 'Inventory'],
@@ -838,14 +836,6 @@ export function Account() {
           )}
         </>
       )}
-
-      {activeTab === 'predict' && (
-        <TournamentPredictionPanel
-          cobbleBalance={cobbleBalance}
-          onBalanceChange={setCobbleBalance}
-        />
-      )}
-
 
       {activeTab === 'inventory' && (
         <>

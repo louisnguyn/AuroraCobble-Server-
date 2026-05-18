@@ -163,6 +163,7 @@ export function Tournament({
   slug: initialSlug,
   onOpenPlayer,
   onSlugChange,
+  onOpenPredictions,
   comparePickFirst,
   onCancelComparePick,
   onComparePair,
@@ -170,6 +171,7 @@ export function Tournament({
   slug: string
   onOpenPlayer: (participantId: number) => void
   onSlugChange?: (slug: string) => void
+  onOpenPredictions?: () => void
   /** When set, the next participant slot opens compare view with this id as the first team. */
   comparePickFirst?: number
   onCancelComparePick?: () => void
@@ -184,7 +186,6 @@ export function Tournament({
   const [loading, setLoading] = useState(false)
   const [catalog, setCatalog] = useState<PublishedTournamentSummary[]>([])
   const [catalogErr, setCatalogErr] = useState<string | null>(null)
-
   useEffect(() => {
     setCatalogErr(null)
     fetchPublishedTournaments()
@@ -304,6 +305,15 @@ export function Tournament({
           >
             Refresh
           </button>
+          {onOpenPredictions ? (
+            <button
+              type="button"
+              onClick={onOpenPredictions}
+              className="py-2 px-4 pixel-btn-primary text-base"
+            >
+              Predictions
+            </button>
+          ) : null}
         </div>
         {catalogErr ? <p className="text-xs text-cyan-400 m-0">Tournament list: {catalogErr}</p> : null}
         {catalog.length === 0 && !catalogErr ? (

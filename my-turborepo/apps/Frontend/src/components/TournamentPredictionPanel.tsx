@@ -11,12 +11,37 @@ function participantLabel(id: number, participants: { id: number; displayName: s
   return p ? `#${p.seedRank} ${p.displayName}` : `#${id}`
 }
 
+function formatBetResult(
+  result: string,
+  payout: number | null
+): { label: string; className: string } {
+  switch (result) {
+    case 'won':
+      return {
+        label: payout != null && payout > 0 ? `Won — +${payout.toLocaleString()} Cobble$` : 'Won',
+        className: 'text-emerald-300',
+      }
+    case 'lost':
+      return { label: 'Lost', className: 'text-rose-300' }
+    case 'skipped':
+      return { label: '—', className: 'text-muted' }
+    default:
+      return { label: 'Waiting for final', className: 'text-amber-200/90' }
+  }
+}
+
 export function TournamentPredictionPanel({
   cobbleBalance,
   onBalanceChange,
+  embedded = false,
+  viewingSlug,
 }: {
   cobbleBalance: number
   onBalanceChange: (balance: number) => void
+  /** When true, used inside the main Tournament page (subsection styling). */
+  embedded?: boolean
+  /** Bracket slug currently open on the Tournament page (for mismatch hint). */
+  viewingSlug?: string
 }) {
   const [status, setStatus] = useState<TournamentPredictionStatus | null>(null)
   const [loading, setLoading] = useState(true)
@@ -51,7 +76,7 @@ export function TournamentPredictionPanel({
   if (!status?.active) {
     return (
       <p className="text-sm text-muted m-0">
-        No tournament prediction is open right now. Check back when an event is announced.
+        No prediction event is open right now. Check back when staff announce one.
       </p>
     )
   }
@@ -74,11 +99,33 @@ export function TournamentPredictionPanel({
   ]
 
   const entry = status.entry
+  const actualChampion =
+    status.championParticipantId != null
+      ? participantLabel(status.championParticipantId, participants)
+      : null
+  const actualRunnerUp =
+    status.runnerUpParticipantId != null
+      ? participantLabel(status.runnerUpParticipantId, participants)
+      : null
+
+  const viewingMismatch =
+    embedded &&
+    viewingSlug?.trim() &&
+    status.tournament?.slug &&
+    viewingSlug.trim().toLowerCase() !== status.tournament.slug.toLowerCase()
 
   return (
     <>
-      <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-2">Tournament predictions</h2>
-      <p className="text-sm text-muted m-0 mb-4">
+      {!embedded ? (
+        <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-2">Tournament predictions</h2>
+      ) : null}
+      {viewingMismatch ? (
+        <p className="text-xs text-amber-200/90 m-0 mb-3">
+          Predictions are for <span className="text-[#f5efe6]">{status.tournament?.title}</span> — select that
+          bracket below to follow the same event.
+        </p>
+      ) : null}
+      <p className={`text-sm text-muted m-0 ${embedded ? 'mb-3' : 'mb-4'}`}>
         {status.tournament?.title ?? 'Tournament'} — pick champion and runner-up separately. Champion pays ×
         {champMult}; runner-up pays ×{ruMult}. Stake {minStake.toLocaleString()}–{maxStake.toLocaleString()}{' '}
         Cobble$ per line (0 = skip). Results settle when the final winner is set in the bracket.
@@ -94,24 +141,43 @@ export function TournamentPredictionPanel({
             <span className="block mt-2 text-amber-300">Prediction window is closed.</span>
           )}
           {status.resultsReady && (
-            <span className="block mt-2 text-emerald-300/90">Final results are in — payouts processed.</span>
+            <span className="block mt-2 text-emerald-300/90">
+              Tournament finished — check your lines below. Winnings are in your site Cobble$ balance.
+            </span>
           )}
         </p>
+
+        {status.resultsReady && (actualChampion || actualRunnerUp) ? (
+          <div className="rounded-lg border border-emerald-500/35 bg-emerald-950/25 p-3 space-y-1 text-sm">
+            <p className="text-xs font-medium text-emerald-200/95 m-0">Official result</p>
+            {actualChampion ? <p className="m-0 text-[#e2e8f0]">Champion: {actualChampion}</p> : null}
+            {actualRunnerUp ? <p className="m-0 text-[#e2e8f0]">Runner-up: {actualRunnerUp}</p> : null}
+          </div>
+        ) : null}
 
         {entry ? (
           <div className="text-sm text-[#e2e8f0] space-y-3">
             <p className="m-0 font-medium">Your entry (locked)</p>
+            {!status.resultsReady ? (
+              <p className="text-xs text-muted m-0">
+                After the final is played, each line shows Won or Lost and payouts go to your wallet
+                automatically.
+              </p>
+            ) : null}
             {entry.stake_champion > 0 && (
               <div className="rounded-lg border border-border/60 p-3 space-y-1">
                 <p className="text-xs text-muted m-0">Champion (×{champMult})</p>
                 <p className="m-0">
+                  Your pick:{' '}
                   {participantLabel(entry.pick_champion_participant_id ?? 0, participants)}
                 </p>
                 <p className="m-0 tabular-nums text-[#fbbf24]">
-                  Stake {entry.stake_champion.toLocaleString()} Cobble$ — {entry.result_champion}
-                  {entry.payout_champion
-                    ? ` · +${entry.payout_champion.toLocaleString()}`
-                    : ''}
+                  Stake {entry.stake_champion.toLocaleString()} Cobble$
+                </p>
+                <p
+                  className={`m-0 font-medium ${formatBetResult(entry.result_champion, entry.payout_champion).className}`}
+                >
+                  {formatBetResult(entry.result_champion, entry.payout_champion).label}
                 </p>
               </div>
             )}
@@ -119,11 +185,16 @@ export function TournamentPredictionPanel({
               <div className="rounded-lg border border-border/60 p-3 space-y-1">
                 <p className="text-xs text-muted m-0">Runner-up (×{ruMult})</p>
                 <p className="m-0">
+                  Your pick:{' '}
                   {participantLabel(entry.pick_runner_up_participant_id ?? 0, participants)}
                 </p>
                 <p className="m-0 tabular-nums text-[#fbbf24]">
-                  Stake {entry.stake_runner_up.toLocaleString()} Cobble$ — {entry.result_runner_up}
-                  {entry.payout_runner_up ? ` · +${entry.payout_runner_up.toLocaleString()}` : ''}
+                  Stake {entry.stake_runner_up.toLocaleString()} Cobble$
+                </p>
+                <p
+                  className={`m-0 font-medium ${formatBetResult(entry.result_runner_up, entry.payout_runner_up).className}`}
+                >
+                  {formatBetResult(entry.result_runner_up, entry.payout_runner_up).label}
                 </p>
               </div>
             )}
