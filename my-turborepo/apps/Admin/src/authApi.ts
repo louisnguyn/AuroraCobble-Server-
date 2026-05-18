@@ -516,6 +516,37 @@ export async function adminSetMatchWinner(
   )
 }
 
+export interface AdminTournamentPredictionSettings {
+  tournamentId: number | null
+  predictionsLockedAt: string | null
+  maxStake: number
+  minStake: number
+  championWinMultiplier: number
+  runnerUpWinMultiplier: number
+}
+
+export async function adminFetchTournamentPredictionSettings(): Promise<{
+  settings: AdminTournamentPredictionSettings | null
+  tournament: { id: number; slug: string; title: string } | null
+  tournaments: { id: number; slug: string; title: string; is_published?: boolean }[]
+}> {
+  return fetchJson('/admin/tournament-prediction/settings')
+}
+
+export async function adminUpdateTournamentPredictionSettings(body: {
+  tournamentId: number | null
+  predictionsLockedAt?: string | null
+  maxStake: number
+  minStake?: number
+  championWinMultiplier?: number
+  runnerUpWinMultiplier?: number
+}): Promise<{ ok: boolean }> {
+  return fetchJson('/admin/tournament-prediction/settings', {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  })
+}
+
 export async function adminClearMatchWinner(tournamentId: number, matchKey: string): Promise<{ ok: boolean }> {
   return fetchJson<{ ok: boolean }>(
     `/admin/tournaments/${tournamentId}/matches/${encodeURIComponent(matchKey)}/winner`,

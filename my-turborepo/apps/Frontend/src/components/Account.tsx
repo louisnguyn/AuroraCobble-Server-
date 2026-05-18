@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+﻿import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import {
   buyPokemonShopOffer,
@@ -12,8 +12,6 @@ import {
   fetchPokemonShopPurchases,
   fetchShopItems,
   fetchUserPvpRank,
-  fetchPvpTopPrediction,
-  submitPvpTopPrediction,
   fetchUserCurrencies,
   fetchUserInventory,
   fetchVerificationStatus,
@@ -29,7 +27,6 @@ import {
   type PokemonShopOffer,
   type PokemonShopPurchase,
   type UserPvpRank,
-  type PvpTopPredictionStatus,
   type ShopItem,
 } from '../authApi'
 import { AuthModal } from './AuthModal'
@@ -39,6 +36,7 @@ import { isAccountVerified, VerifiedAccountBadge } from './VerifiedAccountBadge.
 import { RoleBadge } from './RoleBadge.tsx'
 import { AccountRankHistory } from './AccountRankHistory.tsx'
 import { normalizePvpTierSlugForAssets, pvpTierHumanName, PvPTierBadge } from './PvPTierBadge.tsx'
+import { TournamentPredictionPanel } from './TournamentPredictionPanel.tsx'
 
 function formatPokemonShopCategory(category: string): string {
   const labels: Record<string, string> = {
@@ -77,12 +75,12 @@ function RolePerksSummary({ perks }: { perks: RoleWebsitePerks }) {
         <p className={labelClass}>Shop</p>
         <p className="m-0">
           {d > 0 ? (
-            <span className="text-emerald-300 font-semibold tabular-nums">−{d}%</span>
+            <span className="text-emerald-300 font-semibold tabular-nums">âˆ’{d}%</span>
           ) : (
             <span className="text-slate-500">0%</span>
           )}
           <span className="text-slate-500 block sm:inline sm:ml-1 text-[10px] sm:text-[11px] mt-0.5 sm:mt-0">
-            Items &amp; Pokémon
+            Items &amp; PokÃ©mon
           </span>
         </p>
       </div>
@@ -123,7 +121,7 @@ export function Account() {
   const [rewardsClaimBusy, setRewardsClaimBusy] = useState(false)
   const [rewardsClaimError, setRewardsClaimError] = useState<string | null>(null)
   const [rewardsClaimSuccess, setRewardsClaimSuccess] = useState<string | null>(null)
-  const [dailyResetCountdown, setDailyResetCountdown] = useState('—')
+  const [dailyResetCountdown, setDailyResetCountdown] = useState('â€”')
   const [inventory, setInventory] = useState<{ item_key: string; quantity: number }[]>([])
   const [shopItems, setShopItems] = useState<ShopItem[]>([])
   const [shopDiscountPercent, setShopDiscountPercent] = useState(0)
@@ -137,27 +135,13 @@ export function Account() {
   const [activeTab, setActiveTab] = useState<AccountTab>('daily')
   const [pokemonOffers, setPokemonOffers] = useState<PokemonShopOffer[]>([])
   const [pokemonWindowEnd, setPokemonWindowEnd] = useState<string | null>(null)
-  const [pokemonCountdown, setPokemonCountdown] = useState('—')
+  const [pokemonCountdown, setPokemonCountdown] = useState('â€”')
   const [pokemonPurchases, setPokemonPurchases] = useState<PokemonShopPurchase[]>([])
   const [pokemonBusy, setPokemonBusy] = useState<string | null>(null)
   const [pokemonError, setPokemonError] = useState<string | null>(null)
   const [pokemonSuccess, setPokemonSuccess] = useState<string | null>(null)
   const [pokemonClaimedToServerAt, setPokemonClaimedToServerAt] = useState<Record<number, string>>({})
   const [userPvpRank, setUserPvpRank] = useState<UserPvpRank | null>(null)
-  const [pvpPredict, setPvpPredict] = useState<PvpTopPredictionStatus | null>(null)
-  const [predictPick1, setPredictPick1] = useState('')
-  const [predictPick2, setPredictPick2] = useState('')
-  const [predictPick3, setPredictPick3] = useState('')
-  const [predictStakeFull, setPredictStakeFull] = useState('')
-  const [predictPickOnly1, setPredictPickOnly1] = useState('')
-  const [predictPickOnly2, setPredictPickOnly2] = useState('')
-  const [predictPickOnly3, setPredictPickOnly3] = useState('')
-  const [predictStakeOnly1, setPredictStakeOnly1] = useState('')
-  const [predictStakeOnly2, setPredictStakeOnly2] = useState('')
-  const [predictStakeOnly3, setPredictStakeOnly3] = useState('')
-  const [predictBusy, setPredictBusy] = useState(false)
-  const [predictError, setPredictError] = useState<string | null>(null)
-  const [predictSuccess, setPredictSuccess] = useState<string | null>(null)
   const [vStatus, setVStatus] = useState<VerificationStatusResponse | null>(null)
   const [vLoading, setVLoading] = useState(false)
   const [vError, setVError] = useState<string | null>(null)
@@ -227,7 +211,7 @@ export function Account() {
       .catch((err) => {
         if (!cancelled) {
           setVStatus(null)
-          setVError(err instanceof Error ? err.message : 'Không tải được trạng thái xác minh.')
+          setVError(err instanceof Error ? err.message : 'KhÃ´ng táº£i Ä‘Æ°á»£c tráº¡ng thÃ¡i xÃ¡c minh.')
         }
       })
       .finally(() => {
@@ -262,11 +246,10 @@ export function Account() {
       fetchUserPvpRank(),
       fetchPokemonShopOffers(),
       fetchPokemonShopPurchases(20),
-      fetchPvpTopPrediction().catch(() => null),
       fetchRoleCatalog().catch(() => null),
       fetchRoleRequestStatus().catch(() => null),
     ])
-      .then(([d, inv, shop, currencies, pvpRank, pOffers, pPurchases, predict, roles, rStatus]) => {
+      .then(([d, inv, shop, currencies, pvpRank, pOffers, pPurchases, roles, rStatus]) => {
         setDaily(d)
         setInventory(inv.inventory ?? [])
         setShopItems(shop.items ?? [])
@@ -278,7 +261,6 @@ export function Account() {
         setPokemonOffers(pOffers.offers ?? [])
         setPokemonWindowEnd(pOffers.windowEnd ?? null)
         setPokemonPurchases(pPurchases.purchases ?? [])
-        if (predict) setPvpPredict(predict)
         if (roles) {
           setRoleCat({
             defaultRole: roles.defaultRole,
@@ -295,7 +277,7 @@ export function Account() {
 
   useEffect(() => {
     if (!pokemonWindowEnd) {
-      setPokemonCountdown('—')
+      setPokemonCountdown('â€”')
       return
     }
     const update = () => {
@@ -407,7 +389,7 @@ export function Account() {
       setVStatus(s)
       if (s.verified) void refreshUser()
     } catch (err) {
-      setVError(err instanceof Error ? err.message : 'Không gửi được yêu cầu.')
+      setVError(err instanceof Error ? err.message : 'KhÃ´ng gá»­i Ä‘Æ°á»£c yÃªu cáº§u.')
     } finally {
       setVSubmitting(false)
     }
@@ -490,7 +472,7 @@ export function Account() {
 
   const handleBuyItem = async (item: ShopItem) => {
     if (!canUseWebsiteShop) {
-      setShopError('Cần xác minh tài khoản trên web để mua ở shop (admin được miễn).')
+      setShopError('Cáº§n xÃ¡c minh tÃ i khoáº£n trÃªn web Ä‘á»ƒ mua á»Ÿ shop (admin Ä‘Æ°á»£c miá»…n).')
       return
     }
     setShopError(null)
@@ -519,7 +501,7 @@ export function Account() {
 
   const handleBuyPokemon = async (offer: PokemonShopOffer) => {
     if (!canUseWebsiteShop) {
-      setPokemonError('Cần xác minh tài khoản trên web để mua ở shop (admin được miễn).')
+      setPokemonError('Cáº§n xÃ¡c minh tÃ i khoáº£n trÃªn web Ä‘á»ƒ mua á»Ÿ shop (admin Ä‘Æ°á»£c miá»…n).')
       return
     }
     setPokemonError(null)
@@ -577,7 +559,7 @@ export function Account() {
 
   const handleBuyRank = async (entry: RoleCatalogEntry) => {
     if (!canUseWebsiteShop) {
-      setRankError('Cần xác minh tài khoản trên web để mua rank (admin được miễn).')
+      setRankError('Cáº§n xÃ¡c minh tÃ i khoáº£n trÃªn web Ä‘á»ƒ mua rank (admin Ä‘Æ°á»£c miá»…n).')
       return
     }
     setRankError(null)
@@ -585,7 +567,7 @@ export function Account() {
     setRankBusyKey(entry.key)
     try {
       const out = await buyRank(entry.key)
-      setRankSuccess(`Đã mua rank ${entry.label} — sẽ có hiệu lực trong game sau vài giây.`)
+      setRankSuccess(`ÄÃ£ mua rank ${entry.label} â€” sáº½ cÃ³ hiá»‡u lá»±c trong game sau vÃ i giÃ¢y.`)
       setCobbleBalance(out.newBalance)
       void refreshUser()
       const [shopUp, pOffersUp, rs] = await Promise.all([
@@ -599,7 +581,7 @@ export function Account() {
       setPokemonWindowEnd(pOffersUp.windowEnd ?? null)
       if (rs) setRoleStatus(rs)
     } catch (err) {
-      setRankError(err instanceof Error ? err.message : 'Mua rank thất bại')
+      setRankError(err instanceof Error ? err.message : 'Mua rank tháº¥t báº¡i')
     } finally {
       setRankBusyKey(null)
     }
@@ -616,9 +598,9 @@ export function Account() {
       setGrantMessage('')
       const rs = await fetchRoleRequestStatus()
       setRoleStatus(rs)
-      setRankSuccess('Đã gửi yêu cầu rank — staff sẽ duyệt hoặc từ chối.')
+      setRankSuccess('ÄÃ£ gá»­i yÃªu cáº§u rank â€” staff sáº½ duyá»‡t hoáº·c tá»« chá»‘i.')
     } catch (err) {
-      setRankError(err instanceof Error ? err.message : 'Không gửi được yêu cầu')
+      setRankError(err instanceof Error ? err.message : 'KhÃ´ng gá»­i Ä‘Æ°á»£c yÃªu cáº§u')
     } finally {
       setGrantSubmitting(false)
     }
@@ -646,7 +628,7 @@ export function Account() {
           [
             ['daily', 'Daily'],
             ['history', 'Rank history'],
-            ['predict', 'PVP predict'],
+            ['predict', 'Tournament'],
             ['shop', 'Shop'],
             ['ranks', 'Ranks'],
             ['inventory', 'Inventory'],
@@ -691,7 +673,7 @@ export function Account() {
                     <span className="tabular-nums">#{userPvpRank.rank}</span>
                     {userPvpRank.tier ? (
                       <>
-                        <span className="text-slate-500 font-normal">·</span>
+                        <span className="text-slate-500 font-normal">Â·</span>
                         <PvPTierBadge
                           slug={normalizePvpTierSlugForAssets(userPvpRank.tier)}
                           displayName={pvpTierHumanName(userPvpRank.tier)}
@@ -718,21 +700,21 @@ export function Account() {
                   ) : null}
                   <span className="text-slate-500 font-normal text-xs">
                     {' '}
-                    — if you&apos;re still in the top 3 after the next reset
+                    â€” if you&apos;re still in the top 3 after the next reset
                   </span>
                 </span>
               ) : (
-                <span className="text-slate-500">— For top 3 only. Credited to your site balance automatically.</span>
+                <span className="text-slate-500">â€” For top 3 only. Credited to your site balance automatically.</span>
               )}
             </p>
             <p className="text-xs text-slate-500 m-0 mt-2 leading-relaxed">
-              Not part of the daily claim below — only your streak and role bonuses use that button.
+              Not part of the daily claim below â€” only your streak and role bonuses use that button.
             </p>
           </div>
 
           <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-3">Daily login &amp; role</h2>
           {dailyLoading ? (
-            <p className="text-sm text-muted mb-6">Loading rewards…</p>
+            <p className="text-sm text-muted mb-6">Loading rewardsâ€¦</p>
           ) : dailyLoadError ? (
             <p className="text-sm text-error mb-6">{dailyLoadError}</p>
           ) : !daily ? (
@@ -740,7 +722,7 @@ export function Account() {
           ) : (
             <div className="mb-6 pixel-well p-4 space-y-4">
               <p className="text-sm text-muted m-0">
-                Reset: 00:00 ({daily.timeZone}) · Date: {daily.date}
+                Reset: 00:00 ({daily.timeZone}) Â· Date: {daily.date}
               </p>
               <p className="text-sm text-muted mt-2 mb-0">Next reset in: {dailyResetCountdown}</p>
 
@@ -797,7 +779,7 @@ export function Account() {
                   </span>
                 </p>
                 <p className="text-sm text-violet-200 m-0">
-                  Next step: Day {daily.streak.nextDay} · {daily.streak.nextReward?.label ?? '—'}
+                  Next step: Day {daily.streak.nextDay} Â· {daily.streak.nextReward?.label ?? 'â€”'}
                 </p>
                 <p className="text-xs text-muted mt-1 m-0">
                   Base Cobble$ from streak (before rank extras):{' '}
@@ -807,7 +789,7 @@ export function Account() {
                     </span>
                   ) : (
                     <span className="text-slate-400">
-                      — (today&apos;s reward: {rewardsBreakdown.nr?.label ?? '—'})
+                      â€” (today&apos;s reward: {rewardsBreakdown.nr?.label ?? 'â€”'})
                     </span>
                   )}
                 </p>
@@ -818,7 +800,7 @@ export function Account() {
                 </p>
                 {rewardsBreakdown.claimedToday ? (
                   <p className="text-sm text-emerald-300 mt-2 m-0">
-                    Claimed today (Day {daily.claim?.streakDay ?? '?'}) — {daily.claim?.selectedReward ?? 'Reward'}
+                    Claimed today (Day {daily.claim?.streakDay ?? '?'}) â€” {daily.claim?.selectedReward ?? 'Reward'}
                   </p>
                 ) : null}
               </section>
@@ -830,7 +812,7 @@ export function Account() {
                   <span className="tabular-nums text-[#fbbf24] font-semibold">
                     {rewardsBreakdown.totalCobble.toLocaleString()}
                   </span>
-                  {' · '}
+                  {' Â· '}
                   Tickets:{' '}
                   <span className="tabular-nums text-sky-200/95 font-semibold">{rewardsBreakdown.totalTickets}</span>
                 </p>
@@ -843,7 +825,7 @@ export function Account() {
                   disabled={rewardsClaimBusy || !rewardsBreakdown.hasClaimable}
                   className="py-2 px-4 pixel-btn-primary disabled:opacity-50"
                 >
-                  {rewardsClaimBusy ? 'Claiming…' : 'Claim daily reward'}
+                  {rewardsClaimBusy ? 'Claimingâ€¦' : 'Claim daily reward'}
                 </button>
                 {rewardsClaimSuccess ? (
                   <p className="text-sm text-emerald-300 mt-3 mb-0">{rewardsClaimSuccess}</p>
@@ -858,315 +840,12 @@ export function Account() {
       )}
 
       {activeTab === 'predict' && (
-        <>
-          <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-2">PVP predictions</h2>
-          <p className="text-sm text-muted m-0 mb-4">
-            Exact order #1–#3: win {pvpPredict?.winMultiplierFull ?? 4}× that stake if all three are correct.
-            Or bet separately on who finishes #1, #2, or #3 — each pays {pvpPredict?.winMultiplierSlot ?? 2}× that
-            line if correct. Per-line stake {pvpPredict?.minStake ?? 100}–{pvpPredict?.maxStake ?? 20_000}{' '}
-            Cobble$. Resets 00:00 ({pvpPredict?.resetTimeZone ?? 'Asia/Ho_Chi_Minh'}). Top-3 payouts go to your site
-            balance automatically — round: {pvpPredict?.forPayoutDate ?? '—'}.
-          </p>
-          {!pvpPredict ? (
-            <p className="text-sm text-amber-200/90 m-0">Predictions are unavailable right now. Try again later.</p>
-          ) : pvpPredict.rankedPlayers.length < 3 ? (
-            <p className="text-sm text-muted m-0">
-              Predictions open once there are at least three ranked players on the leaderboard.
-            </p>
-          ) : (
-            <div className="mb-6 pixel-well p-4 space-y-4">
-              <p className="text-xs text-muted m-0">
-                Per line: {pvpPredict.minStake.toLocaleString()}–{pvpPredict.maxStake.toLocaleString()} Cobble$ ·
-                Wallet: <span className="tabular-nums text-[#fbbf24]">{cobbleBalance.toLocaleString()}</span>
-                {!pvpPredict.windowOpen && (
-                  <span className="block mt-2 text-amber-300">
-                    Locked for {pvpPredict.forPayoutDate}. Next round after reset.
-                  </span>
-                )}
-              </p>
-              {pvpPredict.entry ? (
-                <div className="text-sm text-[#e2e8f0] space-y-3">
-                  <p className="m-0 font-medium">Your entry (locked)</p>
-                  {pvpPredict.entry.stake > 0 && (
-                    <div className="rounded-lg border border-border/60 p-3 space-y-1">
-                      <p className="text-xs text-muted m-0">
-                        Full top 3 order (×{pvpPredict.winMultiplierFull})
-                      </p>
-                      <p className="m-0">
-                        #1 {pvpPredict.entry.pick_rank1_name} · #2 {pvpPredict.entry.pick_rank2_name} · #3{' '}
-                        {pvpPredict.entry.pick_rank3_name}
-                      </p>
-                      <p className="m-0 tabular-nums text-[#fbbf24]">
-                        Stake {Number(pvpPredict.entry.stake).toLocaleString()} Cobble$
-                      </p>
-                    </div>
-                  )}
-                  {[1, 2, 3].map((rank) => {
-                    const locked = pvpPredict.entry!
-                    const sk =
-                      rank === 1
-                        ? (locked.stake_rank1_only ?? 0)
-                        : rank === 2
-                          ? (locked.stake_rank2_only ?? 0)
-                          : (locked.stake_rank3_only ?? 0)
-                    const pk =
-                      rank === 1
-                        ? locked.pick_rank1_only
-                        : rank === 2
-                          ? locked.pick_rank2_only
-                          : locked.pick_rank3_only
-                    if (!sk) return null
-                    return (
-                      <div
-                        key={`locked-only-${rank}`}
-                        className="rounded-lg border border-border/60 p-3 space-y-1"
-                      >
-                        <p className="text-xs text-muted m-0">
-                          #{rank} only (×{pvpPredict.winMultiplierSlot})
-                        </p>
-                        <p className="m-0">{pk ?? '—'}</p>
-                        <p className="m-0 tabular-nums text-[#fbbf24]">
-                          Stake {Number(sk).toLocaleString()} Cobble$
-                        </p>
-                      </div>
-                    )
-                  })}
-                  <p className="m-0">
-                    Result:{' '}
-                    <span
-                      className={
-                        pvpPredict.entry.result === 'won'
-                          ? 'text-emerald-300'
-                          : pvpPredict.entry.result === 'lost'
-                            ? 'text-rose-300'
-                            : 'text-muted'
-                      }
-                    >
-                      {pvpPredict.entry.result === 'pending'
-                        ? `Pending until 00:00 ${pvpPredict.resetTimeZone ?? 'Asia/Ho_Chi_Minh'}`
-                        : pvpPredict.entry.result === 'won'
-                          ? `Won — +${Number(pvpPredict.entry.payout_amount ?? 0).toLocaleString()} Cobble$`
-                          : 'Lost'}
-                    </span>
-                  </p>
-                </div>
-              ) : pvpPredict.windowOpen ? (
-                <form
-                  className="space-y-5"
-                  onSubmit={async (e) => {
-                    e.preventDefault()
-                    setPredictError(null)
-                    setPredictSuccess(null)
-                    const parseN = (s: string) => parseInt(s.replace(/,/g, ''), 10)
-                    const sf = parseN(predictStakeFull)
-                    const s1 = parseN(predictStakeOnly1)
-                    const s2 = parseN(predictStakeOnly2)
-                    const s3 = parseN(predictStakeOnly3)
-                    const na = (v: number) => !Number.isFinite(v) || !Number.isInteger(v) || v < 0
-                    if (na(sf) || na(s1) || na(s2) || na(s3)) {
-                      setPredictError('Use whole-number stakes (0 to skip a line).')
-                      return
-                    }
-                    const { minStake, maxStake } = pvpPredict
-                    const checkBand = (x: number, label: string) => {
-                      if (x === 0) return null
-                      if (x < minStake || x > maxStake) return `${label}: ${minStake}–${maxStake}`
-                      return null
-                    }
-                    const bandErr =
-                      checkBand(sf, 'Full combo') ||
-                      checkBand(s1, '#1 only') ||
-                      checkBand(s2, '#2 only') ||
-                      checkBand(s3, '#3 only')
-                    if (bandErr) {
-                      setPredictError(bandErr)
-                      return
-                    }
-                    const total = sf + s1 + s2 + s3
-                    if (total <= 0) {
-                      setPredictError('Stake at least one line.')
-                      return
-                    }
-                    if (sf > 0 && (!predictPick1 || !predictPick2 || !predictPick3)) {
-                      setPredictError('Full combo: pick #1, #2, #3 when stake > 0.')
-                      return
-                    }
-                    if (sf > 0) {
-                      const a = predictPick1.toLowerCase()
-                      const b = predictPick2.toLowerCase()
-                      const c = predictPick3.toLowerCase()
-                      if (a === b || b === c || a === c) {
-                        setPredictError('Full combo: three different players.')
-                        return
-                      }
-                    }
-                    if (s1 > 0 && !predictPickOnly1) {
-                      setPredictError('Pick someone for #1-only.')
-                      return
-                    }
-                    if (s2 > 0 && !predictPickOnly2) {
-                      setPredictError('Pick someone for #2-only.')
-                      return
-                    }
-                    if (s3 > 0 && !predictPickOnly3) {
-                      setPredictError('Pick someone for #3-only.')
-                      return
-                    }
-                    if (cobbleBalance < total) {
-                      setPredictError(`Need ${total.toLocaleString()} Cobble$ (wallet too low).`)
-                      return
-                    }
-                    setPredictBusy(true)
-                    try {
-                      const res = await submitPvpTopPrediction({
-                        pickRank1: sf > 0 ? predictPick1 : '',
-                        pickRank2: sf > 0 ? predictPick2 : '',
-                        pickRank3: sf > 0 ? predictPick3 : '',
-                        stake: sf,
-                        stakeRank1Only: s1,
-                        pickRank1Only: s1 > 0 ? predictPickOnly1 : '',
-                        stakeRank2Only: s2,
-                        pickRank2Only: s2 > 0 ? predictPickOnly2 : '',
-                        stakeRank3Only: s3,
-                        pickRank3Only: s3 > 0 ? predictPickOnly3 : '',
-                      })
-                      setPredictSuccess(`Submitted for ${res.forPayoutDate}.`)
-                      setCobbleBalance(res.newBalance)
-                      setPredictStakeFull('')
-                      setPredictStakeOnly1('')
-                      setPredictStakeOnly2('')
-                      setPredictStakeOnly3('')
-                      const next = await fetchPvpTopPrediction()
-                      setPvpPredict(next)
-                    } catch (err) {
-                      setPredictError(err instanceof Error ? err.message : 'Submit failed')
-                    } finally {
-                      setPredictBusy(false)
-                    }
-                  }}
-                >
-                  <div className="space-y-3 rounded-lg border border-violet-500/25 bg-violet-950/20 p-3">
-                    <p className="text-xs font-medium text-violet-200 m-0">
-                      Exact #1 → #2 → #3 order — ×{pvpPredict.winMultiplierFull}{' '}
-                      <span className="font-normal text-muted">(optional)</span>
-                    </p>
-                    {(['1st', '2nd', '3rd'] as const).map((label, i) => {
-                      const value = i === 0 ? predictPick1 : i === 1 ? predictPick2 : predictPick3
-                      const set =
-                        i === 0 ? setPredictPick1 : i === 1 ? setPredictPick2 : setPredictPick3
-                      return (
-                        <label key={label} className="block">
-                          <span className="block text-xs text-muted mb-1">{label} place</span>
-                          <CustomSelect
-                            value={value}
-                            onChange={(v) => set(v)}
-                            disabled={predictBusy}
-                            options={[
-                              { value: '', label: '— Select —' },
-                              ...pvpPredict.rankedPlayers.map((p) => ({
-                                value: p.playerName,
-                                label: `#${p.rank} ${p.playerName}`,
-                              })),
-                            ]}
-                            buttonClassName="w-full rounded-lg border border-border bg-[#0f0a1a]/80 px-3 py-2 text-sm text-[#e2e8f0]"
-                          />
-                        </label>
-                      )
-                    })}
-                    <label className="block">
-                      <span className="block text-xs text-muted mb-1">Stake (0 = skip)</span>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        value={predictStakeFull}
-                        onChange={(e) => setPredictStakeFull(e.target.value)}
-                        placeholder="0"
-                        className="w-full rounded-lg border border-border bg-[#0f0a1a]/80 px-3 py-2 text-sm text-[#e2e8f0] tabular-nums"
-                        disabled={predictBusy}
-                      />
-                    </label>
-                  </div>
-                  {[1, 2, 3].map((rank) => {
-                    const pick =
-                      rank === 1
-                        ? predictPickOnly1
-                        : rank === 2
-                          ? predictPickOnly2
-                          : predictPickOnly3
-                    const setPick =
-                      rank === 1
-                        ? setPredictPickOnly1
-                        : rank === 2
-                          ? setPredictPickOnly2
-                          : setPredictPickOnly3
-                    const stakeVal =
-                      rank === 1
-                        ? predictStakeOnly1
-                        : rank === 2
-                          ? predictStakeOnly2
-                          : predictStakeOnly3
-                    const setStake =
-                      rank === 1
-                        ? setPredictStakeOnly1
-                        : rank === 2
-                          ? setPredictStakeOnly2
-                          : setPredictStakeOnly3
-                    return (
-                      <div
-                        key={`only-${rank}`}
-                        className="space-y-2 rounded-lg border border-border/70 bg-[#0f0a1a]/40 p-3"
-                      >
-                        <p className="text-xs font-medium text-[#e2e8f0] m-0">
-                          Who finishes #{rank}? only — ×{pvpPredict.winMultiplierSlot}
-                        </p>
-                        <label className="block">
-                          <span className="block text-xs text-muted mb-1">Player</span>
-                          <CustomSelect
-                            value={pick}
-                            onChange={(v) => setPick(v)}
-                            disabled={predictBusy}
-                            options={[
-                              { value: '', label: '— Select —' },
-                              ...pvpPredict.rankedPlayers.map((p) => ({
-                                value: p.playerName,
-                                label: `#${p.rank} ${p.playerName}`,
-                              })),
-                            ]}
-                            buttonClassName="w-full rounded-lg border border-border bg-[#0f0a1a]/80 px-3 py-2 text-sm text-[#e2e8f0]"
-                          />
-                        </label>
-                        <label className="block">
-                          <span className="block text-xs text-muted mb-1">Stake (0 = skip)</span>
-                          <input
-                            type="text"
-                            inputMode="numeric"
-                            value={stakeVal}
-                            onChange={(e) => setStake(e.target.value)}
-                            placeholder="0"
-                            className="w-full rounded-lg border border-border bg-[#0f0a1a]/80 px-3 py-2 text-sm tabular-nums text-[#e2e8f0]"
-                            disabled={predictBusy}
-                          />
-                        </label>
-                      </div>
-                    )
-                  })}
-                  <button
-                    type="submit"
-                    disabled={predictBusy || !pvpPredict.windowOpen}
-                    className="py-2 px-4 pixel-btn-primary disabled:opacity-50"
-                  >
-                    {predictBusy ? 'Submitting…' : 'Lock predictions'}
-                  </button>
-                  {predictSuccess && <p className="text-sm text-emerald-300 m-0">{predictSuccess}</p>}
-                  {predictError && <p className="text-sm text-error m-0">{predictError}</p>}
-                </form>
-              ) : (
-                <p className="text-sm text-muted m-0">No entry — window closed for this round.</p>
-              )}
-            </div>
-          )}
-        </>
+        <TournamentPredictionPanel
+          cobbleBalance={cobbleBalance}
+          onBalanceChange={setCobbleBalance}
+        />
       )}
+
 
       {activeTab === 'inventory' && (
         <>
@@ -1187,7 +866,7 @@ export function Account() {
                       disabled={it.quantity < 1 || claimBusyItem === it.item_key}
                       className="shrink-0 py-2 px-3 pixel-btn-primary disabled:opacity-50 text-base"
                     >
-                      {claimBusyItem === it.item_key ? 'Claiming…' : 'Claim'}
+                      {claimBusyItem === it.item_key ? 'Claimingâ€¦' : 'Claim'}
                     </button>
                   </li>
                 ))}
@@ -1223,10 +902,10 @@ export function Account() {
               className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100"
               role="status"
             >
-              <p className="m-0 font-medium">Shop chỉ dùng sau khi xác minh tài khoản</p>
+              <p className="m-0 font-medium">Shop chá»‰ dÃ¹ng sau khi xÃ¡c minh tÃ i khoáº£n</p>
               <p className="m-0 mt-1 text-xs text-amber-100/90">
-                Chưa verified thì không mua được trên website (Shop / Pokémon Shop). Hãy gửi yêu cầu xác minh ở tab
-                Account. Trừ admin.
+                ChÆ°a verified thÃ¬ khÃ´ng mua Ä‘Æ°á»£c trÃªn website (Shop / PokÃ©mon Shop). HÃ£y gá»­i yÃªu cáº§u xÃ¡c minh á»Ÿ tab
+                Account. Trá»« admin.
               </p>
               <p className="m-0 mt-1 text-xs text-amber-100/75">
                 Verified accounts only can purchase on the web shop; browse prices as usual.
@@ -1237,7 +916,7 @@ export function Account() {
           <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-3">Shop</h2>
           {shopDiscountPercent > 0 ? (
             <p className="text-sm text-emerald-300/95 m-0 mb-3">
-              Rank discount: −{shopDiscountPercent}% on Cobble$ (item shop + Pokémon shop).
+              Rank discount: âˆ’{shopDiscountPercent}% on Cobble$ (item shop + PokÃ©mon shop).
             </p>
           ) : null}
           <div className="mb-6 pixel-well p-4">
@@ -1265,7 +944,7 @@ export function Account() {
                     }
                     className="shrink-0 py-2 px-3 pixel-btn-primary disabled:opacity-50 text-base"
                   >
-                    {shopBusyItem === item.itemKey ? 'Buying…' : 'Buy'}
+                    {shopBusyItem === item.itemKey ? 'Buyingâ€¦' : 'Buy'}
                   </button>
                 </div>
               ))}
@@ -1278,7 +957,7 @@ export function Account() {
           <div className="mb-6 pixel-well p-4">
             <p className="text-sm text-muted m-0 mb-3">
               Refresh in: {pokemonCountdown}. Each slot is <strong className="text-slate-300">one copy site-wide</strong>{' '}
-              per rotation — 6 slots; first buyer takes each. Each slot rolls shiny or normal (~35% shiny).
+              per rotation â€” 6 slots; first buyer takes each. Each slot rolls shiny or normal (~35% shiny).
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {pokemonOffers.map((offer) => (
@@ -1292,7 +971,7 @@ export function Account() {
                       {displayItemName(offer.species)}
                     </p>
                     <p className="text-xs text-muted m-0">
-                      {formatPokemonShopCategory(offer.category)} ·{' '}
+                      {formatPokemonShopCategory(offer.category)} Â·{' '}
                       {shopDiscountPercent > 0 && offer.price < offer.listPrice ? (
                         <>
                           <span className="line-through opacity-70">{offer.listPrice.toLocaleString()}</span>{' '}
@@ -1319,7 +998,7 @@ export function Account() {
                       : offer.purchasedByYou
                         ? 'Yours'
                         : pokemonBusy === `buy-${offer.slot}`
-                          ? 'Buying…'
+                          ? 'Buyingâ€¦'
                           : 'Buy'}
                   </button>
                 </div>
@@ -1339,7 +1018,7 @@ export function Account() {
                         {displayItemName(p.species)}
                       </p>
                       <p className="text-xs text-muted m-0">
-                        {new Date(p.purchasedAt).toLocaleString()} · {p.price.toLocaleString()} Cobble$
+                        {new Date(p.purchasedAt).toLocaleString()} Â· {p.price.toLocaleString()} Cobble$
                       </p>
                       {(p.claimedAt || pokemonClaimedToServerAt[p.id]) && (
                         <p className="text-xs text-emerald-300 m-0 mt-1">
@@ -1355,7 +1034,7 @@ export function Account() {
                         disabled={pokemonBusy === `claim-${p.id}`}
                         className="shrink-0 py-2 px-3 pixel-btn-primary disabled:opacity-50 text-base"
                       >
-                        {pokemonBusy === `claim-${p.id}` ? 'Claiming…' : 'Claim'}
+                        {pokemonBusy === `claim-${p.id}` ? 'Claimingâ€¦' : 'Claim'}
                       </button>
                     )}
                   </div>
@@ -1376,7 +1055,7 @@ export function Account() {
             <span className="text-[#fbbf24] font-semibold tabular-nums">{cobbleBalance.toLocaleString()}</span>
           </p>
           <p className="text-sm text-muted m-0 mb-3">
-            Rank hiện tại:{' '}
+            Rank hiá»‡n táº¡i:{' '}
             <span className="inline-flex align-middle mr-1">
               <RoleBadge roleKey={roleStatus?.currentRole ?? user?.minecraft_role ?? 'member'} />
             </span>
@@ -1389,7 +1068,7 @@ export function Account() {
               className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100"
               role="status"
             >
-              <p className="m-0 font-medium">Mua rank cần tài khoản đã xác minh</p>
+              <p className="m-0 font-medium">Mua rank cáº§n tÃ i khoáº£n Ä‘Ã£ xÃ¡c minh</p>
               <p className="m-0 mt-1 text-xs text-amber-100/85">
                 Verified accounts only can purchase ranks; you can still request staff-granted ranks below (pending
                 review).
@@ -1399,12 +1078,12 @@ export function Account() {
 
           <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-3">Mua rank (Cobble$)</h2>
           <p className="text-xs text-muted m-0 mb-3">
-            Bên dưới là quyền lợi đang áp dụng cho rank của bạn. Các thẻ tiếp theo để xem hoặc mua nâng rank.
+            BÃªn dÆ°á»›i lÃ  quyá»n lá»£i Ä‘ang Ã¡p dá»¥ng cho rank cá»§a báº¡n. CÃ¡c tháº» tiáº¿p theo Ä‘á»ƒ xem hoáº·c mua nÃ¢ng rank.
           </p>
           {roleCat ? (
             <div className="mb-4 rounded-lg border border-emerald-600/40 bg-emerald-950/25 px-3 py-2">
               <p className="text-[11px] font-medium text-emerald-200/95 m-0 mb-1">
-                Quyền lợi của bạn —{' '}
+                Quyá»n lá»£i cá»§a báº¡n â€”{' '}
                 <span className="text-[#e2e8f0]">
                   {(roleStatus?.currentRole ?? user?.minecraft_role ?? 'member').toUpperCase()}
                 </span>
@@ -1417,7 +1096,7 @@ export function Account() {
               />
             </div>
           ) : null}
-          <p className="text-xs text-muted m-0 mb-3">Sau khi thanh toán, rank được cập nhật trong game sau vài giây.</p>
+          <p className="text-xs text-muted m-0 mb-3">Sau khi thanh toÃ¡n, rank Ä‘Æ°á»£c cáº­p nháº­t trong game sau vÃ i giÃ¢y.</p>
           <div className="mb-6 pixel-well p-4 space-y-3">
             {roleCat?.purchasable?.length ? (
               roleCat.purchasable.map((entry) => (
@@ -1445,7 +1124,7 @@ export function Account() {
                       }
                       className="shrink-0 self-start px-4 py-2 text-base pixel-btn-primary disabled:opacity-50"
                     >
-                      {rankBusyKey === entry.key ? 'Buying…' : 'Buy'}
+                      {rankBusyKey === entry.key ? 'Buyingâ€¦' : 'Buy'}
                     </button>
                   </div>
                   <div className="w-full border-t border-border/45 pt-3">
@@ -1454,14 +1133,14 @@ export function Account() {
                 </div>
               ))
             ) : (
-              <p className="text-sm text-muted m-0">Không tải được danh sách rank (kiểm tra API / database).</p>
+              <p className="text-sm text-muted m-0">KhÃ´ng táº£i Ä‘Æ°á»£c danh sÃ¡ch rank (kiá»ƒm tra API / database).</p>
             )}
           </div>
 
-          <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-2">Rank chỉ admin cấp / xin cấp</h2>
+          <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-2">Rank chá»‰ admin cáº¥p / xin cáº¥p</h2>
           <p className="text-xs text-muted m-0 mb-3">
-            Legend, Ultimate, Overlord, God và các rank staff/partner (Champion, Helper, Mod, TikTok, Youtuber, Builder) —
-            không mua Cobble$ trên web. Gửi yêu cầu; staff duyệt sẽ cập nhật rank cho bạn.
+            Legend, Ultimate, Overlord, God vÃ  cÃ¡c rank staff/partner (Champion, Helper, Mod, TikTok, Youtuber, Builder) â€”
+            khÃ´ng mua Cobble$ trÃªn web. Gá»­i yÃªu cáº§u; staff duyá»‡t sáº½ cáº­p nháº­t rank cho báº¡n.
           </p>
           <div className="mb-4 space-y-3">
             {(roleCat?.grantOnly ?? []).map((g) => (
@@ -1494,7 +1173,7 @@ export function Account() {
                         : 'border-border bg-[#0f172a] hover:bg-[#1e293b]'
                     }`}
                   >
-                    {grantRolePick === g.key ? 'Đã chọn' : 'Chọn'}
+                    {grantRolePick === g.key ? 'ÄÃ£ chá»n' : 'Chá»n'}
                   </button>
                 </div>
                 <div className="w-full border-t border-border/45 pt-3">
@@ -1506,18 +1185,18 @@ export function Account() {
           <div className="mb-6 pixel-well p-4 space-y-3">
             {roleStatus?.pending ? (
               <p className="text-sm text-amber-200 m-0">
-                Đang chờ duyệt: <strong>{roleStatus.pending.requested_role}</strong> (gửi lúc{' '}
+                Äang chá» duyá»‡t: <strong>{roleStatus.pending.requested_role}</strong> (gá»­i lÃºc{' '}
                 {new Date(roleStatus.pending.created_at).toLocaleString()})
               </p>
             ) : (
               <form onSubmit={handleSubmitGrant} className="space-y-2">
                 <label className="block text-sm text-[#e2e8f0]">
-                  Rank đã chọn
+                  Rank Ä‘Ã£ chá»n
                   <CustomSelect
                     value={grantRolePick}
                     onChange={(v) => setGrantRolePick(v)}
                     options={[
-                      { value: '', label: '— Chọn ở danh sách trên hoặc tại đây —' },
+                      { value: '', label: 'â€” Chá»n á»Ÿ danh sÃ¡ch trÃªn hoáº·c táº¡i Ä‘Ã¢y â€”' },
                       ...(roleCat?.grantOnly ?? []).map((g) => ({
                         value: g.key,
                         label: `${g.label} (${g.key})`,
@@ -1528,13 +1207,13 @@ export function Account() {
                   />
                 </label>
                 <label className="block text-sm text-[#e2e8f0]">
-                  Lời nhắn (tuỳ chọn)
+                  Lá»i nháº¯n (tuá»³ chá»n)
                   <textarea
                     value={grantMessage}
                     onChange={(e) => setGrantMessage(e.target.value)}
                     rows={2}
                     className="mt-1 block w-full rounded border border-border bg-[#0f172a] px-2 py-2 text-base text-[#e2e8f0]"
-                    placeholder="Ví dụ: link TikTok / lý do cần rank…"
+                    placeholder="VÃ­ dá»¥: link TikTok / lÃ½ do cáº§n rankâ€¦"
                   />
                 </label>
                 <button
@@ -1542,17 +1221,17 @@ export function Account() {
                   disabled={grantSubmitting || !grantRolePick || Boolean(roleStatus?.pending)}
                   className="py-2 px-4 pixel-btn-primary disabled:opacity-50"
                 >
-                  {grantSubmitting ? 'Sending…' : 'Gửi yêu cầu'}
+                  {grantSubmitting ? 'Sendingâ€¦' : 'Gá»­i yÃªu cáº§u'}
                 </button>
               </form>
             )}
             {roleStatus?.lastResolved ? (
               <p className="text-xs text-muted m-0 border-t border-border/60 pt-2">
-                Gần nhất: {roleStatus.lastResolved.status} — {roleStatus.lastResolved.requested_role}
+                Gáº§n nháº¥t: {roleStatus.lastResolved.status} â€” {roleStatus.lastResolved.requested_role}
                 {roleStatus.lastResolved.resolved_at
-                  ? ` · ${new Date(roleStatus.lastResolved.resolved_at).toLocaleString()}`
+                  ? ` Â· ${new Date(roleStatus.lastResolved.resolved_at).toLocaleString()}`
                   : ''}
-                {roleStatus.lastResolved.admin_note ? ` — Note: ${roleStatus.lastResolved.admin_note}` : ''}
+                {roleStatus.lastResolved.admin_note ? ` â€” Note: ${roleStatus.lastResolved.admin_note}` : ''}
               </p>
             ) : null}
           </div>
@@ -1579,32 +1258,32 @@ export function Account() {
               {user?.is_admin ? (
                 <p className="text-sm text-emerald-200/90 m-0">Admin accounts do not need to submit a request.</p>
               ) : vLoading ? (
-                <p className="text-sm text-muted m-0">Đang tải trạng thái…</p>
+                <p className="text-sm text-muted m-0">Äang táº£i tráº¡ng thÃ¡iâ€¦</p>
               ) : vStatus?.verified || isAccountVerified(user) ? (
                 <p className="text-sm text-emerald-200/90 m-0 flex flex-wrap items-center gap-2">
-                  Tài khoản đã được xác minh.
+                  TÃ i khoáº£n Ä‘Ã£ Ä‘Æ°á»£c xÃ¡c minh.
                   <VerifiedAccountBadge className="w-5 h-5" />
                 </p>
               ) : (
                 <>
                   {vStatus?.pending ? (
                     <p className="text-sm text-amber-200/90 m-0">
-                      Đã gửi yêu cầu · đang chờ quản trị viên ·{' '}
+                      ÄÃ£ gá»­i yÃªu cáº§u Â· Ä‘ang chá» quáº£n trá»‹ viÃªn Â·{' '}
                       {new Date(vStatus.pending.created_at).toLocaleString('vi-VN')}
                       {vStatus.pending.message ? (
-                        <span className="block mt-2 text-muted">Nội dung: {vStatus.pending.message}</span>
+                        <span className="block mt-2 text-muted">Ná»™i dung: {vStatus.pending.message}</span>
                       ) : null}
                     </p>
                   ) : null}
                   {vStatus?.lastResolved?.status === 'rejected' ? (
                     <div className="rounded-lg border border-red-500/30 bg-red-950/20 p-3 text-sm">
-                      <p className="text-red-200/95 m-0 font-medium">Yêu cầu trước bị từ chối</p>
+                      <p className="text-red-200/95 m-0 font-medium">YÃªu cáº§u trÆ°á»›c bá»‹ tá»« chá»‘i</p>
                       {vStatus.lastResolved.admin_note ? (
                         <p className="text-red-100/90 m-0 mt-2 text-xs">
-                          Ghi chú: {vStatus.lastResolved.admin_note}
+                          Ghi chÃº: {vStatus.lastResolved.admin_note}
                         </p>
                       ) : null}
-                      <p className="text-muted m-0 mt-2 text-xs">Bạn có thể gửi yêu cầu mới bên dưới.</p>
+                      <p className="text-muted m-0 mt-2 text-xs">Báº¡n cÃ³ thá»ƒ gá»­i yÃªu cáº§u má»›i bÃªn dÆ°á»›i.</p>
                     </div>
                   ) : null}
                   {!vStatus?.pending ? (
@@ -1613,7 +1292,7 @@ export function Account() {
                         <p className="text-sm text-red-400 m-0">{vError}</p>
                       ) : null}
                       <label htmlFor="verify-req-msg" className="block text-xs text-muted mb-1">
-                        Lời nhắn (không bắt buộc)
+                        Lá»i nháº¯n (khÃ´ng báº¯t buá»™c)
                       </label>
                       <textarea
                         id="verify-req-msg"
@@ -1621,7 +1300,7 @@ export function Account() {
                         onChange={(e) => setVRequestNote(e.target.value)}
                         rows={3}
                         maxLength={2000}
-                        placeholder="Ví dụ: IGN trong game, Discord, minh chứng…"
+                        placeholder="VÃ­ dá»¥: IGN trong game, Discord, minh chá»©ngâ€¦"
                         className="w-full px-3 py-2 rounded-lg bg-[#0f0a1a] border border-border text-[#e2e8f0] text-sm"
                       />
                       <button
@@ -1629,7 +1308,7 @@ export function Account() {
                         disabled={vSubmitting}
                         className="py-2 px-4 pixel-btn-primary disabled:opacity-50 text-base"
                       >
-                        {vSubmitting ? 'Đang gửi…' : 'Gửi yêu cầu xác minh'}
+                        {vSubmitting ? 'Äang gá»­iâ€¦' : 'Gá»­i yÃªu cáº§u xÃ¡c minh'}
                       </button>
                     </form>
                   ) : null}
@@ -1698,7 +1377,7 @@ export function Account() {
           disabled={submitting}
           className="w-full sm:w-auto py-2.5 px-6 pixel-btn-primary disabled:opacity-50"
         >
-          {submitting ? 'Updating…' : 'Update password'}
+          {submitting ? 'Updatingâ€¦' : 'Update password'}
         </button>
           </form>
         </>

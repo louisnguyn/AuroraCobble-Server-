@@ -263,61 +263,53 @@ export async function fetchUserRankedHistory(params?: { limit?: number }): Promi
   )
 }
 
-export interface PvpTopPredictionPlayer {
-  rank: number
-  playerName: string
+export interface TournamentPredictionParticipant {
+  id: number
+  seedRank: number
+  displayName: string
 }
 
-export interface PvpTopPredictionEntry {
+export interface TournamentPredictionEntry {
   id: number
-  stake: number
-  pick_rank1_name: string
-  pick_rank2_name: string
-  pick_rank3_name: string
-  stake_rank1_only: number
-  pick_rank1_only: string | null
-  stake_rank2_only: number
-  pick_rank2_only: string | null
-  stake_rank3_only: number
-  pick_rank3_only: string | null
-  result: string
-  payout_amount: number | null
+  stake_champion: number
+  pick_champion_participant_id: number | null
+  stake_runner_up: number
+  pick_runner_up_participant_id: number | null
+  result_champion: string
+  result_runner_up: string
+  payout_champion: number | null
+  payout_runner_up: number | null
   resolved_at: string | null
 }
 
-export interface PvpTopPredictionStatus {
-  label?: string
-  forPayoutDate: string
-  formatKey: string
-  windowOpen: boolean
-  resetTimeZone?: string
-  settlesAtLocalMidnight?: boolean
-  maxStake: number
-  minStake: number
-  winMultiplierFull: number
-  winMultiplierSlot: number
-  rankedPlayers: PvpTopPredictionPlayer[]
-  entry: PvpTopPredictionEntry | null
+export interface TournamentPredictionStatus {
+  active: boolean
+  windowOpen?: boolean
+  tournament?: { id: number; slug: string; title: string; subtitle?: string | null } | null
+  predictionsLockedAt?: string | null
+  maxStake?: number
+  minStake?: number
+  championWinMultiplier?: number
+  runnerUpWinMultiplier?: number
+  participants?: TournamentPredictionParticipant[]
+  resultsReady?: boolean
+  championParticipantId?: number | null
+  runnerUpParticipantId?: number | null
+  entry?: TournamentPredictionEntry | null
 }
 
-export async function fetchPvpTopPrediction(): Promise<PvpTopPredictionStatus> {
-  return fetchApi<PvpTopPredictionStatus>('/user/pvp-top-prediction')
+export async function fetchTournamentPrediction(): Promise<TournamentPredictionStatus> {
+  return fetchApi<TournamentPredictionStatus>('/user/tournament-prediction')
 }
 
-export async function submitPvpTopPrediction(body: {
-  pickRank1: string
-  pickRank2: string
-  pickRank3: string
-  stake: number
-  stakeRank1Only?: number
-  pickRank1Only?: string
-  stakeRank2Only?: number
-  pickRank2Only?: string
-  stakeRank3Only?: number
-  pickRank3Only?: string
-}): Promise<{ ok: boolean; newBalance: number; forPayoutDate: string }> {
-  return fetchApi<{ ok: boolean; newBalance: number; forPayoutDate: string }>(
-    '/user/pvp-top-prediction',
+export async function submitTournamentPrediction(body: {
+  pickChampionParticipantId: number
+  stakeChampion: number
+  pickRunnerUpParticipantId: number
+  stakeRunnerUp: number
+}): Promise<{ ok: boolean; newBalance: number; tournamentId: number }> {
+  return fetchApi<{ ok: boolean; newBalance: number; tournamentId: number }>(
+    '/user/tournament-prediction',
     {
       method: 'POST',
       body: JSON.stringify(body),

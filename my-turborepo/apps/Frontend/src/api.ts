@@ -82,6 +82,27 @@ export async function fetchSpawnBoss(params?: { q?: string; limit?: number }) {
 
 export type TeamAnalysisLanguage = 'en' | 'vi'
 
+/** Upload team text to pokepast.es via backend proxy; returns shareable URL. */
+export async function createTeamPokepasteLink(body: {
+  paste: string
+  title?: string
+  author?: string
+}): Promise<{ url: string }> {
+  const res = await fetch(`${apiOrigin}/team/pokepaste-link`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const data = (await res.json().catch(() => null)) as { url?: string; error?: string } | null
+  if (!res.ok) {
+    throw new Error(data?.error ?? `PokePaste failed (${res.status})`)
+  }
+  if (!data?.url?.trim()) {
+    throw new Error('PokePaste did not return a link')
+  }
+  return { url: data.url.trim() }
+}
+
 export async function analyzeTeamWithAI(
   pokepaste: string,
   opts?: { language?: TeamAnalysisLanguage }

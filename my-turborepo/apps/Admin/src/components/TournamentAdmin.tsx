@@ -8,6 +8,8 @@ import {
   adminPatchTournament,
   adminSetMatchWinner,
   adminUpsertParticipant,
+  adminFetchTournamentPredictionSettings,
+  adminUpdateTournamentPredictionSettings,
   type TournamentBracketMatch,
   type TournamentBracketSlot,
 } from '../authApi'
@@ -95,6 +97,14 @@ function bracketSizeFromUnknown(v: unknown): 8 | 12 {
   return Number(v) === 8 ? 8 : 12
 }
 
+function isoToDatetimeLocal(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 export function TournamentAdmin() {
   const [tournaments, setTournaments] = useState<TRow[]>([])
   const [selectedId, setSelectedId] = useState<number | null>(null)
@@ -118,6 +128,14 @@ export function TournamentAdmin() {
   const [parsePreview, setParsePreview] = useState<number | null>(null)
   const [qfQualDraft, setQfQualDraft] = useState<[number, number, number, number]>([...DEFAULT_QF_FEED])
   const [prizesDraft, setPrizesDraft] = useState('')
+
+  const [predTournamentId, setPredTournamentId] = useState<string>('')
+  const [predLockedAt, setPredLockedAt] = useState('')
+  const [predMaxStake, setPredMaxStake] = useState('20000')
+  const [predMinStake, setPredMinStake] = useState('100')
+  const [predChampMult, setPredChampMult] = useState('2')
+  const [predRuMult, setPredRuMult] = useState('2')
+  const [predSaving, setPredSaving] = useState(false)
 
   const qfDraftIsPermutation = new Set(qfQualDraft).size === 4
 
@@ -151,9 +169,26 @@ export function TournamentAdmin() {
       .finally(() => setLoading(false))
   }, [])
 
+  const loadPredictionSettings = useCallback(() => {
+    adminFetchTournamentPredictionSettings()
+      .then((r) => {
+        const s = r.settings
+        if (s) {
+          setPredTournamentId(s.tournamentId != null ? String(s.tournamentId) : '')
+          setPredLockedAt(isoToDatetimeLocal(s.predictionsLockedAt))
+          setPredMaxStake(String(s.maxStake))
+          setPredMinStake(String(s.minStake))
+          setPredChampMult(String(s.championWinMultiplier))
+          setPredRuMult(String(s.runnerUpWinMultiplier))
+        }
+      })
+      .catch((e) => setErr(e instanceof Error ? e.message : 'Prediction settings failed'))
+  }, [])
+
   useEffect(() => {
     refreshList()
-  }, [refreshList])
+    loadPredictionSettings()
+  }, [refreshList, loadPredictionSettings])
 
   useEffect(() => {
     if (selectedId != null) loadBracket(selectedId)
@@ -261,6 +296,34 @@ export function TournamentAdmin() {
     }
   }
 
+  const handleSavePredictionSettings = async () => {
+    setPredSaving(true)
+    setErr(null)
+    try {
+      const maxStake = parseInt(predMaxStake.replace(/,/g, ''), 10)
+      const minStake = parseInt(predMinStake.replace(/,/g, ''), 10)
+      const championWinMultiplier = parseFloat(predChampMult)
+      const runnerUpWinMultiplier = parseFloat(predRuMult)
+      if (!Number.isInteger(maxStake) || maxStake < 1) {
+        throw new Error('Max stake must be a positive integer')
+      }
+      await adminUpdateTournamentPredictionSettings({
+        tournamentId: predTournamentId ? parseInt(predTournamentId, 10) : null,
+        predictionsLockedAt: predLockedAt.trim() ? new Date(predLockedAt).toISOString() : null,
+        maxStake,
+        minStake,
+        championWinMultiplier,
+        runnerUpWinMultiplier,
+      })
+      setMsg('Tournament prediction settings saved')
+      loadPredictionSettings()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Save prediction settings failed')
+    } finally {
+      setPredSaving(false)
+    }
+  }
+
   const handleSaveBracketSize = async (size: 8 | 12) => {
     if (selectedId == null) return
     setErr(null)
@@ -299,6 +362,85 @@ export function TournamentAdmin() {
       {err ? (
         <p className="text-sm text-red-300 m-0 px-4 py-3 rounded-xl border border-red-500/35 bg-red-950/30">{err}</p>
       ) : null}
+
+      <section className={cardClass}>
+        <h3 className="text-sm font-semibold text-cyan-200 m-0 tracking-wide uppercase">Tournament predictions</h3>
+        <p className="text-xs text-muted m-0 leading-relaxed">
+          Choose which tournament users can bet on (champion + runner-up). Leave tournament empty to disable
+          predictions. Set a lock date — after that, users cannot submit. Payouts run automatically when you set the
+          final match winner in the bracket below.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="sm:col-span-2 block space-y-1">
+            <span className="text-xs text-slate-400">Active tournament</span>
+            <select
+              className={selectClass}
+              value={predTournamentId}
+              onChange={(e) => setPredTournamentId(e.target.value)}
+            >
+              <option value="">None (predictions off)</option>
+              {tournaments.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.title} · {t.slug}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block space-y-1">
+            <span className="text-xs text-slate-400">Lock predictions at (local time)</span>
+            <input
+              type="datetime-local"
+              className={fieldClass}
+              value={predLockedAt}
+              onChange={(e) => setPredLockedAt(e.target.value)}
+            />
+          </label>
+          <label className="block space-y-1">
+            <span className="text-xs text-slate-400">Max stake (Cobble$)</span>
+            <input
+              className={fieldClass}
+              inputMode="numeric"
+              value={predMaxStake}
+              onChange={(e) => setPredMaxStake(e.target.value)}
+            />
+          </label>
+          <label className="block space-y-1">
+            <span className="text-xs text-slate-400">Min stake</span>
+            <input
+              className={fieldClass}
+              inputMode="numeric"
+              value={predMinStake}
+              onChange={(e) => setPredMinStake(e.target.value)}
+            />
+          </label>
+          <label className="block space-y-1">
+            <span className="text-xs text-slate-400">Champion win multiplier</span>
+            <input
+              className={fieldClass}
+              inputMode="decimal"
+              value={predChampMult}
+              onChange={(e) => setPredChampMult(e.target.value)}
+            />
+          </label>
+          <label className="block space-y-1">
+            <span className="text-xs text-slate-400">Runner-up win multiplier</span>
+            <input
+              className={fieldClass}
+              inputMode="decimal"
+              value={predRuMult}
+              onChange={(e) => setPredRuMult(e.target.value)}
+            />
+          </label>
+        </div>
+        <button
+          type="button"
+          onClick={() => void handleSavePredictionSettings()}
+          disabled={predSaving}
+          className={btnPrimary}
+        >
+          {predSaving ? 'Saving…' : 'Save prediction settings'}
+        </button>
+      </section>
 
       <section className={cardClass}>
         <h3 className="text-sm font-semibold text-cyan-200 m-0 tracking-wide uppercase">New tournament</h3>

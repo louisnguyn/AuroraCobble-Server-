@@ -8,6 +8,7 @@ import {
   type BuiltMatch,
   type ParticipantRow,
 } from "./tournamentBracket.js";
+import { resolveTournamentPredictionsForTournament } from "./tournamentPrediction.js";
 
 function qfFeedFromRow(t: { qf_qual_feed?: unknown } | null | undefined): [number, number, number, number] {
   return normalizeQfQualFeed(t?.qf_qual_feed) ?? ([...DEFAULT_QF_QUAL_FEED] as [number, number, number, number]);
@@ -287,6 +288,14 @@ export function registerTournamentRoutes(
     if (upErr) {
       res.status(500).json({ error: upErr.message });
       return;
+    }
+    if (matchKey === "final") {
+      void resolveTournamentPredictionsForTournament(tournamentId).catch((e) =>
+        console.warn(
+          "[tournament-prediction] resolve after final:",
+          e instanceof Error ? e.message : e
+        )
+      );
     }
     res.json({ ok: true, matchKey, winner_participant_id: winnerId });
   });

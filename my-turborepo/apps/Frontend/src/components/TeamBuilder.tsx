@@ -26,7 +26,7 @@ import {
   teamSlotsToPaste,
   type TeamBuildSlot,
 } from '../pokepasteParse'
-import { analyzeTeamWithAI, type TeamAnalysisLanguage } from '../api'
+import { analyzeTeamWithAI, createTeamPokepasteLink, type TeamAnalysisLanguage } from '../api'
 import {
   fetchAbilityList,
   fetchItemImage,
@@ -412,6 +412,8 @@ export function TeamBuilder() {
   const [savedLoading, setSavedLoading] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saveOk, setSaveOk] = useState<string | null>(null)
+  const [pokepasteBusy, setPokepasteBusy] = useState(false)
+  const [pokepasteUrl, setPokepasteUrl] = useState<string | null>(null)
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null)
@@ -553,12 +555,51 @@ export function TeamBuilder() {
     const text = teamSlotsToPaste(slots)
     try {
       await navigator.clipboard.writeText(text)
-      setSaveOk('Paste copied to clipboard.')
+      setSaveOk('Showdown paste copied to clipboard.')
     } catch {
       setSaveOk(null)
     }
     setTimeout(() => setSaveOk(null), 2500)
   }, [slots])
+
+  const uploadToPokepaste = useCallback(
+    async (paste: string, title: string) => {
+      if (!paste.trim()) {
+        setSaveError(null)
+        setSaveOk('Add at least one Pokémon first.')
+        setTimeout(() => setSaveOk(null), 2500)
+        return
+      }
+      setPokepasteBusy(true)
+      setPokepasteUrl(null)
+      setSaveError(null)
+      try {
+        const author = user?.username?.trim() || 'AuroraCobble'
+        const { url } = await createTeamPokepasteLink({
+          paste,
+          title: title.trim() || 'Team',
+          author,
+        })
+        setPokepasteUrl(url)
+        try {
+          await navigator.clipboard.writeText(url)
+          setSaveOk('PokePaste link copied to clipboard.')
+        } catch {
+          setSaveOk('PokePaste link created — open the link below.')
+        }
+      } catch (e) {
+        setSaveError(e instanceof Error ? e.message : 'PokePaste upload failed')
+      } finally {
+        setPokepasteBusy(false)
+        setTimeout(() => setSaveOk(null), 5000)
+      }
+    },
+    [user?.username],
+  )
+
+  const createPokepasteLinkForCurrentTeam = useCallback(() => {
+    void uploadToPokepaste(teamSlotsToPaste(slots), teamName)
+  }, [slots, teamName, uploadToPokepaste])
 
   const runTeamAnalyseByAi = useCallback(async () => {
     if (!isAuthenticated) {
@@ -671,12 +712,19 @@ export function TeamBuilder() {
     const text = teamSlotsToPaste(slotsFromSavedJson(row.team_json))
     try {
       await navigator.clipboard.writeText(text)
-      setSaveOk(`"${row.name}" pokepaste copied.`)
+      setSaveOk(`"${row.name}" paste copied.`)
     } catch {
       setSaveOk('Could not copy to clipboard.')
     }
     setTimeout(() => setSaveOk(null), 2500)
   }, [])
+
+  const createPokepasteLinkForSavedTeam = useCallback(
+    (row: SavedTeamRow) => {
+      void uploadToPokepaste(teamSlotsToPaste(slotsFromSavedJson(row.team_json)), row.name)
+    },
+    [uploadToPokepaste],
+  )
 
   const handleDelete = async (id: number) => {
     if (!confirm('Delete this saved team?')) return
@@ -703,6 +751,7 @@ export function TeamBuilder() {
     setTeamName('')
     setSavedTeamRowId(null)
     setPasteImport('')
+    setPokepasteUrl(null)
     setSaveError(null)
     setSaveOk(null)
     setAiAnalysis(null)
@@ -717,7 +766,8 @@ export function TeamBuilder() {
         <h1 className="text-2xl sm:text-3xl font-semibold m-0 text-[#f5efe6]">Team Builder</h1>
         <p className="text-sm text-muted m-0 mt-2 max-w-2xl">
           Tap <span className="text-[#f5efe6]">+</span> on an empty slot to add a Pokémon. Filled slots
-          show sprite and item. Log in to save teams to your account.
+          show sprite and item. Export as Showdown paste text or upload a{' '}
+          <span className="text-[#f5efe6]">PokePaste</span> link (pokepast.es). Log in to save teams.
         </p>
       </header>
 
@@ -725,8 +775,16 @@ export function TeamBuilder() {
         <button type="button" onClick={newTeam} className="pixel-btn text-sm h-11 px-4">
           New team
         </button>
-        <button type="button" onClick={exportPaste} className="pixel-btn text-sm h-11 px-4">
-          Copy current team
+        <button type="button" onClick={() => void exportPaste()} className="pixel-btn text-sm h-11 px-4">
+          Copy paste text
+        </button>
+        <button
+          type="button"
+          onClick={createPokepasteLinkForCurrentTeam}
+          disabled={pokepasteBusy}
+          className="pixel-btn-primary text-sm h-11 px-4 disabled:opacity-60"
+        >
+          {pokepasteBusy ? 'Uploading…' : 'Create PokePaste link'}
         </button>
         {canUseTeamAi ? (
           <>
@@ -764,6 +822,34 @@ export function TeamBuilder() {
           </>
         ) : null}
       </div>
+
+      {(saveOk || saveError || pokepasteUrl) && (
+        <div className="pixel-panel-soft p-3 space-y-2 text-sm max-w-2xl">
+          {saveOk ? <p className="text-emerald-300 m-0">{saveOk}</p> : null}
+          {saveError ? <p className="text-red-400 m-0">{saveError}</p> : null}
+          {pokepasteUrl ? (
+            <p className="m-0 text-muted">
+              <a
+                href={pokepasteUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-accent hover:underline break-all"
+              >
+                {pokepasteUrl}
+              </a>
+              {' · '}
+              <a
+                href="https://play.pokemonshowdown.com/teambuilder"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-accent hover:underline"
+              >
+                Open Showdown teambuilder
+              </a>
+            </p>
+          ) : null}
+        </div>
+      )}
 
       {!authLoading ? (
         <p className="text-[11px] text-muted m-0 max-w-2xl">
@@ -845,10 +931,18 @@ export function TeamBuilder() {
                     </button>
                     <button
                       type="button"
-                      className="pixel-btn-primary text-xs py-1.5 px-2"
+                      className="pixel-btn text-xs py-1.5 px-2"
                       onClick={() => void copySavedTeamPokepaste(t)}
                     >
-                      Copy pokepaste
+                      Copy paste
+                    </button>
+                    <button
+                      type="button"
+                      className="pixel-btn-primary text-xs py-1.5 px-2 disabled:opacity-60"
+                      disabled={pokepasteBusy}
+                      onClick={() => createPokepasteLinkForSavedTeam(t)}
+                    >
+                      PokePaste link
                     </button>
                   </div>
                   <button
