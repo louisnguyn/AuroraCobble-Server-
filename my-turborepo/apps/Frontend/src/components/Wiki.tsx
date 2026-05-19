@@ -53,7 +53,7 @@ function formatName(name: string): string {
   return name.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
-/** Showdown animated sprite when available; falls back to official art / id sprite. */
+/** Showdown HOME PNG sprite when available; falls back to official art / id sprite. */
 function WikiSpriteImg({
   speciesSlug,
   fallbackSrc,

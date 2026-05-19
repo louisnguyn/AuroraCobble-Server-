@@ -12,7 +12,7 @@ import { sortTierEntries } from '../usageStatsNormalize'
 
 const FORMAT_ORDER = ['singles', 'doubles', 'triples'] as const
 
-/** Showdown HOME sprite first, then PokéAPI official art — same as tournament team thumbnails. */
+/** Showdown HOME PNG sprite first, then PokéAPI official art — same as tournament team thumbnails. */
 function SpeciesSpriteImg({
   name,
   className,

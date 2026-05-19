@@ -15,7 +15,9 @@ import { TournamentPredictionsPage } from './components/TournamentPredictionsPag
 import { TournamentTeamCompare } from './components/TournamentTeamCompare.tsx'
 import { TournamentTeamDetail } from './components/TournamentTeamDetail.tsx'
 import { TeamBuilder } from './components/TeamBuilder.tsx'
+import { TeamPasteViewPage } from './components/TeamPasteViewPage.tsx'
 import { parseProfileSlugFromHash, Profile } from './components/Profile.tsx'
+import { isTeamPasteViewHash } from './teamPasteViewStorage.ts'
 import { isAccountVerified, VerifiedAccountBadge } from './components/VerifiedAccountBadge.tsx'
 type Page =
   | 'main'
@@ -28,6 +30,7 @@ type Page =
   | 'account'
   | 'tournament'
   | 'teambuilder'
+  | 'teampasteview'
   | 'profile'
 
 const PAGES: { id: Page; label: string }[] = [
@@ -129,7 +132,9 @@ function NavIcon({ page }: { page: Page }) {
 
 function initialPageFromHash(): Page {
   if (typeof window === 'undefined') return 'main'
-  return parseProfileSlugFromHash() ? 'profile' : 'main'
+  if (parseProfileSlugFromHash()) return 'profile'
+  if (isTeamPasteViewHash()) return 'teampasteview'
+  return 'main'
 }
 
 function AppContent() {
@@ -152,7 +157,14 @@ function AppContent() {
     const sync = () => {
       const slug = parseProfileSlugFromHash()
       setHashProfileSlug(slug)
-      if (slug) setPage('profile')
+      if (slug) {
+        setPage('profile')
+        return
+      }
+      if (isTeamPasteViewHash()) {
+        setPage('teampasteview')
+        return
+      }
     }
     sync()
     window.addEventListener('hashchange', sync)
@@ -162,6 +174,7 @@ function AppContent() {
   const goTo = (p: Page) => {
     if (typeof window !== 'undefined') {
       const isProfileHash = window.location.hash.startsWith('#profile/')
+      const isTeamPasteHash = isTeamPasteViewHash()
       if (isProfileHash && p !== 'profile') {
         window.history.replaceState(null, '', window.location.pathname + window.location.search)
         setHashProfileSlug(null)
@@ -170,6 +183,9 @@ function AppContent() {
         setHashProfileSlug(null)
       } else if (p === 'profile' && !isProfileHash) {
         setHashProfileSlug(null)
+      }
+      if (isTeamPasteHash && p !== 'teampasteview') {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search)
       }
     }
     setPage(p)
@@ -268,6 +284,9 @@ function AppContent() {
         {page === 'wiki' && <Wiki />}
         {page === 'restrictions' && <Restrictions />}
         {page === 'teambuilder' && <TeamBuilder />}
+        {page === 'teampasteview' && (
+          <TeamPasteViewPage onBack={() => goTo('teambuilder')} />
+        )}
         {page === 'gacha' && <Gacha />}
         {page === 'spawn' && <Spawn />}
         {page === 'account' && <Account />}

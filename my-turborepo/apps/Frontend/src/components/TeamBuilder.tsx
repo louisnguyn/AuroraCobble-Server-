@@ -32,10 +32,8 @@ import {
   fetchItemImage,
   fetchItemList,
   fetchMoveList,
-  fetchPokemonInfo,
   fetchPokemonList,
   pokeApiItemSpriteCandidates,
-  showdownHomeSpriteUrl,
   TERA_TYPE_OPTIONS,
   type AbilityListEntry,
   type ItemListEntry,
@@ -43,6 +41,8 @@ import {
   type PokemonListEntry,
 } from '../pokemonApi'
 import { CustomSelect } from './CustomSelect'
+import { PokemonSprite } from './PokemonSprite.tsx'
+import { saveTeamPasteView } from '../teamPasteViewStorage.ts'
 
 function formatSpeciesLabel(apiSlug: string): string {
   return apiSlug
@@ -53,47 +53,6 @@ function formatSpeciesLabel(apiSlug: string): string {
 
 function emptySlot(): TeamBuildSlot {
   return { species: '', speciesSlug: '', item: '', ability: null, teraType: null, moves: [] }
-}
-
-function TeamBuilderPokeSprite({
-  speciesSlug,
-  className = 'w-16 h-16',
-}: {
-  speciesSlug: string
-  className?: string
-}) {
-  const slug = speciesSlug.trim().toLowerCase()
-  const [src, setSrc] = useState<string | null>(() => (slug ? showdownHomeSpriteUrl(slug) : null))
-  const fallbackAttempted = useRef(false)
-
-  useEffect(() => {
-    fallbackAttempted.current = false
-    if (!slug) {
-      setSrc(null)
-      return
-    }
-    setSrc(showdownHomeSpriteUrl(slug))
-  }, [slug])
-
-  if (!slug) {
-    return <div className={`${className} rounded-lg bg-surface-hover shrink-0 mx-auto`} />
-  }
-
-  return (
-    <img
-      src={src ?? showdownHomeSpriteUrl(slug)}
-      alt=""
-      className={`${className} object-contain shrink-0 rounded-lg bg-surface-hover/50 mx-auto`}
-      loading="lazy"
-      onError={() => {
-        if (fallbackAttempted.current) return
-        fallbackAttempted.current = true
-        void fetchPokemonInfo(slug).then((i) => {
-          if (i?.image) setSrc(i.image)
-        })
-      }}
-    />
-  )
 }
 
 function TeamBuilderItemIcon({ itemName, className = 'w-7 h-7' }: { itemName: string; className?: string }) {
@@ -229,6 +188,15 @@ function SlotFormFields({
   return (
     <div className="pixel-panel-soft p-4 sm:p-5 space-y-3 border-2 border-accent/35 ring-1 ring-amber-900/30">
       <p className="text-sm font-semibold text-[#f5efe6] m-0">Edit slot {slotNumber}</p>
+      {draft.species.trim() ? (
+        <div className="flex justify-center py-1">
+          <PokemonSprite
+            speciesSlug={draft.speciesSlug}
+            speciesDisplay={draft.species}
+            className="w-20 h-20 sm:w-24 sm:h-24"
+          />
+        </div>
+      ) : null}
       <div className="grid gap-2 sm:grid-cols-2">
         <div className="sm:col-span-2">
           <AutoCompleteField
@@ -581,6 +549,11 @@ export function TeamBuilder() {
           author,
         })
         setPokepasteUrl(url)
+        saveTeamPasteView({
+          title: title.trim() || 'Team',
+          paste,
+          pokepastUrl: url,
+        })
         try {
           await navigator.clipboard.writeText(url)
           setSaveOk('PokePaste link copied to clipboard.')
@@ -828,16 +801,52 @@ export function TeamBuilder() {
           {saveOk ? <p className="text-emerald-300 m-0">{saveOk}</p> : null}
           {saveError ? <p className="text-red-400 m-0">{saveError}</p> : null}
           {pokepasteUrl ? (
-            <p className="m-0">
-              <a
-                href={pokepasteUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-accent hover:underline break-all"
-              >
-                {pokepasteUrl}
-              </a>
-            </p>
+            <>
+              <p className="m-0 flex flex-wrap gap-2 items-center">
+                <button
+                  type="button"
+                  className="pixel-btn-primary text-sm py-2 px-3"
+                  onClick={() => {
+                    window.location.hash = 'team/paste'
+                    window.dispatchEvent(new HashChangeEvent('hashchange'))
+                  }}
+                >
+                  View team with sprites
+                </button>
+                <a
+                  href={pokepasteUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-accent hover:underline break-all"
+                >
+                  {pokepasteUrl}
+                </a>
+              </p>
+              {slots.some((s) => s.species.trim()) ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted m-0">Team in this link:</p>
+                  <div className="flex flex-wrap gap-3 justify-center sm:justify-start">
+                    {slots
+                      .filter((s) => s.species.trim())
+                      .map((slot, i) => (
+                        <div
+                          key={`${slot.speciesSlug}-${i}`}
+                          className="flex flex-col items-center gap-1 min-w-[4.5rem] max-w-[5.5rem]"
+                        >
+                          <PokemonSprite
+                            speciesSlug={slot.speciesSlug || speciesDisplayToSlug(slot.species)}
+                            speciesDisplay={slot.species}
+                            className="w-14 h-14"
+                          />
+                          <span className="text-[10px] text-center text-[#f5efe6] leading-tight line-clamp-2">
+                            {slot.species.trim()}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              ) : null}
+            </>
           ) : null}
         </div>
       )}
@@ -1025,8 +1034,9 @@ export function TeamBuilder() {
                       onClick={() => openSlotForm(i)}
                       className="flex-1 flex flex-col items-center text-center gap-1.5 rounded-lg hover:bg-surface-hover/50 p-1 -m-1 transition-colors w-full"
                     >
-                      <TeamBuilderPokeSprite
+                      <PokemonSprite
                         speciesSlug={slot.speciesSlug || speciesDisplayToSlug(slot.species)}
+                        speciesDisplay={slot.species}
                         className="w-14 h-14 sm:w-16 sm:h-16"
                       />
                       <span className="text-sm font-semibold text-[#f5efe6] leading-tight line-clamp-2 px-0.5">

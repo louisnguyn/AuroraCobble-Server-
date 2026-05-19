@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   fetchPublicTournament,
   fetchPublishedTournaments,
@@ -6,7 +6,7 @@ import {
   type TournamentBracketMatch,
   type TournamentBracketSlot,
 } from '../authApi'
-import { fetchPokemonInfo, showdownHomeSpriteUrl } from '../pokemonApi'
+import { PokemonSprite } from './PokemonSprite.tsx'
 import { CustomSelect } from './CustomSelect'
 
 /** Internal keys (qual-0, qf-2, …) → viewer labels (Qualifier 1, Quarter-final 3, …). */
@@ -22,36 +22,13 @@ function formatPendingMatchLabel(matchKey: string): string {
   return matchKey
 }
 
-function MonThumb({ speciesSlug }: { speciesSlug?: string }) {
-  const slug = speciesSlug?.trim() ?? ''
-  const [src, setSrc] = useState<string | null>(() => (slug ? showdownHomeSpriteUrl(slug) : null))
-  const fallbackAttempted = useRef(false)
-
-  useEffect(() => {
-    fallbackAttempted.current = false
-    if (!slug) {
-      setSrc(null)
-      return
-    }
-    setSrc(showdownHomeSpriteUrl(slug))
-  }, [slug])
-
-  if (!slug) {
-    return <span className="inline-block w-7 h-7 rounded bg-surface-hover shrink-0" aria-hidden />
-  }
+function MonThumb({ speciesSlug, speciesDisplay }: { speciesSlug?: string; speciesDisplay?: string }) {
   return (
-    <img
-      src={src ?? showdownHomeSpriteUrl(slug)}
-      alt=""
-      className="w-7 h-7 object-contain shrink-0 [image-rendering:auto]"
-      loading="lazy"
-      onError={() => {
-        if (fallbackAttempted.current) return
-        fallbackAttempted.current = true
-        void fetchPokemonInfo(slug.toLowerCase()).then((info) => {
-          if (info?.image) setSrc(info.image)
-        })
-      }}
+    <PokemonSprite
+      speciesSlug={speciesSlug}
+      speciesDisplay={speciesDisplay ?? speciesSlug}
+      className="w-7 h-7"
+      emptyClassName="inline-block w-7 h-7 rounded bg-surface-hover shrink-0"
     />
   )
 }
@@ -118,7 +95,11 @@ function PlayerSlot({
       </div>
       <div className="flex w-full min-w-0 flex-nowrap items-center justify-between">
         {preview.slice(0, 6).map((m, i) => (
-          <MonThumb key={`${id}-${i}`} speciesSlug={m.speciesSlug || m.species} />
+          <MonThumb
+            key={`${id}-${i}`}
+            speciesSlug={m.speciesSlug || m.species}
+            speciesDisplay={m.species}
+          />
         ))}
       </div>
     </button>

@@ -77,10 +77,10 @@ function sanitizeShowdownSpeciesSlug(speciesSlug: string): string {
 }
 
 /**
- * Map PokéAPI / common slugs → Play animated basename
- * (https://play.pokemonshowdown.com/sprites/ani/).
+ * Map PokéAPI / common slugs → Play Showdown sprite basename
+ * (https://play.pokemonshowdown.com/sprites/home/).
  */
-const SHOWDOWN_ANI_SLUG_ALIASES: Record<string, string> = {
+const SHOWDOWN_SPRITE_SLUG_ALIASES: Record<string, string> = {
   'mr-mime': 'mrmime',
   'mr-mime-galar': 'mrmime-galar',
   'mr-rime': 'mrrime',
@@ -96,8 +96,8 @@ const SHOWDOWN_ANI_SLUG_ALIASES: Record<string, string> = {
   'basculin-white-striped': 'basculin-whitestriped',
 }
 
-/** Filename slug for /sprites/ani/ and /sprites/ani-shiny/ (not always == PokéAPI name). */
-function showdownAniSpriteSlug(speciesSlug: string): string {
+/** Filename slug for Showdown sprite paths (not always == PokéAPI name). */
+function showdownSpriteSlug(speciesSlug: string): string {
   let s = sanitizeShowdownSpeciesSlug(speciesSlug)
   // "galarian-moltres" / display order → Showdown "moltres-galar"
   if (s.startsWith('galarian-')) {
@@ -108,33 +108,32 @@ function showdownAniSpriteSlug(speciesSlug: string): string {
   }
   s = s.replace(/-mega-x$/g, '-megax').replace(/-mega-y$/g, '-megay')
   s = s.replace(/^tapu-([a-z]+)$/g, 'tapu$1')
-  return SHOWDOWN_ANI_SLUG_ALIASES[s] ?? s
+  return SHOWDOWN_SPRITE_SLUG_ALIASES[s] ?? s
 }
 
 /**
- * Pokémon Showdown animated front sprites (GIF).
- * https://play.pokemonshowdown.com/sprites/ani/
+ * Pokémon Showdown static HOME front sprites (PNG).
+ * https://play.pokemonshowdown.com/sprites/home/
  */
 export function showdownHomeSpriteUrl(speciesSlug: string): string {
-  const s = showdownAniSpriteSlug(speciesSlug)
-  return `https://play.pokemonshowdown.com/sprites/ani/${encodeURIComponent(s)}.gif`
-}
-
-/** Shiny animated: https://play.pokemonshowdown.com/sprites/ani-shiny/ */
-export function showdownHomeShinySpriteUrl(speciesSlug: string): string {
-  const s = showdownAniSpriteSlug(speciesSlug)
-  return `https://play.pokemonshowdown.com/sprites/ani-shiny/${encodeURIComponent(s)}.gif`
-}
-
-/** Static HOME PNG (fallback when ani GIF is missing). Same basename as ani. */
-export function showdownHomePngSpriteUrl(speciesSlug: string): string {
-  const s = showdownAniSpriteSlug(speciesSlug)
+  const s = showdownSpriteSlug(speciesSlug)
   return `https://play.pokemonshowdown.com/sprites/home/${encodeURIComponent(s)}.png`
 }
 
-export function showdownHomeShinyPngSpriteUrl(speciesSlug: string): string {
-  const s = showdownAniSpriteSlug(speciesSlug)
+/** Shiny static HOME PNG. */
+export function showdownHomeShinySpriteUrl(speciesSlug: string): string {
+  const s = showdownSpriteSlug(speciesSlug)
   return `https://play.pokemonshowdown.com/sprites/home-shiny/${encodeURIComponent(s)}.png`
+}
+
+/** @deprecated Use showdownHomeSpriteUrl — same PNG URL. */
+export function showdownHomePngSpriteUrl(speciesSlug: string): string {
+  return showdownHomeSpriteUrl(speciesSlug)
+}
+
+/** @deprecated Use showdownHomeShinySpriteUrl — same PNG URL. */
+export function showdownHomeShinyPngSpriteUrl(speciesSlug: string): string {
+  return showdownHomeShinySpriteUrl(speciesSlug)
 }
 
 /** Fetch full Pokémon details for wiki. Cached by id/name. */
@@ -297,6 +296,33 @@ export function toPokeApiName(name: string): string {
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-$|-$/g, '') || name.toLowerCase()
+}
+
+/** Try PokéAPI official art using slug and/or display name (for when Showdown sprites 404). */
+export async function fetchPokemonSpriteImage(
+  speciesSlug?: string | null,
+  speciesDisplay?: string | null
+): Promise<string | null> {
+  const candidates: string[] = []
+  const slug = speciesSlug?.trim().toLowerCase()
+  const display = speciesDisplay?.trim()
+  if (slug) candidates.push(slug)
+  if (display) {
+    candidates.push(
+      display
+        .toLowerCase()
+        .replace(/\s+/g, '-')
+        .replace(/[^a-z0-9-]/g, '')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '')
+    )
+    candidates.push(toPokeApiName(display))
+  }
+  for (const key of [...new Set(candidates.filter(Boolean))]) {
+    const info = await fetchPokemonInfo(key)
+    if (info?.image) return info.image
+  }
+  return null
 }
 
 /** Fetch sprite and types from PokéAPI; returns null on 404 or error. Results are cached. */
