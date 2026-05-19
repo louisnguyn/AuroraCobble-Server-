@@ -575,7 +575,7 @@ export function Leaderboard() {
           </div>
           <p className="text-sm text-muted m-0">
             {economyKind === 'website_cobble' ? (
-              <>Top site wallet balances (same Cobble$ you see under Account). In-game boards use RCON below.</>
+              <>Top site wallet balances (same Cobble$ you see under Account).</>
             ) : economyKind === 'cobble' ? (
               <>Richest players by in-game Cobble$ (Minecraft server). Deposit from your website wallet under Account.</>
             ) : (

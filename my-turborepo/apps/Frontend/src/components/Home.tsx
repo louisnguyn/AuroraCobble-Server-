@@ -14,27 +14,27 @@ const QUICK_LINKS: { id: Exclude<Page, 'main'>; label: string; description: stri
   {
     id: 'leaderboard',
     label: 'Leaderboard',
-    description: 'PvP ranks, Cobble$ / PCO economy & Battle Tower (live)',
+    description: 'PvP ladder, economy leaderboards, and Battle Tower rankings',
   },
-  { id: 'usage', label: 'Usage Stats', description: 'Pokémon usage by tier and format' },
-  { id: 'wiki', label: 'Wiki', description: 'Pokédex, moves, evolution & forms' },
-  { id: 'restrictions', label: 'Restrictions', description: 'Battle limits & staff-published rules' },
+  { id: 'usage', label: 'Usage Stats', description: 'Meta usage by tier and competitive format' },
+  { id: 'wiki', label: 'Wiki', description: 'Pokédex data, moves, evolutions, and forms' },
+  { id: 'restrictions', label: 'Restrictions', description: 'Format limits and competitive rules' },
   {
     id: 'teambuilder',
     label: 'Team Builder',
-    description: 'Paste a Showdown team — sprites & item icons',
+    description: 'Build Showdown teams with sprites and export',
   },
-  { id: 'gacha', label: 'Gacha', description: 'Open loot & collect rewards (login required)' },
-  { id: 'spawn', label: 'Spawn', description: 'Pokemon spawn locations and conditions' },
+  { id: 'gacha', label: 'Gacha', description: 'Reward pools and ticket exchange' },
+  { id: 'spawn', label: 'Spawn', description: 'Spawn locations and encounter conditions' },
   {
     id: 'tournament',
     label: 'Tournament',
-    description: 'Live bracket, qualifiers & prizes',
+    description: 'Brackets, qualifiers, prizes, and predictions',
   },
   {
     id: 'account',
     label: 'Account',
-    description: 'Sign in, profile & site wallet (login required)',
+    description: 'Profile, wallet, shop, ranks, and verification',
   },
 ]
 
@@ -76,10 +76,9 @@ export function Home({ onNavigate }: HomeProps) {
           <p className="text-xl sm:text-2xl text-[#ecebff] font-semibold tracking-wide m-0">
             Competitive Hub for AuroraCobble Adventure Server
           </p>
-          <p className="text-base sm:text-lg text-muted/90 mt-3 m-0 max-w-4xl mx-auto">
-            Build teams, follow live ladders, open gacha rewards, climb the rankings, and dominate the
-            leaderboards. Track usage stats, join tournaments, and manage your Cobble$ journey in one place.
-            Home to 50+ dedicated trainers, ultra-rare hunts at 0.001%, no inflation, and no resets.
+          <p className="text-base sm:text-lg text-muted/90 mt-3 m-0 max-w-3xl mx-auto leading-relaxed">
+            A web platform for the AuroraCobble competitive community: team building, live leaderboards,
+            tournament brackets, economy tools, usage analytics, and account management in one place.
           </p>
         </div>
       </section>
@@ -108,9 +107,9 @@ export function Home({ onNavigate }: HomeProps) {
       </section>
 
       {!onNavigate && (
-        <p className="text-center text-base text-muted/80 mt-8 max-w-5xl mx-auto">
-          Use the menu to switch sections — Leaderboard, Usage, Wiki, Restrictions, Team Builder, Gacha, Spawn,
-          Tournament, and Account.
+        <p className="text-center text-base text-muted/80 mt-8 max-w-3xl mx-auto">
+          Use the navigation menu to open Leaderboard, Usage Stats, Wiki, Restrictions, Team Builder, Gacha,
+          Spawn, Tournament, and Account.
         </p>
       )}
     </div>

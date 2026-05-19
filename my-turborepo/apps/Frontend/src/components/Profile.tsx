@@ -283,10 +283,7 @@ export function Profile({ slugFromHashOrNav }: ProfileProps) {
           <section className="profile-glass rounded-2xl border border-[#2d2a45]/85 p-6 sm:p-8">
             <h2 className="text-xl font-bold m-0 mb-5 profile-section-heading">Achievements</h2>
             {profile.achievements.length === 0 ? (
-              <p className="text-muted m-0 italic">
-                Achievements appear when staff grants profile badges from the Aurora Cobble Admin app (website users cannot
-                add these themselves).
-              </p>
+              <p className="text-muted m-0 italic">No achievements yet.</p>
             ) : (
               <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 profile-achievements-grid">
                 {profile.achievements.map((a) =>

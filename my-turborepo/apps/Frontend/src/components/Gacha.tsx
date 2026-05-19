@@ -259,7 +259,7 @@ export function Gacha() {
     if (!claimPending) return
     if (!canUseGacha) {
       setClaimPending(null)
-      setError('Cần xác minh tài khoản trên web để nhận thưởng gacha (admin được miễn).')
+      setError('Account verification required to claim gacha rewards.')
       return
     }
     const { pullId } = claimPending
@@ -280,7 +280,7 @@ export function Gacha() {
   const handleExchange = async (toCurrency: string) => {
     if (exchanging) return
     if (!canUseGacha) {
-      setError('Cần xác minh tài khoản trên web để đổi vé (admin được miễn).')
+      setError('Account verification required to exchange tickets.')
       return
     }
     setExchanging(toCurrency)
@@ -348,7 +348,7 @@ export function Gacha() {
       return
     }
     if (!canUseGacha) {
-      setError('Cần xác minh tài khoản trên web để quay gacha (admin được miễn).')
+      setError('Account verification required to use gacha.')
       return
     }
     setError(null)
@@ -453,13 +453,10 @@ export function Gacha() {
           className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100"
           role="status"
         >
-          <p className="m-0 font-medium">Gacha chỉ dùng sau khi xác minh tài khoản</p>
+          <p className="m-0 font-medium">Gacha requires a verified account</p>
           <p className="m-0 mt-1 text-xs text-amber-100/90">
-            Chưa verified thì không quay gacha, không đổi vé, và không Claim thưởng trong game. Tab Account → xác minh.
-            Admins được miễn.
-          </p>
-          <p className="m-0 mt-1 text-xs text-amber-100/75">
-            Verified-only: gacha pulls, ticket exchange, and in-game claim. You can still browse pools and history.
+            Verify your account under Account to pull, exchange tickets, and claim rewards in-game. You can still browse
+            pools and history.
           </p>
         </div>
       ) : null}
@@ -475,7 +472,7 @@ export function Gacha() {
 
       {!loading && pools.length === 0 && !error && (
         <div className="pixel-panel-soft p-8 text-center text-muted text-base">
-          No gacha pools available yet. Check back later!
+          No reward pools are available at this time.
         </div>
       )}
 

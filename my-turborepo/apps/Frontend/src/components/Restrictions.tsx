@@ -208,7 +208,7 @@ export function Restrictions() {
           <p className="text-lg sm:text-xl font-semibold text-[#e2e8f0] m-0 mt-2">{data.format_label.trim()}</p>
         ) : null}
         <p className="text-base text-muted m-0 mt-2">
-          Battle format limits and player rules — maintained by staff.
+          Battle format limits and player rules for competitive play.
         </p>
         {data?.updated_at ? (
           <p className="text-xs text-muted/80 m-0 mt-2">
@@ -222,15 +222,14 @@ export function Restrictions() {
         <div className="pixel-panel p-6 text-rose-400 text-base">
           {error}
           <p className="text-muted text-sm m-0 mt-2">
-            If the database migration is missing, apply supabase/battle_restrictions_config.sql,
-            battle_restrictions_format_label.sql, and battle_restrictions_pokemon_blacklist.sql when needed.
+            Restrictions could not be loaded. Please try again later.
           </p>
         </div>
       ) : null}
 
       {!loading && !error && emptyConfigured ? (
         <div className="pixel-panel p-8 text-center text-base text-muted">
-          Restrictions have not been published yet. Check back soon.
+          Competitive restrictions have not been published yet.
         </div>
       ) : null}
 

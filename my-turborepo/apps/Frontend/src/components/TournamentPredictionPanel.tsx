@@ -205,14 +205,14 @@ export function TournamentPredictionPanel({
         <p className="text-sm text-muted m-0">View all bets below. Log in to place your own.</p>
       ) : (
         <p className="text-sm text-muted m-0">
-          No prediction event is open right now. Check back when staff announce one.
+          No prediction window is open at this time.
         </p>
       )}
 
       {canBet ? (
       <div className="pixel-well p-4 space-y-4">
         {!status?.active ? (
-          <p className="text-xs text-muted m-0">You cannot place new bets until staff open the next event.</p>
+          <p className="text-xs text-muted m-0">You cannot place new bets until the next event opens.</p>
         ) : null}
         {status?.active ? (
           <>

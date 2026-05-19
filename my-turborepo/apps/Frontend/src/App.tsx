@@ -34,7 +34,7 @@ type Page =
   | 'profile'
 
 const PAGES: { id: Page; label: string }[] = [
-  { id: 'main', label: 'Main' },
+  { id: 'main', label: 'Home' },
   { id: 'leaderboard', label: 'Leaderboard' },
   { id: 'usage', label: 'Usage Stats' },
   { id: 'wiki', label: 'Wiki' },

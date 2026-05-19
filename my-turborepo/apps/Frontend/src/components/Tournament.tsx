@@ -263,7 +263,7 @@ export function Tournament({
                   ? [
                       {
                         value: slugInput.trim().toLowerCase(),
-                        label: `${slugInput.trim()} (not in list — may be unpublished)`,
+                        label: `${slugInput.trim()} (custom slug)`,
                       },
                     ]
                   : []),
@@ -298,7 +298,7 @@ export function Tournament({
         </div>
         {catalogErr ? <p className="text-xs text-cyan-400 m-0">Tournament list: {catalogErr}</p> : null}
         {catalog.length === 0 && !catalogErr ? (
-          <p className="text-xs text-muted m-0">No published tournaments yet — admins can publish one from the admin app.</p>
+          <p className="text-xs text-muted m-0">No tournaments are available at this time.</p>
         ) : null}
       </header>
 

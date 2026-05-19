@@ -424,7 +424,7 @@ export function Account() {
     return (
       <div className="max-w-lg mx-auto pixel-panel-soft p-8 text-center">
         <h1 className="text-3xl font-bold text-[#e2e8f0] m-0 mb-2">Account</h1>
-        <p className="text-muted text-base mb-6">Log in to change your password.</p>
+        <p className="text-muted text-base mb-6">Sign in to manage your profile, wallet, and settings.</p>
         <button
           type="button"
           onClick={() => setShowAuth(true)}
@@ -471,7 +471,7 @@ export function Account() {
 
   const handleBuyItem = async (item: ShopItem) => {
     if (!canUseWebsiteShop) {
-      setShopError('Account verification required to buy from the shop (admins exempt).')
+      setShopError('Account verification required to buy from the shop.')
       return
     }
     setShopError(null)
@@ -500,7 +500,7 @@ export function Account() {
 
   const handleBuyPokemon = async (offer: PokemonShopOffer) => {
     if (!canUseWebsiteShop) {
-      setPokemonError('Account verification required to buy from the shop (admins exempt).')
+      setPokemonError('Account verification required to buy from the shop.')
       return
     }
     setPokemonError(null)
@@ -558,7 +558,7 @@ export function Account() {
 
   const handleBuyRank = async (entry: RoleCatalogEntry) => {
     if (!canUseWebsiteShop) {
-      setRankError('Account verification required to buy ranks (admins exempt).')
+      setRankError('Account verification required to buy ranks.')
       return
     }
     setRankError(null)
@@ -597,7 +597,7 @@ export function Account() {
       setGrantMessage('')
       const rs = await fetchRoleRequestStatus()
       setRoleStatus(rs)
-      setRankSuccess('Rank request sent. Staff will approve or deny it.')
+      setRankSuccess('Rank request sent. You will be notified when it is reviewed.')
     } catch (err) {
       setRankError(err instanceof Error ? err.message : 'Could not submit request')
     } finally {
@@ -630,7 +630,7 @@ export function Account() {
             ['shop', 'Shop'],
             ['ranks', 'Ranks'],
             ['inventory', 'Inventory'],
-            ['cobble', 'C$ balance'],
+            ['cobble', 'Wallet'],
             ['account', 'Account'],
           ] as const satisfies readonly [AccountTab, string][]
         ).map(([id, label]) => (
@@ -895,10 +895,7 @@ export function Account() {
               <p className="m-0 font-medium">Shop available after account verification</p>
               <p className="m-0 mt-1 text-xs text-amber-100/90">
                 If not verified, you cannot buy on the website (Shop / Pokemon Shop). Submit a verification request in the
-                Account tab. Admins are exempt.
-              </p>
-              <p className="m-0 mt-1 text-xs text-amber-100/75">
-                Verified accounts only can purchase on the web shop; browse prices as usual.
+                Account tab.
               </p>
             </div>
           ) : null}
@@ -1060,8 +1057,7 @@ export function Account() {
             >
               <p className="m-0 font-medium">Buying ranks requires a verified account</p>
               <p className="m-0 mt-1 text-xs text-amber-100/85">
-                Verified accounts only can purchase ranks; you can still request staff-granted ranks below (pending
-                review).
+                Verified accounts can purchase eligible ranks here. Premium ranks are available by request only.
               </p>
             </div>
           ) : null}
@@ -1123,14 +1119,13 @@ export function Account() {
                 </div>
               ))
             ) : (
-              <p className="text-sm text-muted m-0">Could not load rank list (check API / database).</p>
+              <p className="text-sm text-muted m-0">Unable to load rank catalog. Please try again later.</p>
             )}
           </div>
 
-          <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-2">Staff-granted ranks / requests</h2>
+          <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-2">Rank requests</h2>
           <p className="text-xs text-muted m-0 mb-3">
-            Legend, Ultimate, Overlord, God and staff/partner ranks (Champion, Helper, Mod, TikTok, Youtuber, Builder) -
-            cannot be bought with Cobble$ on the web. Submit a request; staff will update your rank if approved.
+            Premium and partner ranks are not available for direct purchase. Submit a request for staff review.
           </p>
           <div className="mb-4 space-y-3">
             {(roleCat?.grantOnly ?? []).map((g) => (
@@ -1150,7 +1145,7 @@ export function Account() {
                     <div className="min-w-0">
                       <p className="m-0 text-sm font-semibold text-[#e2e8f0]">{g.label}</p>
                       <p className="m-0 mt-0.5 text-[10px] uppercase tracking-wide text-amber-200/75">
-                        Grant / request
+                        By request
                       </p>
                     </div>
                   </div>
@@ -1235,10 +1230,10 @@ export function Account() {
         <>
           {isAuthenticated && (
             <div className="mb-8 pixel-well p-4 space-y-3">
-              <h2 className="text-lg font-medium text-[#e2e8f0] m-0">Account verification (verified)</h2>
+              <h2 className="text-lg font-medium text-[#e2e8f0] m-0">Account verification</h2>
               <p className="text-xs text-muted m-0">
-                Once approved, you receive the verified badge and can use AI analysis in Team Builder, buy items and
-                Pokemon on the website, use gacha, and join the monthly tournament.
+                Verified accounts unlock Team Builder AI analysis, the website shop, gacha, and monthly tournament
+                registration.
               </p>
               {vError && !vLoading && (
                 <p className="text-sm text-red-400 m-0">
@@ -1246,7 +1241,7 @@ export function Account() {
                 </p>
               )}
               {user?.is_admin ? (
-                <p className="text-sm text-emerald-200/90 m-0">Admin accounts do not need to submit a request.</p>
+                <p className="text-sm text-emerald-200/90 m-0">Your account has full access.</p>
               ) : vLoading ? (
                 <p className="text-sm text-muted m-0">Loading status...</p>
               ) : vStatus?.verified || isAccountVerified(user) ? (
@@ -1258,7 +1253,7 @@ export function Account() {
                 <>
                   {vStatus?.pending ? (
                     <p className="text-sm text-amber-200/90 m-0">
-                      Request sent | awaiting admin review |{' '}
+                      Request pending review ·{' '}
                       {new Date(vStatus.pending.created_at).toLocaleString('vi-VN')}
                       {vStatus.pending.message ? (
                         <span className="block mt-2 text-muted">Message: {vStatus.pending.message}</span>

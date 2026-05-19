@@ -364,8 +364,8 @@ function formatTeamAiCooldownMessage(lang: TeamAnalysisLanguage, nextIso?: strin
 
 function formatTeamAiVerificationMessage(lang: TeamAnalysisLanguage): string {
   return lang === 'vi'
-    ? 'Phân tích AI chỉ bật sau khi quản trị viên xác minh tài khoản của bạn trên trang Admin.'
-    : 'Team AI unlocks after staff mark your account as verified in the admin panel.'
+    ? 'Phân tích AI chỉ bật sau khi tài khoản của bạn được xác minh.'
+    : 'Team AI unlocks after your account is verified.'
 }
 
 export function TeamBuilder() {
@@ -738,9 +738,8 @@ export function TeamBuilder() {
       <header>
         <h1 className="text-2xl sm:text-3xl font-semibold m-0 text-[#f5efe6]">Team Builder</h1>
         <p className="text-sm text-muted m-0 mt-2 max-w-2xl">
-          Tap <span className="text-[#f5efe6]">+</span> on an empty slot to add a Pokémon. Filled slots
-          show sprite and item. Export as Showdown paste text or upload a{' '}
-          <span className="text-[#f5efe6]">PokePaste</span> link (pokepast.es). Log in to save teams.
+          Build competitive teams in Showdown format with sprites and item icons. Export paste text, create a
+          PokePaste link, or open the built-in sprite viewer. Sign in to save teams to your account.
         </p>
       </header>
 
@@ -763,7 +762,7 @@ export function TeamBuilder() {
           <>
             <div className="flex flex-col gap-1 min-w-[240px] sm:min-w-[300px]">
               <label htmlFor="tb-ai-lang" className="text-xs text-muted whitespace-nowrap m-0 px-1">
-                AI language / Ngôn ngữ
+                Analysis language
               </label>
               <CustomSelect
                 id="tb-ai-lang"
@@ -857,25 +856,25 @@ export function TeamBuilder() {
             aiLang === 'vi' ? (
               <>
                 Phân tích AI cần <span className="text-[#f5efe6]/90">đăng nhập</span>,{' '}
-                <span className="text-[#f5efe6]/90">xác minh in-game</span> (staff), rồi tối đa{' '}
+                <span className="text-[#f5efe6]/90">xác minh tài khoản</span>, tối đa{' '}
                 <span className="text-[#f5efe6]/90">1 lần / 12 giờ</span>.
               </>
             ) : (
               <>
-                AI analysis requires <span className="text-[#f5efe6]/90">logging in</span>, staff{' '}
-                <span className="text-[#f5efe6]/90">in-game verification</span>, then standard accounts:{' '}
-                <span className="text-[#f5efe6]/90">once per 12 hours</span>.
+                AI analysis requires <span className="text-[#f5efe6]/90">logging in</span> and a{' '}
+                <span className="text-[#f5efe6]/90">verified account</span> (up to{' '}
+                <span className="text-[#f5efe6]/90">once per 12 hours</span>).
               </>
             )
           ) : canUseTeamAi ? (
             isAdminUser ? (
               aiLang === 'vi' ? (
                 <>
-                  Tài khoản quản trị: <span className="text-[#f5efe6]/90">không giới hạn</span> số lần phân tích AI.
+                  <span className="text-[#f5efe6]/90">Không giới hạn</span> số lần phân tích AI.
                 </>
               ) : (
                 <>
-                  Admin account: <span className="text-[#f5efe6]/90">no limit</span> on AI analyses.
+                  <span className="text-[#f5efe6]/90">Unlimited</span> AI analyses.
                 </>
               )
             ) : aiLang === 'vi' ? (

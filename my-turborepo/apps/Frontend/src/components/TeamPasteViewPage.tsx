@@ -14,8 +14,7 @@ export function TeamPasteViewPage({ onBack }: { onBack: () => void }) {
           ← Back
         </button>
         <p className="text-sm text-muted m-0">
-          No team loaded. Create a PokePaste link from Team Builder first, then open &quot;View with
-          sprites&quot;.
+          No team is loaded. Export a team from Team Builder, then open the sprite viewer.
         </p>
       </div>
     )

@@ -19,7 +19,7 @@ const LEDGER_KIND_LABEL: Record<string, string> = {
   pvp_rank_daily: 'PvP leaderboard reward',
   tournament_prediction_stake: 'Tournament prediction (bet)',
   tournament_prediction_win: 'Tournament prediction (win)',
-  admin_grant: 'Staff grant',
+  admin_grant: 'Bonus',
   gacha_reward: 'Gacha reward',
   transfer_to_user: 'Sent to player',
   transfer_from_user: 'Received from player',
@@ -170,9 +170,9 @@ export function CobbleWebsiteWallet({ onBalanceUpdated }: { onBalanceUpdated?: (
 
   return (
     <section className="pixel-well p-5 sm:p-6 text-left">
-      <h2 className="text-lg font-semibold m-0 mb-1 text-[#e2e8f0]">C$ balance</h2>
+      <h2 className="text-lg font-semibold m-0 mb-1 text-[#e2e8f0]">Website wallet</h2>
       <p className="text-sm text-muted m-0 mb-4">
-        Cobble$ you earn on this site. You can send them to your in-game balance. Your account name must match your
+        Cobble$ earned on this site can be deposited to your in-game balance. Your account username must match your
         in-game name.
       </p>
       {walletLoading ? (
@@ -298,8 +298,8 @@ export function CobbleWebsiteWallet({ onBalanceUpdated }: { onBalanceUpdated?: (
           <div className="mt-8 pt-5 border-t border-border/80">
             <h3 className="text-sm font-semibold text-[#e2e8f0] m-0 mb-2">Ticket activity</h3>
             <p className="text-xs text-muted m-0 mb-3">
-              Last 10 changes to normal and special ticket balances (daily bonus, leaderboard rewards, exchange, staff
-              grants).
+              Last 10 changes to normal and special ticket balances (daily bonus, leaderboard rewards, exchange, and
+              bonuses).
             </p>
             {ticketLedgerLoading ? (
               <p className="text-xs text-muted m-0">Loading ticket history…</p>
