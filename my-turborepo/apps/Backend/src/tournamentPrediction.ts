@@ -41,6 +41,166 @@ export function isTournamentPredictionWindowOpen(
   return now.getTime() < new Date(settings.predictions_locked_at).getTime();
 }
 
+export type TournamentPredictionPickSummary = {
+  participantId: number;
+  displayName: string;
+  seedRank: number;
+  totalStake: number;
+  betCount: number;
+};
+
+export type TournamentPredictionBetEntry = {
+  id: number;
+  userId: number;
+  username: string;
+  stakeChampion: number;
+  pickChampionParticipantId: number | null;
+  pickChampionLabel: string | null;
+  resultChampion: string;
+  payoutChampion: number | null;
+  stakeRunnerUp: number;
+  pickRunnerUpParticipantId: number | null;
+  pickRunnerUpLabel: string | null;
+  resultRunnerUp: string;
+  payoutRunnerUp: number | null;
+  totalStake: number;
+  createdAt: string;
+  resolvedAt: string | null;
+};
+
+export type TournamentPredictionBetsPayload = {
+  tournament: { id: number; slug: string; title: string };
+  entries: TournamentPredictionBetEntry[];
+  summary: {
+    champion: TournamentPredictionPickSummary[];
+    runnerUp: TournamentPredictionPickSummary[];
+    totalEntries: number;
+    totalStaked: number;
+  };
+};
+
+export async function loadTournamentPredictionBetsForTournament(
+  tournamentId: number
+): Promise<TournamentPredictionBetsPayload | null> {
+  if (!supabase) return null;
+  const { data: t } = await supabase
+    .from("tournaments")
+    .select("id, slug, title")
+    .eq("id", tournamentId)
+    .maybeSingle();
+  if (!t) return null;
+
+  const { data: rows, error } = await supabase
+    .from("tournament_predictions")
+    .select(
+      "id, user_id, stake_champion, pick_champion_participant_id, stake_runner_up, pick_runner_up_participant_id, result_champion, result_runner_up, payout_champion, payout_runner_up, created_at, resolved_at"
+    )
+    .eq("tournament_id", tournamentId)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+
+  const list = rows ?? [];
+  const userIds = [...new Set(list.map((r) => r.user_id as number))];
+  const partIds = new Set<number>();
+  for (const r of list) {
+    const c = r.pick_champion_participant_id as number | null;
+    const ru = r.pick_runner_up_participant_id as number | null;
+    if (c != null) partIds.add(c);
+    if (ru != null) partIds.add(ru);
+  }
+
+  const userMap = new Map<number, string>();
+  if (userIds.length > 0) {
+    const { data: users } = await supabase.from("users").select("id, username").in("id", userIds);
+    for (const u of users ?? []) {
+      userMap.set(u.id as number, String(u.username ?? `#${u.id}`));
+    }
+  }
+
+  const partMap = new Map<number, { displayName: string; seedRank: number }>();
+  if (partIds.size > 0) {
+    const { data: parts } = await supabase
+      .from("tournament_participants")
+      .select("id, seed_rank, display_name")
+      .in("id", [...partIds]);
+    for (const p of parts ?? []) {
+      partMap.set(p.id as number, {
+        displayName: String(p.display_name ?? ""),
+        seedRank: Number(p.seed_rank),
+      });
+    }
+  }
+
+  const labelPart = (id: number | null): string | null => {
+    if (id == null) return null;
+    const p = partMap.get(id);
+    return p ? `#${p.seedRank} ${p.displayName}` : `#${id}`;
+  };
+
+  const champTotals = new Map<number, TournamentPredictionPickSummary>();
+  const ruTotals = new Map<number, TournamentPredictionPickSummary>();
+
+  const addTotal = (map: Map<number, TournamentPredictionPickSummary>, partId: number, stake: number) => {
+    if (stake <= 0) return;
+    const p = partMap.get(partId);
+    const cur = map.get(partId);
+    if (cur) {
+      cur.totalStake += stake;
+      cur.betCount += 1;
+    } else {
+      map.set(partId, {
+        participantId: partId,
+        displayName: p?.displayName ?? `Participant ${partId}`,
+        seedRank: p?.seedRank ?? 0,
+        totalStake: stake,
+        betCount: 1,
+      });
+    }
+  };
+
+  const entries: TournamentPredictionBetEntry[] = list.map((r) => {
+    const stakeChampion = Number(r.stake_champion) || 0;
+    const stakeRunnerUp = Number(r.stake_runner_up) || 0;
+    const pickChampionId = r.pick_champion_participant_id as number | null;
+    const pickRunnerUpId = r.pick_runner_up_participant_id as number | null;
+    if (pickChampionId != null) addTotal(champTotals, pickChampionId, stakeChampion);
+    if (pickRunnerUpId != null) addTotal(ruTotals, pickRunnerUpId, stakeRunnerUp);
+
+    return {
+      id: r.id as number,
+      userId: r.user_id as number,
+      username: userMap.get(r.user_id as number) ?? `#${r.user_id}`,
+      stakeChampion,
+      pickChampionParticipantId: pickChampionId,
+      pickChampionLabel: labelPart(pickChampionId),
+      resultChampion: r.result_champion as string,
+      payoutChampion: r.payout_champion as number | null,
+      stakeRunnerUp,
+      pickRunnerUpParticipantId: pickRunnerUpId,
+      pickRunnerUpLabel: labelPart(pickRunnerUpId),
+      resultRunnerUp: r.result_runner_up as string,
+      payoutRunnerUp: r.payout_runner_up as number | null,
+      totalStake: stakeChampion + stakeRunnerUp,
+      createdAt: r.created_at as string,
+      resolvedAt: r.resolved_at as string | null,
+    };
+  });
+
+  const sortSummary = (m: Map<number, TournamentPredictionPickSummary>) =>
+    [...m.values()].sort((a, b) => b.totalStake - a.totalStake);
+
+  return {
+    tournament: { id: t.id as number, slug: t.slug as string, title: t.title as string },
+    entries,
+    summary: {
+      champion: sortSummary(champTotals),
+      runnerUp: sortSummary(ruTotals),
+      totalEntries: entries.length,
+      totalStaked: entries.reduce((s, e) => s + e.totalStake, 0),
+    },
+  };
+}
+
 /** Champion = final winner; runner-up = other finalist (loser of final). */
 export async function resolveTournamentChampionRunnerUp(
   tournamentId: number
@@ -329,31 +489,68 @@ export function registerTournamentPredictionRoutes(app: Express, deps: RouteDeps
       res.status(400).json({ error: "tournamentId required" });
       return;
     }
+    try {
+      const payload = await loadTournamentPredictionBetsForTournament(tournamentId);
+      if (!payload) {
+        res.status(404).json({ error: "Tournament not found" });
+        return;
+      }
+      res.json(payload);
+    } catch (e) {
+      res.status(500).json({ error: e instanceof Error ? e.message : "Failed to load bets" });
+    }
+  });
 
-    const { data: t } = await supabase
-      .from("tournaments")
-      .select("id, slug, title")
-      .eq("id", tournamentId)
-      .maybeSingle();
-    if (!t) {
-      res.status(404).json({ error: "Tournament not found" });
+  /** All bets for the active prediction tournament (public read). */
+  app.get("/user/tournament-prediction/ledger", async (req, res) => {
+    if (!supabase) {
+      res.status(503).json({ error: "Database not configured" });
       return;
     }
+    const settings = await loadTournamentPredictionSettings();
+    if (!settings?.tournament_id) {
+      res.json({ active: false, entries: [], summary: null, tournament: null });
+      return;
+    }
+    try {
+      const payload = await loadTournamentPredictionBetsForTournament(settings.tournament_id);
+      if (!payload) {
+        res.json({ active: false, entries: [], summary: null, tournament: null });
+        return;
+      }
+      res.json({ active: true, ...payload });
+    } catch (e) {
+      res.status(500).json({ error: e instanceof Error ? e.message : "Failed to load ledger" });
+    }
+  });
+
+  app.get("/user/tournament-prediction/history", requireAuth, async (req, res) => {
+    const user = res.locals.user!;
+    if (!supabase) {
+      res.status(503).json({ error: "Database not configured" });
+      return;
+    }
+    const settings = await loadTournamentPredictionSettings();
+    const activeTournamentId = settings?.tournament_id ?? null;
 
     const { data: rows, error } = await supabase
       .from("tournament_predictions")
       .select(
-        "id, user_id, stake_champion, pick_champion_participant_id, stake_runner_up, pick_runner_up_participant_id, result_champion, result_runner_up, payout_champion, payout_runner_up, created_at, resolved_at"
+        "id, tournament_id, stake_champion, pick_champion_participant_id, stake_runner_up, pick_runner_up_participant_id, result_champion, result_runner_up, payout_champion, payout_runner_up, created_at, resolved_at"
       )
-      .eq("tournament_id", tournamentId)
+      .eq("user_id", user.userId)
       .order("created_at", { ascending: false });
     if (error) {
       res.status(500).json({ error: error.message });
       return;
     }
-
     const list = rows ?? [];
-    const userIds = [...new Set(list.map((r) => r.user_id as number))];
+    if (list.length === 0) {
+      res.json({ history: [] });
+      return;
+    }
+
+    const tournamentIds = [...new Set(list.map((r) => r.tournament_id as number))];
     const partIds = new Set<number>();
     for (const r of list) {
       const c = r.pick_champion_participant_id as number | null;
@@ -362,82 +559,54 @@ export function registerTournamentPredictionRoutes(app: Express, deps: RouteDeps
       if (ru != null) partIds.add(ru);
     }
 
-    const userMap = new Map<number, string>();
-    if (userIds.length > 0) {
-      const { data: users } = await supabase.from("users").select("id, username").in("id", userIds);
-      for (const u of users ?? []) {
-        userMap.set(u.id as number, String(u.username ?? `#${u.id}`));
-      }
+    const tournamentMap = new Map<number, { title: string; slug: string }>();
+    const { data: tournaments } = await supabase
+      .from("tournaments")
+      .select("id, title, slug")
+      .in("id", tournamentIds);
+    for (const t of tournaments ?? []) {
+      tournamentMap.set(t.id as number, {
+        title: String(t.title ?? "Tournament"),
+        slug: String(t.slug ?? ""),
+      });
     }
 
-    const partMap = new Map<number, { displayName: string; seedRank: number }>();
+    const partMap = new Map<number, string>();
     if (partIds.size > 0) {
       const { data: parts } = await supabase
         .from("tournament_participants")
         .select("id, seed_rank, display_name")
         .in("id", [...partIds]);
       for (const p of parts ?? []) {
-        partMap.set(p.id as number, {
-          displayName: String(p.display_name ?? ""),
-          seedRank: Number(p.seed_rank),
-        });
+        partMap.set(
+          p.id as number,
+          `#${p.seed_rank} ${String(p.display_name ?? "")}`.trim()
+        );
       }
     }
 
     const labelPart = (id: number | null): string | null => {
       if (id == null) return null;
-      const p = partMap.get(id);
-      return p ? `#${p.seedRank} ${p.displayName}` : `#${id}`;
+      return partMap.get(id) ?? `#${id}`;
     };
 
-    type PickSummary = {
-      participantId: number;
-      displayName: string;
-      seedRank: number;
-      totalStake: number;
-      betCount: number;
-    };
-    const champTotals = new Map<number, PickSummary>();
-    const ruTotals = new Map<number, PickSummary>();
-
-    const addTotal = (map: Map<number, PickSummary>, partId: number, stake: number) => {
-      if (stake <= 0) return;
-      const p = partMap.get(partId);
-      const cur = map.get(partId);
-      if (cur) {
-        cur.totalStake += stake;
-        cur.betCount += 1;
-      } else {
-        map.set(partId, {
-          participantId: partId,
-          displayName: p?.displayName ?? `Participant ${partId}`,
-          seedRank: p?.seedRank ?? 0,
-          totalStake: stake,
-          betCount: 1,
-        });
-      }
-    };
-
-    const entries = list.map((r) => {
+    const history = list.map((r) => {
+      const tournamentId = r.tournament_id as number;
+      const tMeta = tournamentMap.get(tournamentId);
       const stakeChampion = Number(r.stake_champion) || 0;
       const stakeRunnerUp = Number(r.stake_runner_up) || 0;
-      const pickChampionId = r.pick_champion_participant_id as number | null;
-      const pickRunnerUpId = r.pick_runner_up_participant_id as number | null;
-      if (pickChampionId != null) addTotal(champTotals, pickChampionId, stakeChampion);
-      if (pickRunnerUpId != null) addTotal(ruTotals, pickRunnerUpId, stakeRunnerUp);
-
       return {
         id: r.id as number,
-        userId: r.user_id as number,
-        username: userMap.get(r.user_id as number) ?? `#${r.user_id}`,
+        tournamentId,
+        tournamentTitle: tMeta?.title ?? `Tournament #${tournamentId}`,
+        tournamentSlug: tMeta?.slug ?? "",
+        isCurrentEvent: activeTournamentId != null && tournamentId === activeTournamentId,
         stakeChampion,
-        pickChampionParticipantId: pickChampionId,
-        pickChampionLabel: labelPart(pickChampionId),
+        pickChampionLabel: labelPart(r.pick_champion_participant_id as number | null),
         resultChampion: r.result_champion as string,
         payoutChampion: r.payout_champion as number | null,
         stakeRunnerUp,
-        pickRunnerUpParticipantId: pickRunnerUpId,
-        pickRunnerUpLabel: labelPart(pickRunnerUpId),
+        pickRunnerUpLabel: labelPart(r.pick_runner_up_participant_id as number | null),
         resultRunnerUp: r.result_runner_up as string,
         payoutRunnerUp: r.payout_runner_up as number | null,
         totalStake: stakeChampion + stakeRunnerUp,
@@ -446,19 +615,7 @@ export function registerTournamentPredictionRoutes(app: Express, deps: RouteDeps
       };
     });
 
-    const sortSummary = (m: Map<number, PickSummary>) =>
-      [...m.values()].sort((a, b) => b.totalStake - a.totalStake);
-
-    res.json({
-      tournament: { id: t.id, slug: t.slug, title: t.title },
-      entries,
-      summary: {
-        champion: sortSummary(champTotals),
-        runnerUp: sortSummary(ruTotals),
-        totalEntries: entries.length,
-        totalStaked: entries.reduce((s, e) => s + e.totalStake, 0),
-      },
-    });
+    res.json({ history });
   });
 
   app.get("/user/tournament-prediction", requireAuth, async (req, res) => {

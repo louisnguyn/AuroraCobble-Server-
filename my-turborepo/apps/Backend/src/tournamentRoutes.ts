@@ -330,7 +330,7 @@ export function registerTournamentRoutes(
     }
     const { data: parts } = await supabase!
       .from("tournament_participants")
-      .select("id, seed_rank, display_name, team_json")
+      .select("id, seed_rank, display_name, pokepaste_raw, team_json")
       .eq("tournament_id", tournamentId)
       .order("seed_rank");
     const { data: results } = await supabase!

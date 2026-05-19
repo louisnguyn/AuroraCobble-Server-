@@ -298,8 +298,81 @@ export interface TournamentPredictionStatus {
   entry?: TournamentPredictionEntry | null
 }
 
+export interface TournamentPredictionHistoryRow {
+  id: number
+  tournamentId: number
+  tournamentTitle: string
+  tournamentSlug: string
+  isCurrentEvent: boolean
+  stakeChampion: number
+  pickChampionLabel: string | null
+  resultChampion: string
+  payoutChampion: number | null
+  stakeRunnerUp: number
+  pickRunnerUpLabel: string | null
+  resultRunnerUp: string
+  payoutRunnerUp: number | null
+  totalStake: number
+  createdAt: string
+  resolvedAt: string | null
+}
+
 export async function fetchTournamentPrediction(): Promise<TournamentPredictionStatus> {
   return fetchApi<TournamentPredictionStatus>('/user/tournament-prediction')
+}
+
+export async function fetchTournamentPredictionHistory(): Promise<{
+  history: TournamentPredictionHistoryRow[]
+}> {
+  return fetchApi<{ history: TournamentPredictionHistoryRow[] }>('/user/tournament-prediction/history')
+}
+
+export interface TournamentPredictionBetEntry {
+  id: number
+  userId: number
+  username: string
+  stakeChampion: number
+  pickChampionParticipantId: number | null
+  pickChampionLabel: string | null
+  resultChampion: string
+  payoutChampion: number | null
+  stakeRunnerUp: number
+  pickRunnerUpParticipantId: number | null
+  pickRunnerUpLabel: string | null
+  resultRunnerUp: string
+  payoutRunnerUp: number | null
+  totalStake: number
+  createdAt: string
+  resolvedAt: string | null
+}
+
+export interface TournamentPredictionPickSummary {
+  participantId: number
+  displayName: string
+  seedRank: number
+  totalStake: number
+  betCount: number
+}
+
+export interface TournamentPredictionBetsSummary {
+  champion: TournamentPredictionPickSummary[]
+  runnerUp: TournamentPredictionPickSummary[]
+  totalEntries: number
+  totalStaked: number
+}
+
+export async function fetchTournamentPredictionLedger(): Promise<{
+  active: boolean
+  tournament: { id: number; slug: string; title: string } | null
+  entries: TournamentPredictionBetEntry[]
+  summary: TournamentPredictionBetsSummary | null
+}> {
+  return fetchApi<{
+    active: boolean
+    tournament: { id: number; slug: string; title: string } | null
+    entries: TournamentPredictionBetEntry[]
+    summary: TournamentPredictionBetsSummary | null
+  }>('/user/tournament-prediction/ledger', { skipAuth: true })
 }
 
 export async function submitTournamentPrediction(body: {

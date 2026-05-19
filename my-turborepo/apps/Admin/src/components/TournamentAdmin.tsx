@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import {
   adminClearMatchWinner,
   adminCreateTournament,
@@ -26,7 +26,19 @@ type TRow = {
   bracket_size?: number
 }
 
-type ParticipantSummary = { id: number; seed_rank: number; display_name: string }
+type ParticipantSummary = {
+  id: number
+  seed_rank: number
+  display_name: string
+  pokepaste_raw?: string | null
+}
+
+function participantAtSeed(
+  participants: ParticipantSummary[],
+  seed: number
+): ParticipantSummary | undefined {
+  return participants.find((p) => p.seed_rank === seed)
+}
 
 const DEFAULT_QF_FEED: [number, number, number, number] = [3, 2, 1, 0]
 
@@ -77,6 +89,35 @@ const fieldClass =
 const cardClass =
   'rounded-2xl border border-violet-500/25 bg-[#0f1020]/55 backdrop-blur-sm p-5 space-y-4 shadow-lg shadow-black/25'
 
+const panelClass =
+  'rounded-xl border border-violet-500/20 bg-[#121426]/50 p-4 space-y-3'
+
+type AdminTab = 'bracket' | 'predictions'
+
+function AdminTabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean
+  onClick: () => void
+  children: ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
+        active
+          ? 'border-cyan-400 text-cyan-100'
+          : 'border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-500/40'
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
+
 function slotLine(slot: TournamentBracketSlot): string {
   if (slot.kind === 'participant') return slot.name ?? '—'
   if (slot.kind === 'winner_of' && slot.matchKey) return formatBracketMatchKeyLabel(slot.matchKey)
@@ -116,6 +157,7 @@ export function TournamentAdmin() {
   const [loading, setLoading] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
+  const [adminTab, setAdminTab] = useState<AdminTab>('bracket')
 
   const [newSlug, setNewSlug] = useState('championship-s1')
   const [newTitle, setNewTitle] = useState('AuroraCobble Championship Season 1')
@@ -175,10 +217,18 @@ export function TournamentAdmin() {
         setQfQualDraft(parseQfDraft(t?.qf_qual_feed))
         setPrizesDraft(prizesToDraft(t?.prizes))
         setParticipants(
-          (r.participants as { id: number; seed_rank: number; display_name: string }[]).map((p) => ({
+          (
+            r.participants as {
+              id: number
+              seed_rank: number
+              display_name: string
+              pokepaste_raw?: string | null
+            }[]
+          ).map((p) => ({
             id: p.id,
             seed_rank: p.seed_rank,
             display_name: p.display_name,
+            pokepaste_raw: p.pokepaste_raw ?? null,
           }))
         )
       })
@@ -210,6 +260,13 @@ export function TournamentAdmin() {
   useEffect(() => {
     if (selectedId != null) loadBracket(selectedId)
   }, [selectedId, loadBracket])
+
+  useEffect(() => {
+    const p = participantAtSeed(participants, seedRank)
+    setDisplayName(p?.display_name ?? '')
+    setPokepaste(p?.pokepaste_raw ?? '')
+    setParsePreview(null)
+  }, [seedRank, participants])
 
   useEffect(() => {
     if (predTournamentId && !betHistoryTournamentId) {
@@ -393,16 +450,16 @@ export function TournamentAdmin() {
   const selectClass =
     'w-full rounded-xl border border-violet-500/30 bg-[#151524]/90 px-3 py-2.5 text-sm text-[#f5efe6] transition-colors hover:border-violet-400/45 focus:border-cyan-400/60 focus:ring-2 focus:ring-cyan-500/25 outline-none'
 
+  const selectedTournament = tournaments.find((t) => t.id === selectedId) ?? null
+
   return (
-    <div className="max-w-4xl mx-auto space-y-8 pb-16 text-left">
-      <header className="space-y-2">
+    <div className="w-full max-w-6xl mx-auto space-y-5 pb-16 text-left">
+      <header className="space-y-1">
         <h2 className="text-2xl font-bold tracking-tight text-white m-0 bg-gradient-to-r from-white via-cyan-100 to-violet-200 bg-clip-text text-transparent">
           Tournaments
         </h2>
-        <p className="text-sm text-muted m-0 leading-relaxed">
-          Choose <strong className="text-slate-300">12 players</strong> for the usual flow (qualifiers for seeds 5–12 →
-          quarter-finals) or <strong className="text-slate-300">8 players</strong> for straight quarter-finals (1 vs 8, 2
-          vs 7, …) with no qualifying round. Publish when ready for the main site.
+        <p className="text-sm text-muted m-0">
+          Manage brackets, publish events, and configure Cobble$ predictions from the tabs below.
         </p>
       </header>
 
@@ -415,12 +472,139 @@ export function TournamentAdmin() {
         <p className="text-sm text-red-300 m-0 px-4 py-3 rounded-xl border border-red-500/35 bg-red-950/30">{err}</p>
       ) : null}
 
-      <section className={cardClass}>
-        <h3 className="text-sm font-semibold text-cyan-200 m-0 tracking-wide uppercase">Tournament predictions</h3>
+      <section className={panelClass}>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <label className="flex-1 min-w-[14rem] block space-y-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wide text-cyan-200/90">
+              Working tournament
+            </span>
+            <select
+              className={selectClass}
+              value={selectedId ?? ''}
+              onChange={(e) => setSelectedId(e.target.value ? parseInt(e.target.value, 10) : null)}
+            >
+              <option value="">Choose a tournament…</option>
+              {tournaments.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.title} · {bracketSizeFromUnknown(t.bracket_size) === 8 ? '8p' : '12p'} · {t.slug}{' '}
+                  {t.is_published ? '· live' : '· draft'}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="flex flex-wrap gap-2 shrink-0">
+            {selectedId != null ? (
+              <>
+                <button type="button" onClick={() => handlePublish(true)} className={btnSuccess}>
+                  Publish
+                </button>
+                <button type="button" onClick={() => handlePublish(false)} className={btnMuted}>
+                  Unpublish
+                </button>
+              </>
+            ) : null}
+          </div>
+        </div>
+        {selectedTournament ? (
+          <p className="text-xs text-slate-400 m-0">
+            <span className="text-[#f5efe6] font-medium">{selectedTournament.title}</span>
+            {' · '}
+            {bracketSizeFromUnknown(selectedTournament.bracket_size) === 8 ? '8 players' : '12 players'}
+            {' · '}
+            {selectedTournament.is_published ? (
+              <span className="text-emerald-300">Published on main site</span>
+            ) : (
+              <span className="text-amber-200/90">Draft (not on main site)</span>
+            )}
+          </p>
+        ) : (
+          <p className="text-xs text-muted m-0">Select a tournament to edit the bracket, or create one below.</p>
+        )}
+        <details className="group rounded-xl border border-violet-500/20 bg-[#121426]/40 open:border-violet-400/35">
+          <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-slate-200 hover:text-white [&::-webkit-details-marker]:hidden">
+            <span className="text-cyan-200/90">+</span> Create new tournament
+          </summary>
+          <div className="px-4 pb-4 pt-1 space-y-3 border-t border-violet-500/15">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <input
+                className={fieldClass}
+                placeholder="URL slug (e.g. spring-2026)"
+                value={newSlug}
+                onChange={(e) => setNewSlug(e.target.value)}
+              />
+              <input
+                className={fieldClass}
+                placeholder="Title"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+              />
+              <input
+                className={`${fieldClass} sm:col-span-2`}
+                placeholder="Subtitle / format"
+                value={newSubtitle}
+                onChange={(e) => setNewSubtitle(e.target.value)}
+              />
+              <fieldset className="sm:col-span-2 rounded-xl border border-violet-500/25 px-4 py-3 space-y-2">
+                <legend className="text-xs font-semibold text-cyan-200/95 px-1">Bracket size</legend>
+                <label className="flex items-start gap-2 text-sm text-slate-200 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="newBs"
+                    checked={newBracketSize === 12}
+                    onChange={() => setNewBracketSize(12)}
+                  />
+                  <span>
+                    <span className="font-medium text-[#f5efe6]">12 players</span>
+                    <span className="block text-xs text-muted">
+                      Qualifying (seeds 5–12), then quarters with configurable qual → QF pairings.
+                    </span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 text-sm text-slate-200 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="newBs"
+                    checked={newBracketSize === 8}
+                    onChange={() => setNewBracketSize(8)}
+                  />
+                  <span>
+                    <span className="font-medium text-[#f5efe6]">8 players</span>
+                    <span className="block text-xs text-muted">
+                      Quarter-finals immediately: seed 1 vs 8, 2 vs 7, 3 vs 6, 4 vs 5.
+                    </span>
+                  </span>
+                </label>
+              </fieldset>
+            </div>
+            <button type="button" onClick={handleCreate} className={btnPrimary}>
+              Create tournament
+            </button>
+          </div>
+        </details>
+      </section>
+
+      <nav
+        className="flex gap-0 border-b border-violet-500/25 -mb-px"
+        aria-label="Tournament admin sections"
+      >
+        <AdminTabButton active={adminTab === 'bracket'} onClick={() => setAdminTab('bracket')}>
+          Bracket &amp; matches
+        </AdminTabButton>
+        <AdminTabButton active={adminTab === 'predictions'} onClick={() => setAdminTab('predictions')}>
+          Predictions &amp; bets
+        </AdminTabButton>
+      </nav>
+
+      {adminTab === 'predictions' ? (
+        <div className="space-y-5">
+          <section className={panelClass}>
+            <h3 className="text-sm font-semibold text-cyan-200 m-0 tracking-wide uppercase">
+              Prediction settings
+            </h3>
         <p className="text-xs text-muted m-0 leading-relaxed">
           Choose which tournament users can bet on (champion + runner-up). Leave tournament empty to disable
           predictions. Set a lock date — after that, users cannot submit. Payouts run automatically when you set the
-          final match winner in the bracket below.
+          final match winner in the Bracket tab.
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="sm:col-span-2 block space-y-1">
@@ -494,7 +678,7 @@ export function TournamentAdmin() {
         </button>
       </section>
 
-      <section className={cardClass}>
+      <section className={panelClass}>
         <h3 className="text-sm font-semibold text-cyan-200 m-0 tracking-wide uppercase">Prediction bet history</h3>
         <p className="text-xs text-muted m-0 leading-relaxed">
           All website bets for a tournament — who staked how much on champion and runner-up picks.
@@ -675,69 +859,22 @@ export function TournamentAdmin() {
             </table>
           </div>
         ) : null}
-      </section>
-
-      <section className={cardClass}>
-        <h3 className="text-sm font-semibold text-cyan-200 m-0 tracking-wide uppercase">New tournament</h3>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <input className={fieldClass} placeholder="URL slug (e.g. spring-2026)" value={newSlug} onChange={(e) => setNewSlug(e.target.value)} />
-          <div className="sm:col-span-2 space-y-3">
-            <input className={fieldClass} placeholder="Title" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} />
-            <input className={fieldClass} placeholder="Subtitle / format" value={newSubtitle} onChange={(e) => setNewSubtitle(e.target.value)} />
-          </div>
-          <fieldset className="sm:col-span-2 rounded-xl border border-violet-500/25 px-4 py-3 space-y-2">
-            <legend className="text-xs font-semibold text-cyan-200/95 px-1">Bracket size</legend>
-            <label className="flex items-start gap-2 text-sm text-slate-200 cursor-pointer">
-              <input type="radio" name="newBs" checked={newBracketSize === 12} onChange={() => setNewBracketSize(12)} />
-              <span>
-                <span className="font-medium text-[#f5efe6]">12 players</span>
-                <span className="block text-xs text-muted">Qualifying (seeds 5–12), then quarters with configurable qual → QF pairings.</span>
-              </span>
-            </label>
-            <label className="flex items-start gap-2 text-sm text-slate-200 cursor-pointer">
-              <input type="radio" name="newBs" checked={newBracketSize === 8} onChange={() => setNewBracketSize(8)} />
-              <span>
-                <span className="font-medium text-[#f5efe6]">8 players</span>
-                <span className="block text-xs text-muted">Quarter-finals immediately: seed 1 vs 8, 2 vs 7, 3 vs 6, 4 vs 5.</span>
-              </span>
-            </label>
-          </fieldset>
+          </section>
         </div>
-        <button type="button" onClick={handleCreate} className={btnPrimary}>
-          Create tournament
-        </button>
-      </section>
+      ) : null}
 
-      <section className={cardClass}>
-        <h3 className="text-sm font-semibold text-cyan-200 m-0 tracking-wide uppercase">Select tournament</h3>
-        <select
-          className={selectClass}
-          value={selectedId ?? ''}
-          onChange={(e) => setSelectedId(e.target.value ? parseInt(e.target.value, 10) : null)}
-        >
-          <option value="">Choose one…</option>
-          {tournaments.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.title} · {bracketSizeFromUnknown(t.bracket_size) === 8 ? '8p' : '12p'} · {t.slug}{' '}
-              {t.is_published ? '· live' : '· draft'}
-            </option>
-          ))}
-        </select>
-        {selectedId != null ? (
-          <div className="flex flex-wrap gap-3 pt-1">
-            <button type="button" onClick={() => handlePublish(true)} className={btnSuccess}>
-              Publish (main site)
-            </button>
-            <button type="button" onClick={() => handlePublish(false)} className={btnMuted}>
-              Unpublish
-            </button>
-          </div>
-        ) : null}
-      </section>
+      {adminTab === 'bracket' && selectedId == null ? (
+        <section className={panelClass}>
+          <p className="text-sm text-muted m-0">
+            Choose a tournament in the toolbar above to edit format, participants, and match winners.
+          </p>
+        </section>
+      ) : null}
 
-      {selectedId != null ? (
-        <>
-          <section className={cardClass}>
+      {adminTab === 'bracket' && selectedId != null ? (
+        <div className="grid gap-5 xl:grid-cols-[minmax(300px,380px)_1fr] xl:items-start">
+          <div className="space-y-4">
+          <section className={panelClass}>
             <h3 className="text-sm font-semibold text-cyan-200 m-0 tracking-wide uppercase">Bracket format</h3>
             <p className="text-xs text-muted m-0 leading-relaxed">
               Current: <strong className="text-slate-200">{loadedBracketSize === 8 ? '8 players' : '12 players'}</strong>
@@ -766,7 +903,7 @@ export function TournamentAdmin() {
             </div>
           </section>
 
-          <section className={cardClass}>
+          <section className={panelClass}>
             <h3 className="text-sm font-semibold text-cyan-200 m-0 tracking-wide uppercase">Prizes</h3>
             <p className="text-xs text-muted m-0 leading-relaxed">
               One line per bullet — same list as on the public tournament page. Empty lines are ignored.
@@ -793,7 +930,7 @@ export function TournamentAdmin() {
           </section>
 
           {loadedBracketSize === 12 ? (
-            <section className={cardClass}>
+            <section className={panelClass}>
               <h3 className="text-sm font-semibold text-cyan-200 m-0 tracking-wide uppercase">Quarter-final pairings</h3>
               <p className="text-xs text-muted m-0 leading-relaxed">
                 For each quarter-final, pick which <strong className="text-slate-300">qualifier winner</strong>{' '}
@@ -835,7 +972,7 @@ export function TournamentAdmin() {
               </button>
             </section>
           ) : (
-            <section className={cardClass}>
+            <section className={panelClass}>
               <h3 className="text-sm font-semibold text-cyan-200 m-0 tracking-wide uppercase">8-player quarters</h3>
               <p className="text-xs text-muted m-0 leading-relaxed">
                 Fixed pairings: QF1 = seed 1 vs 8, QF2 = 2 vs 7, QF3 = 3 vs 6, QF4 = 4 vs 5. Enter participants for seeds{' '}
@@ -844,11 +981,11 @@ export function TournamentAdmin() {
             </section>
           )}
 
-          <section className={cardClass}>
+          <section className={panelClass}>
             <h3 className="text-sm font-semibold text-cyan-200 m-0 tracking-wide uppercase">
               Participant (seed 1–{loadedBracketSize})
             </h3>
-            <div className="flex flex-wrap gap-3 items-end">
+            <div className="flex flex-wrap gap-3 items-end justify-between">
               <label className="flex flex-col gap-1.5 text-xs text-muted">
                 Seed
                 <select
@@ -856,13 +993,24 @@ export function TournamentAdmin() {
                   value={Math.min(seedRank, loadedBracketSize)}
                   onChange={(e) => setSeedRank(parseInt(e.target.value, 10))}
                 >
-                  {Array.from({ length: loadedBracketSize }, (_, i) => i + 1).map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
+                  {Array.from({ length: loadedBracketSize }, (_, i) => i + 1).map((n) => {
+                    const existing = participantAtSeed(participants, n)
+                    return (
+                      <option key={n} value={n}>
+                        {n}
+                        {existing ? ` — ${existing.display_name}` : ''}
+                      </option>
+                    )
+                  })}
                 </select>
               </label>
+              {participantAtSeed(participants, seedRank) ? (
+                <p className="text-xs text-emerald-300/90 m-0 pb-1">
+                  Editing seed {seedRank} — {participantAtSeed(participants, seedRank)!.display_name}
+                </p>
+              ) : (
+                <p className="text-xs text-muted m-0 pb-1">Seed {seedRank} — no participant saved yet</p>
+              )}
             </div>
             <input
               className={fieldClass}
@@ -890,23 +1038,34 @@ export function TournamentAdmin() {
                 {[...participants]
                   .sort((a, b) => a.seed_rank - b.seed_rank)
                   .map((p) => (
-                    <span
+                    <button
                       key={p.id}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-violet-500/25 bg-[#121426]/55 px-2.5 py-1 text-xs text-slate-200"
+                      type="button"
+                      onClick={() => setSeedRank(p.seed_rank)}
+                      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs transition-colors ${
+                        p.seed_rank === seedRank
+                          ? 'border-cyan-400/50 bg-cyan-950/40 text-cyan-100'
+                          : 'border-violet-500/25 bg-[#121426]/55 text-slate-200 hover:border-violet-400/45 hover:bg-[#121426]/80'
+                      }`}
                     >
                       <span className="text-cyan-300 font-medium">Seed {p.seed_rank}</span>
                       <span className="text-slate-500">·</span>
                       <span>{p.display_name}</span>
-                    </span>
+                    </button>
                   ))}
               </div>
             ) : null}
           </section>
+          </div>
 
-          <section className={cardClass}>
-            <h3 className="text-sm font-semibold text-cyan-200 m-0 tracking-wide uppercase">Matches — pick winner</h3>
-            {loading ? <p className="text-xs text-muted m-0">Loading bracket…</p> : null}
-            <div className="space-y-3 max-h-[min(70vh,36rem)] overflow-y-auto pr-1 [scrollbar-color:rgba(129,140,248,0.35)_transparent]">
+          <section
+            className={`${cardClass} xl:sticky xl:top-4 xl:max-h-[calc(100vh-7rem)] xl:flex xl:flex-col min-h-0`}
+          >
+            <h3 className="text-sm font-semibold text-cyan-200 m-0 tracking-wide uppercase shrink-0">
+              Matches — pick winner
+            </h3>
+            {loading ? <p className="text-xs text-muted m-0 shrink-0">Loading bracket…</p> : null}
+            <div className="space-y-3 flex-1 min-h-0 overflow-y-auto pr-1 mt-2 [scrollbar-color:rgba(129,140,248,0.35)_transparent]">
               {bracket.map((m) => {
                 const winnerName =
                   m.winnerParticipantId != null
@@ -968,7 +1127,7 @@ export function TournamentAdmin() {
               })}
             </div>
           </section>
-        </>
+        </div>
       ) : null}
     </div>
   )
