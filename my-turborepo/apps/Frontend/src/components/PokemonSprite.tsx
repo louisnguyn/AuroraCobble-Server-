@@ -7,11 +7,14 @@ export function PokemonSprite({
   speciesDisplay,
   className = 'w-16 h-16',
   emptyClassName,
+  centered = true,
 }: {
   speciesSlug?: string
   speciesDisplay?: string
   className?: string
   emptyClassName?: string
+  /** When false, sprite stays left-aligned (team cards). Default true for thumbs/grids. */
+  centered?: boolean
 }) {
   const slug =
     speciesSlug?.trim().toLowerCase() ||
@@ -31,7 +34,10 @@ export function PokemonSprite({
   if (!slug) {
     return (
       <div
-        className={emptyClassName ?? `${className} rounded-lg bg-surface-hover shrink-0 mx-auto`}
+        className={
+          emptyClassName ??
+          `${className} rounded-lg bg-surface-hover shrink-0${centered ? ' mx-auto' : ''}`
+        }
         aria-hidden
       />
     )
@@ -41,7 +47,7 @@ export function PokemonSprite({
     <img
       src={src ?? showdownHomeSpriteUrl(slug)}
       alt=""
-      className={`${className} object-contain shrink-0 rounded-lg bg-surface-hover/50 mx-auto`}
+      className={`${className} object-contain shrink-0 rounded-lg bg-surface-hover/50${centered ? ' mx-auto' : ''}`}
       loading="lazy"
       onError={() => {
         if (fallbackStep.current > 0) return

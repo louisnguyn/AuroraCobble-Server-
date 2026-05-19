@@ -26,9 +26,9 @@ export function TournamentTeamDetail({
   const team = (data?.participant.team as ParsedMon[]) ?? []
 
   return (
-    <div className="w-full max-w-3xl mx-auto space-y-6 pb-12">
-      <div className="flex flex-wrap items-center gap-3">
-        <button type="button" onClick={onBack} className="text-sm text-accent hover:underline">
+    <div className="w-full max-w-3xl mx-auto space-y-6 pb-12 px-2 sm:px-4">
+      <div className="flex flex-wrap items-center justify-start gap-3">
+        <button type="button" onClick={onBack} className="text-sm px-3 py-1.5 pixel-btn">
           ← Back to bracket
         </button>
         {onCompareWithOther ? (
@@ -44,11 +44,11 @@ export function TournamentTeamDetail({
       {err ? <p className="text-error">{err}</p> : null}
       {data ? (
         <>
-          <header>
+          <header className="text-center max-w-lg mx-auto">
             <h1 className="text-2xl font-semibold text-[#f5efe6] m-0">{data.participant.displayName}</h1>
             <p className="text-sm text-muted m-0 mt-1">Seed #{data.participant.seedRank}</p>
           </header>
-          <div className="space-y-4">
+          <div className="space-y-3 max-w-lg mx-auto w-full">
             {team.map((mon, i) => (
               <TournamentMonCard key={i} mon={mon} />
             ))}

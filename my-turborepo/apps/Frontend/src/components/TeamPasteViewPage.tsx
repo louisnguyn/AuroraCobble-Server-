@@ -26,7 +26,7 @@ export function TeamPasteViewPage({ onBack }: { onBack: () => void }) {
       <button type="button" onClick={onBack} className="pixel-btn text-sm py-2 px-4">
         ← Back to Team Builder
       </button>
-      <header>
+      <header className="text-center max-w-lg mx-auto">
         <h1 className="text-2xl font-semibold text-[#f5efe6] m-0">{data.title || 'Team'}</h1>
       </header>
 
@@ -44,7 +44,7 @@ export function TeamPasteViewPage({ onBack }: { onBack: () => void }) {
         </p>
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="flex flex-col gap-3 max-w-lg mx-auto w-full">
         {team.map((mon, i) => (
           <TournamentMonCard key={`${mon.speciesSlug}-${i}`} mon={mon} />
         ))}

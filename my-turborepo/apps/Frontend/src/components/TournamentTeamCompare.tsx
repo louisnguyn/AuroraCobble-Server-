@@ -46,7 +46,7 @@ export function TournamentTeamCompare({
   return (
     <div className="w-full max-w-6xl mx-auto space-y-6 pb-12 px-1">
       <div className="flex flex-wrap items-center gap-3">
-        <button type="button" onClick={onBack} className="text-sm text-accent hover:underline shrink-0">
+        <button type="button" onClick={onBack} className="text-sm px-3 py-1.5 pixel-btn shrink-0">
           ← Back to bracket
         </button>
       </div>
