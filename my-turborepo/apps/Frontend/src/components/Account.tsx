@@ -74,12 +74,12 @@ function RolePerksSummary({ perks }: { perks: RoleWebsitePerks }) {
         <p className={labelClass}>Shop</p>
         <p className="m-0">
           {d > 0 ? (
-            <span className="text-emerald-300 font-semibold tabular-nums">âˆ’{d}%</span>
+            <span className="text-emerald-300 font-semibold tabular-nums">-{d}%</span>
           ) : (
             <span className="text-slate-500">0%</span>
           )}
           <span className="text-slate-500 block sm:inline sm:ml-1 text-[10px] sm:text-[11px] mt-0.5 sm:mt-0">
-            Items &amp; PokÃ©mon
+            Items &amp; Pokemon
           </span>
         </p>
       </div>
@@ -120,7 +120,7 @@ export function Account() {
   const [rewardsClaimBusy, setRewardsClaimBusy] = useState(false)
   const [rewardsClaimError, setRewardsClaimError] = useState<string | null>(null)
   const [rewardsClaimSuccess, setRewardsClaimSuccess] = useState<string | null>(null)
-  const [dailyResetCountdown, setDailyResetCountdown] = useState('â€”')
+  const [dailyResetCountdown, setDailyResetCountdown] = useState('-')
   const [inventory, setInventory] = useState<{ item_key: string; quantity: number }[]>([])
   const [shopItems, setShopItems] = useState<ShopItem[]>([])
   const [shopDiscountPercent, setShopDiscountPercent] = useState(0)
@@ -134,7 +134,7 @@ export function Account() {
   const [activeTab, setActiveTab] = useState<AccountTab>('daily')
   const [pokemonOffers, setPokemonOffers] = useState<PokemonShopOffer[]>([])
   const [pokemonWindowEnd, setPokemonWindowEnd] = useState<string | null>(null)
-  const [pokemonCountdown, setPokemonCountdown] = useState('â€”')
+  const [pokemonCountdown, setPokemonCountdown] = useState('-')
   const [pokemonPurchases, setPokemonPurchases] = useState<PokemonShopPurchase[]>([])
   const [pokemonBusy, setPokemonBusy] = useState<string | null>(null)
   const [pokemonError, setPokemonError] = useState<string | null>(null)
@@ -210,7 +210,7 @@ export function Account() {
       .catch((err) => {
         if (!cancelled) {
           setVStatus(null)
-          setVError(err instanceof Error ? err.message : 'KhÃ´ng táº£i Ä‘Æ°á»£c tráº¡ng thÃ¡i xÃ¡c minh.')
+          setVError(err instanceof Error ? err.message : 'Could not load verification status.')
         }
       })
       .finally(() => {
@@ -276,7 +276,7 @@ export function Account() {
 
   useEffect(() => {
     if (!pokemonWindowEnd) {
-      setPokemonCountdown('â€”')
+      setPokemonCountdown('-')
       return
     }
     const update = () => {
@@ -388,7 +388,7 @@ export function Account() {
       setVStatus(s)
       if (s.verified) void refreshUser()
     } catch (err) {
-      setVError(err instanceof Error ? err.message : 'KhÃ´ng gá»­i Ä‘Æ°á»£c yÃªu cáº§u.')
+      setVError(err instanceof Error ? err.message : 'Could not submit request.')
     } finally {
       setVSubmitting(false)
     }
@@ -471,7 +471,7 @@ export function Account() {
 
   const handleBuyItem = async (item: ShopItem) => {
     if (!canUseWebsiteShop) {
-      setShopError('Cáº§n xÃ¡c minh tÃ i khoáº£n trÃªn web Ä‘á»ƒ mua á»Ÿ shop (admin Ä‘Æ°á»£c miá»…n).')
+      setShopError('Account verification required to buy from the shop (admins exempt).')
       return
     }
     setShopError(null)
@@ -500,7 +500,7 @@ export function Account() {
 
   const handleBuyPokemon = async (offer: PokemonShopOffer) => {
     if (!canUseWebsiteShop) {
-      setPokemonError('Cáº§n xÃ¡c minh tÃ i khoáº£n trÃªn web Ä‘á»ƒ mua á»Ÿ shop (admin Ä‘Æ°á»£c miá»…n).')
+      setPokemonError('Account verification required to buy from the shop (admins exempt).')
       return
     }
     setPokemonError(null)
@@ -558,7 +558,7 @@ export function Account() {
 
   const handleBuyRank = async (entry: RoleCatalogEntry) => {
     if (!canUseWebsiteShop) {
-      setRankError('Cáº§n xÃ¡c minh tÃ i khoáº£n trÃªn web Ä‘á»ƒ mua rank (admin Ä‘Æ°á»£c miá»…n).')
+      setRankError('Account verification required to buy ranks (admins exempt).')
       return
     }
     setRankError(null)
@@ -566,7 +566,7 @@ export function Account() {
     setRankBusyKey(entry.key)
     try {
       const out = await buyRank(entry.key)
-      setRankSuccess(`ÄÃ£ mua rank ${entry.label} â€” sáº½ cÃ³ hiá»‡u lá»±c trong game sau vÃ i giÃ¢y.`)
+      setRankSuccess(`Purchased rank ${entry.label}. It should apply in-game within a few seconds.`)
       setCobbleBalance(out.newBalance)
       void refreshUser()
       const [shopUp, pOffersUp, rs] = await Promise.all([
@@ -580,7 +580,7 @@ export function Account() {
       setPokemonWindowEnd(pOffersUp.windowEnd ?? null)
       if (rs) setRoleStatus(rs)
     } catch (err) {
-      setRankError(err instanceof Error ? err.message : 'Mua rank tháº¥t báº¡i')
+      setRankError(err instanceof Error ? err.message : 'Rank purchase failed')
     } finally {
       setRankBusyKey(null)
     }
@@ -597,9 +597,9 @@ export function Account() {
       setGrantMessage('')
       const rs = await fetchRoleRequestStatus()
       setRoleStatus(rs)
-      setRankSuccess('ÄÃ£ gá»­i yÃªu cáº§u rank â€” staff sáº½ duyá»‡t hoáº·c tá»« chá»‘i.')
+      setRankSuccess('Rank request sent. Staff will approve or deny it.')
     } catch (err) {
-      setRankError(err instanceof Error ? err.message : 'KhÃ´ng gá»­i Ä‘Æ°á»£c yÃªu cáº§u')
+      setRankError(err instanceof Error ? err.message : 'Could not submit request')
     } finally {
       setGrantSubmitting(false)
     }
@@ -671,7 +671,7 @@ export function Account() {
                     <span className="tabular-nums">#{userPvpRank.rank}</span>
                     {userPvpRank.tier ? (
                       <>
-                        <span className="text-slate-500 font-normal">Â·</span>
+                        <span className="text-slate-500 font-normal"> | </span>
                         <PvPTierBadge
                           slug={normalizePvpTierSlugForAssets(userPvpRank.tier)}
                           displayName={pvpTierHumanName(userPvpRank.tier)}
@@ -698,21 +698,21 @@ export function Account() {
                   ) : null}
                   <span className="text-slate-500 font-normal text-xs">
                     {' '}
-                    â€” if you&apos;re still in the top 3 after the next reset
+                    - if you&apos;re still in the top 3 after the next reset
                   </span>
                 </span>
               ) : (
-                <span className="text-slate-500">â€” For top 3 only. Credited to your site balance automatically.</span>
+                <span className="text-slate-500">- For top 3 only. Credited to your site balance automatically.</span>
               )}
             </p>
             <p className="text-xs text-slate-500 m-0 mt-2 leading-relaxed">
-              Not part of the daily claim below â€” only your streak and role bonuses use that button.
+              Not part of the daily claim below - only your streak and role bonuses use that button.
             </p>
           </div>
 
           <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-3">Daily login &amp; role</h2>
           {dailyLoading ? (
-            <p className="text-sm text-muted mb-6">Loading rewardsâ€¦</p>
+            <p className="text-sm text-muted mb-6">Loading rewards...</p>
           ) : dailyLoadError ? (
             <p className="text-sm text-error mb-6">{dailyLoadError}</p>
           ) : !daily ? (
@@ -720,7 +720,7 @@ export function Account() {
           ) : (
             <div className="mb-6 pixel-well p-4 space-y-4">
               <p className="text-sm text-muted m-0">
-                Reset: 00:00 ({daily.timeZone}) Â· Date: {daily.date}
+                Reset: 00:00 ({daily.timeZone})  |  Date: {daily.date}
               </p>
               <p className="text-sm text-muted mt-2 mb-0">Next reset in: {dailyResetCountdown}</p>
 
@@ -777,7 +777,7 @@ export function Account() {
                   </span>
                 </p>
                 <p className="text-sm text-violet-200 m-0">
-                  Next step: Day {daily.streak.nextDay} Â· {daily.streak.nextReward?.label ?? 'â€”'}
+                  Next step: Day {daily.streak.nextDay}  |  {daily.streak.nextReward?.label ?? '-'}
                 </p>
                 <p className="text-xs text-muted mt-1 m-0">
                   Base Cobble$ from streak (before rank extras):{' '}
@@ -787,7 +787,7 @@ export function Account() {
                     </span>
                   ) : (
                     <span className="text-slate-400">
-                      â€” (today&apos;s reward: {rewardsBreakdown.nr?.label ?? 'â€”'})
+                      - (today&apos;s reward: {rewardsBreakdown.nr?.label ?? '-'})
                     </span>
                   )}
                 </p>
@@ -798,7 +798,7 @@ export function Account() {
                 </p>
                 {rewardsBreakdown.claimedToday ? (
                   <p className="text-sm text-emerald-300 mt-2 m-0">
-                    Claimed today (Day {daily.claim?.streakDay ?? '?'}) â€” {daily.claim?.selectedReward ?? 'Reward'}
+                    Claimed today (Day {daily.claim?.streakDay ?? '?'}) - {daily.claim?.selectedReward ?? 'Reward'}
                   </p>
                 ) : null}
               </section>
@@ -810,7 +810,7 @@ export function Account() {
                   <span className="tabular-nums text-[#fbbf24] font-semibold">
                     {rewardsBreakdown.totalCobble.toLocaleString()}
                   </span>
-                  {' Â· '}
+                  {'  |  '}
                   Tickets:{' '}
                   <span className="tabular-nums text-sky-200/95 font-semibold">{rewardsBreakdown.totalTickets}</span>
                 </p>
@@ -823,7 +823,7 @@ export function Account() {
                   disabled={rewardsClaimBusy || !rewardsBreakdown.hasClaimable}
                   className="py-2 px-4 pixel-btn-primary disabled:opacity-50"
                 >
-                  {rewardsClaimBusy ? 'Claimingâ€¦' : 'Claim daily reward'}
+                  {rewardsClaimBusy ? 'Claiming...' : 'Claim daily reward'}
                 </button>
                 {rewardsClaimSuccess ? (
                   <p className="text-sm text-emerald-300 mt-3 mb-0">{rewardsClaimSuccess}</p>
@@ -856,7 +856,7 @@ export function Account() {
                       disabled={it.quantity < 1 || claimBusyItem === it.item_key}
                       className="shrink-0 py-2 px-3 pixel-btn-primary disabled:opacity-50 text-base"
                     >
-                      {claimBusyItem === it.item_key ? 'Claimingâ€¦' : 'Claim'}
+                      {claimBusyItem === it.item_key ? 'Claiming...' : 'Claim'}
                     </button>
                   </li>
                 ))}
@@ -892,10 +892,10 @@ export function Account() {
               className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100"
               role="status"
             >
-              <p className="m-0 font-medium">Shop chá»‰ dÃ¹ng sau khi xÃ¡c minh tÃ i khoáº£n</p>
+              <p className="m-0 font-medium">Shop available after account verification</p>
               <p className="m-0 mt-1 text-xs text-amber-100/90">
-                ChÆ°a verified thÃ¬ khÃ´ng mua Ä‘Æ°á»£c trÃªn website (Shop / PokÃ©mon Shop). HÃ£y gá»­i yÃªu cáº§u xÃ¡c minh á»Ÿ tab
-                Account. Trá»« admin.
+                If not verified, you cannot buy on the website (Shop / Pokemon Shop). Submit a verification request in the
+                Account tab. Admins are exempt.
               </p>
               <p className="m-0 mt-1 text-xs text-amber-100/75">
                 Verified accounts only can purchase on the web shop; browse prices as usual.
@@ -906,7 +906,7 @@ export function Account() {
           <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-3">Shop</h2>
           {shopDiscountPercent > 0 ? (
             <p className="text-sm text-emerald-300/95 m-0 mb-3">
-              Rank discount: âˆ’{shopDiscountPercent}% on Cobble$ (item shop + PokÃ©mon shop).
+              Rank discount: -{shopDiscountPercent}% on Cobble$ (item shop + Pokemon shop).
             </p>
           ) : null}
           <div className="mb-6 pixel-well p-4">
@@ -934,7 +934,7 @@ export function Account() {
                     }
                     className="shrink-0 py-2 px-3 pixel-btn-primary disabled:opacity-50 text-base"
                   >
-                    {shopBusyItem === item.itemKey ? 'Buyingâ€¦' : 'Buy'}
+                    {shopBusyItem === item.itemKey ? 'Buying...' : 'Buy'}
                   </button>
                 </div>
               ))}
@@ -947,7 +947,7 @@ export function Account() {
           <div className="mb-6 pixel-well p-4">
             <p className="text-sm text-muted m-0 mb-3">
               Refresh in: {pokemonCountdown}. Each slot is <strong className="text-slate-300">one copy site-wide</strong>{' '}
-              per rotation â€” 6 slots; first buyer takes each. Each slot rolls shiny or normal (~35% shiny).
+              per rotation - 6 slots; first buyer takes each. Each slot rolls shiny or normal (~35% shiny).
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {pokemonOffers.map((offer) => (
@@ -961,7 +961,7 @@ export function Account() {
                       {displayItemName(offer.species)}
                     </p>
                     <p className="text-xs text-muted m-0">
-                      {formatPokemonShopCategory(offer.category)} Â·{' '}
+                      {formatPokemonShopCategory(offer.category)}  | {' '}
                       {shopDiscountPercent > 0 && offer.price < offer.listPrice ? (
                         <>
                           <span className="line-through opacity-70">{offer.listPrice.toLocaleString()}</span>{' '}
@@ -988,7 +988,7 @@ export function Account() {
                       : offer.purchasedByYou
                         ? 'Yours'
                         : pokemonBusy === `buy-${offer.slot}`
-                          ? 'Buyingâ€¦'
+                          ? 'Buying...'
                           : 'Buy'}
                   </button>
                 </div>
@@ -1008,7 +1008,7 @@ export function Account() {
                         {displayItemName(p.species)}
                       </p>
                       <p className="text-xs text-muted m-0">
-                        {new Date(p.purchasedAt).toLocaleString()} Â· {p.price.toLocaleString()} Cobble$
+                        {new Date(p.purchasedAt).toLocaleString()}  |  {p.price.toLocaleString()} Cobble$
                       </p>
                       {(p.claimedAt || pokemonClaimedToServerAt[p.id]) && (
                         <p className="text-xs text-emerald-300 m-0 mt-1">
@@ -1024,7 +1024,7 @@ export function Account() {
                         disabled={pokemonBusy === `claim-${p.id}`}
                         className="shrink-0 py-2 px-3 pixel-btn-primary disabled:opacity-50 text-base"
                       >
-                        {pokemonBusy === `claim-${p.id}` ? 'Claimingâ€¦' : 'Claim'}
+                        {pokemonBusy === `claim-${p.id}` ? 'Claiming...' : 'Claim'}
                       </button>
                     )}
                   </div>
@@ -1045,7 +1045,7 @@ export function Account() {
             <span className="text-[#fbbf24] font-semibold tabular-nums">{cobbleBalance.toLocaleString()}</span>
           </p>
           <p className="text-sm text-muted m-0 mb-3">
-            Rank hiá»‡n táº¡i:{' '}
+            Current rank:{' '}
             <span className="inline-flex align-middle mr-1">
               <RoleBadge roleKey={roleStatus?.currentRole ?? user?.minecraft_role ?? 'member'} />
             </span>
@@ -1058,7 +1058,7 @@ export function Account() {
               className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100"
               role="status"
             >
-              <p className="m-0 font-medium">Mua rank cáº§n tÃ i khoáº£n Ä‘Ã£ xÃ¡c minh</p>
+              <p className="m-0 font-medium">Buying ranks requires a verified account</p>
               <p className="m-0 mt-1 text-xs text-amber-100/85">
                 Verified accounts only can purchase ranks; you can still request staff-granted ranks below (pending
                 review).
@@ -1066,14 +1066,14 @@ export function Account() {
             </div>
           ) : null}
 
-          <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-3">Mua rank (Cobble$)</h2>
+          <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-3">Buy rank (Cobble$)</h2>
           <p className="text-xs text-muted m-0 mb-3">
-            BÃªn dÆ°á»›i lÃ  quyá»n lá»£i Ä‘ang Ã¡p dá»¥ng cho rank cá»§a báº¡n. CÃ¡c tháº» tiáº¿p theo Ä‘á»ƒ xem hoáº·c mua nÃ¢ng rank.
+            Below are perks for your current rank. Use the cards to view or purchase higher ranks.
           </p>
           {roleCat ? (
             <div className="mb-4 rounded-lg border border-emerald-600/40 bg-emerald-950/25 px-3 py-2">
               <p className="text-[11px] font-medium text-emerald-200/95 m-0 mb-1">
-                Quyá»n lá»£i cá»§a báº¡n â€”{' '}
+                Your perks -{' '}
                 <span className="text-[#e2e8f0]">
                   {(roleStatus?.currentRole ?? user?.minecraft_role ?? 'member').toUpperCase()}
                 </span>
@@ -1086,7 +1086,7 @@ export function Account() {
               />
             </div>
           ) : null}
-          <p className="text-xs text-muted m-0 mb-3">Sau khi thanh toÃ¡n, rank Ä‘Æ°á»£c cáº­p nháº­t trong game sau vÃ i giÃ¢y.</p>
+          <p className="text-xs text-muted m-0 mb-3">After payment, your rank updates in-game within a few seconds.</p>
           <div className="mb-6 pixel-well p-4 space-y-3">
             {roleCat?.purchasable?.length ? (
               roleCat.purchasable.map((entry) => (
@@ -1114,7 +1114,7 @@ export function Account() {
                       }
                       className="shrink-0 self-start px-4 py-2 text-base pixel-btn-primary disabled:opacity-50"
                     >
-                      {rankBusyKey === entry.key ? 'Buyingâ€¦' : 'Buy'}
+                      {rankBusyKey === entry.key ? 'Buying...' : 'Buy'}
                     </button>
                   </div>
                   <div className="w-full border-t border-border/45 pt-3">
@@ -1123,14 +1123,14 @@ export function Account() {
                 </div>
               ))
             ) : (
-              <p className="text-sm text-muted m-0">KhÃ´ng táº£i Ä‘Æ°á»£c danh sÃ¡ch rank (kiá»ƒm tra API / database).</p>
+              <p className="text-sm text-muted m-0">Could not load rank list (check API / database).</p>
             )}
           </div>
 
-          <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-2">Rank chá»‰ admin cáº¥p / xin cáº¥p</h2>
+          <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-2">Staff-granted ranks / requests</h2>
           <p className="text-xs text-muted m-0 mb-3">
-            Legend, Ultimate, Overlord, God vÃ  cÃ¡c rank staff/partner (Champion, Helper, Mod, TikTok, Youtuber, Builder) â€”
-            khÃ´ng mua Cobble$ trÃªn web. Gá»­i yÃªu cáº§u; staff duyá»‡t sáº½ cáº­p nháº­t rank cho báº¡n.
+            Legend, Ultimate, Overlord, God and staff/partner ranks (Champion, Helper, Mod, TikTok, Youtuber, Builder) -
+            cannot be bought with Cobble$ on the web. Submit a request; staff will update your rank if approved.
           </p>
           <div className="mb-4 space-y-3">
             {(roleCat?.grantOnly ?? []).map((g) => (
@@ -1163,7 +1163,7 @@ export function Account() {
                         : 'border-border bg-[#0f172a] hover:bg-[#1e293b]'
                     }`}
                   >
-                    {grantRolePick === g.key ? 'ÄÃ£ chá»n' : 'Chá»n'}
+                    {grantRolePick === g.key ? 'Selected' : 'Select'}
                   </button>
                 </div>
                 <div className="w-full border-t border-border/45 pt-3">
@@ -1175,18 +1175,18 @@ export function Account() {
           <div className="mb-6 pixel-well p-4 space-y-3">
             {roleStatus?.pending ? (
               <p className="text-sm text-amber-200 m-0">
-                Äang chá» duyá»‡t: <strong>{roleStatus.pending.requested_role}</strong> (gá»­i lÃºc{' '}
+                Pending approval: <strong>{roleStatus.pending.requested_role}</strong> (sent{' '}
                 {new Date(roleStatus.pending.created_at).toLocaleString()})
               </p>
             ) : (
               <form onSubmit={handleSubmitGrant} className="space-y-2">
                 <label className="block text-sm text-[#e2e8f0]">
-                  Rank Ä‘Ã£ chá»n
+                  Selected rank
                   <CustomSelect
                     value={grantRolePick}
                     onChange={(v) => setGrantRolePick(v)}
                     options={[
-                      { value: '', label: 'â€” Chá»n á»Ÿ danh sÃ¡ch trÃªn hoáº·c táº¡i Ä‘Ã¢y â€”' },
+                      { value: '', label: '- Pick from the list above or here -' },
                       ...(roleCat?.grantOnly ?? []).map((g) => ({
                         value: g.key,
                         label: `${g.label} (${g.key})`,
@@ -1197,13 +1197,13 @@ export function Account() {
                   />
                 </label>
                 <label className="block text-sm text-[#e2e8f0]">
-                  Lá»i nháº¯n (tuá»³ chá»n)
+                  Message (optional)
                   <textarea
                     value={grantMessage}
                     onChange={(e) => setGrantMessage(e.target.value)}
                     rows={2}
                     className="mt-1 block w-full rounded border border-border bg-[#0f172a] px-2 py-2 text-base text-[#e2e8f0]"
-                    placeholder="VÃ­ dá»¥: link TikTok / lÃ½ do cáº§n rankâ€¦"
+                    placeholder="e.g. TikTok link / why you need this rank..."
                   />
                 </label>
                 <button
@@ -1211,17 +1211,17 @@ export function Account() {
                   disabled={grantSubmitting || !grantRolePick || Boolean(roleStatus?.pending)}
                   className="py-2 px-4 pixel-btn-primary disabled:opacity-50"
                 >
-                  {grantSubmitting ? 'Sendingâ€¦' : 'Gá»­i yÃªu cáº§u'}
+                  {grantSubmitting ? 'Sending...' : 'Submit request'}
                 </button>
               </form>
             )}
             {roleStatus?.lastResolved ? (
               <p className="text-xs text-muted m-0 border-t border-border/60 pt-2">
-                Gáº§n nháº¥t: {roleStatus.lastResolved.status} â€” {roleStatus.lastResolved.requested_role}
+                Latest: {roleStatus.lastResolved.status} - {roleStatus.lastResolved.requested_role}
                 {roleStatus.lastResolved.resolved_at
-                  ? ` Â· ${new Date(roleStatus.lastResolved.resolved_at).toLocaleString()}`
+                  ? `  |  ${new Date(roleStatus.lastResolved.resolved_at).toLocaleString()}`
                   : ''}
-                {roleStatus.lastResolved.admin_note ? ` â€” Note: ${roleStatus.lastResolved.admin_note}` : ''}
+                {roleStatus.lastResolved.admin_note ? ` - Note: ${roleStatus.lastResolved.admin_note}` : ''}
               </p>
             ) : null}
           </div>
@@ -1248,32 +1248,32 @@ export function Account() {
               {user?.is_admin ? (
                 <p className="text-sm text-emerald-200/90 m-0">Admin accounts do not need to submit a request.</p>
               ) : vLoading ? (
-                <p className="text-sm text-muted m-0">Äang táº£i tráº¡ng thÃ¡iâ€¦</p>
+                <p className="text-sm text-muted m-0">Loading status...</p>
               ) : vStatus?.verified || isAccountVerified(user) ? (
                 <p className="text-sm text-emerald-200/90 m-0 flex flex-wrap items-center gap-2">
-                  TÃ i khoáº£n Ä‘Ã£ Ä‘Æ°á»£c xÃ¡c minh.
+                  Account verified.
                   <VerifiedAccountBadge className="w-5 h-5" />
                 </p>
               ) : (
                 <>
                   {vStatus?.pending ? (
                     <p className="text-sm text-amber-200/90 m-0">
-                      ÄÃ£ gá»­i yÃªu cáº§u Â· Ä‘ang chá» quáº£n trá»‹ viÃªn Â·{' '}
+                      Request sent | awaiting admin review |{' '}
                       {new Date(vStatus.pending.created_at).toLocaleString('vi-VN')}
                       {vStatus.pending.message ? (
-                        <span className="block mt-2 text-muted">Ná»™i dung: {vStatus.pending.message}</span>
+                        <span className="block mt-2 text-muted">Message: {vStatus.pending.message}</span>
                       ) : null}
                     </p>
                   ) : null}
                   {vStatus?.lastResolved?.status === 'rejected' ? (
                     <div className="rounded-lg border border-red-500/30 bg-red-950/20 p-3 text-sm">
-                      <p className="text-red-200/95 m-0 font-medium">YÃªu cáº§u trÆ°á»›c bá»‹ tá»« chá»‘i</p>
+                      <p className="text-red-200/95 m-0 font-medium">Previous request was rejected</p>
                       {vStatus.lastResolved.admin_note ? (
                         <p className="text-red-100/90 m-0 mt-2 text-xs">
-                          Ghi chÃº: {vStatus.lastResolved.admin_note}
+                          Note: {vStatus.lastResolved.admin_note}
                         </p>
                       ) : null}
-                      <p className="text-muted m-0 mt-2 text-xs">Báº¡n cÃ³ thá»ƒ gá»­i yÃªu cáº§u má»›i bÃªn dÆ°á»›i.</p>
+                      <p className="text-muted m-0 mt-2 text-xs">You can submit a new request below.</p>
                     </div>
                   ) : null}
                   {!vStatus?.pending ? (
@@ -1282,7 +1282,7 @@ export function Account() {
                         <p className="text-sm text-red-400 m-0">{vError}</p>
                       ) : null}
                       <label htmlFor="verify-req-msg" className="block text-xs text-muted mb-1">
-                        Lá»i nháº¯n (khÃ´ng báº¯t buá»™c)
+                        Message (optional)
                       </label>
                       <textarea
                         id="verify-req-msg"
@@ -1290,7 +1290,7 @@ export function Account() {
                         onChange={(e) => setVRequestNote(e.target.value)}
                         rows={3}
                         maxLength={2000}
-                        placeholder="VÃ­ dá»¥: IGN trong game, Discord, minh chá»©ngâ€¦"
+                        placeholder="e.g. in-game IGN, Discord, proof..."
                         className="w-full px-3 py-2 rounded-lg bg-[#0f0a1a] border border-border text-[#e2e8f0] text-sm"
                       />
                       <button
@@ -1298,7 +1298,7 @@ export function Account() {
                         disabled={vSubmitting}
                         className="py-2 px-4 pixel-btn-primary disabled:opacity-50 text-base"
                       >
-                        {vSubmitting ? 'Äang gá»­iâ€¦' : 'Gá»­i yÃªu cáº§u xÃ¡c minh'}
+                        {vSubmitting ? 'Sending...' : 'Submit verification request'}
                       </button>
                     </form>
                   ) : null}
@@ -1367,7 +1367,7 @@ export function Account() {
           disabled={submitting}
           className="w-full sm:w-auto py-2.5 px-6 pixel-btn-primary disabled:opacity-50"
         >
-          {submitting ? 'Updatingâ€¦' : 'Update password'}
+          {submitting ? 'Updating...' : 'Update password'}
         </button>
           </form>
         </>
