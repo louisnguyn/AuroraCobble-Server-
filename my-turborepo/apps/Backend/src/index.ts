@@ -3173,6 +3173,7 @@ const POKEMON_SHOP_CATEGORIES = {
       "xerneas", "yveltal", "zygarde", "solgaleo", "lunala", "necrozma",
       "zacian", "zamazenta", "eternatus", "urshifu", "regieleki", "calyrex",
       "koraidon", "miraidon",
+      "cosmog", "cosmoem", "glastrier", "spectrier",
     ],
   },
   legend_low: {
@@ -3184,7 +3185,7 @@ const POKEMON_SHOP_CATEGORIES = {
       "regirock", "regice", "registeel", "uxie", "mesprit", "azelf", "cresselia",
       "cobalion", "terrakion", "virizion", "tornadus", "thundurus", "landorus",
       "tapukoko", "tapulele", "tapubulu", "tapufini",
-      "cosmog", "cosmoem", "kubfu", "regidrago", "glastrier", "spectrier",
+      "kubfu", "regidrago",
       "enamorus",
     ],
   },
