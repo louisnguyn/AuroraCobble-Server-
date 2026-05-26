@@ -4,6 +4,7 @@ import {
   buildBracketView,
   getWinner,
   otherParticipantInMatch,
+  parseBracketSize,
   type ParticipantRow,
 } from "./tournamentBracket.js";
 
@@ -225,7 +226,7 @@ export async function resolveTournamentChampionRunnerUp(
     (results ?? []) as { match_key: string; winner_participant_id: number | null }[],
     {
       qfQualFeed: (t as { qf_qual_feed?: unknown }).qf_qual_feed,
-      bracketSize: Number((t as { bracket_size?: unknown }).bracket_size) === 8 ? 8 : 12,
+      bracketSize: parseBracketSize((t as { bracket_size?: unknown }).bracket_size),
     }
   );
   const res = new Map<string, number | null>();

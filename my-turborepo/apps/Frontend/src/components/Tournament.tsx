@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   fetchPublicTournament,
   fetchPublishedTournaments,
@@ -8,27 +8,21 @@ import {
 } from '../authApi'
 import { PokemonSprite } from './PokemonSprite.tsx'
 import { CustomSelect } from './CustomSelect'
+import { formatBracketMatchKeyLabel } from '../bracketLabels.ts'
 
-/** Internal keys (qual-0, qf-2, …) → viewer labels (Qualifier 1, Quarter-final 3, …). */
-function formatPendingMatchLabel(matchKey: string): string {
-  const q = /^qual-(\d+)$/.exec(matchKey)
-  if (q) return `Qualifier ${parseInt(q[1], 10) + 1}`
-  const f = /^qf-(\d+)$/.exec(matchKey)
-  if (f) return `Quarter-final ${parseInt(f[1], 10) + 1}`
-  const s = /^sf-(\d+)$/.exec(matchKey)
-  if (s) return `Semi-final ${parseInt(s[1], 10) + 1}`
-  if (matchKey === 'final') return 'Final'
-  if (matchKey === 'third') return '3rd place'
-  return matchKey
+function bracketGridRowsForSize(bracketSize?: 8 | 12 | 16): number {
+  return bracketSize === 16 ? 16 : 8
 }
 
-/** Shared row slots so each round’s matches align vertically (4 → 2 → 1). */
-const BRACKET_GRID_ROWS = 8
-
-function bracketMatchGridRow(matchIndex: number, matchCount: number): string {
-  const span = BRACKET_GRID_ROWS / matchCount
+function bracketMatchGridRow(matchIndex: number, matchCount: number, gridRows: number): string {
+  const span = gridRows / matchCount
   const start = 2 + matchIndex * span
   return `${start} / ${start + span}`
+}
+
+function podiumGridRows(gridRows: number): { champion: string; bronze: string } {
+  const half = gridRows / 2
+  return { champion: `2 / ${2 + half}`, bronze: `${2 + half} / ${2 + gridRows}` }
 }
 
 function MonThumb({ speciesSlug, speciesDisplay }: { speciesSlug?: string; speciesDisplay?: string }) {
@@ -59,32 +53,32 @@ function PlayerSlot({
     )
   }
   if (slot.kind === 'winner_of') {
-    const label = formatPendingMatchLabel(slot.matchKey ?? '')
+    const label = formatBracketMatchKeyLabel(slot.matchKey ?? '')
+    const line = `Winner of ${label}`
     return (
       <div
-        className="rounded-lg border border-violet-900/40 bg-[#171724]/90 px-2 py-2 text-center leading-snug shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+        className="tournament-pending-slot"
         role="status"
-        aria-label={`Pending: winner of ${label}`}
+        aria-label={`Pending: ${line}`}
+        title={line}
       >
-        <span className="block text-[10px] font-semibold uppercase tracking-wider text-cyan-300/90 mb-1">
-          Pending
-        </span>
-        <span className="text-xs text-[#f0ebe3]/90">Winner of {label}</span>
+        <span className="tournament-pending-slot-badge">Pending</span>
+        <span className="tournament-pending-slot-label">{line}</span>
       </div>
     )
   }
   if (slot.kind === 'loser_of') {
-    const label = formatPendingMatchLabel(slot.matchKey ?? '')
+    const label = formatBracketMatchKeyLabel(slot.matchKey ?? '')
+    const line = `Loser of ${label}`
     return (
       <div
-        className="rounded-lg border border-violet-900/40 bg-[#171724]/90 px-2 py-2 text-center leading-snug shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+        className="tournament-pending-slot"
         role="status"
-        aria-label={`Pending: loser of ${label}`}
+        aria-label={`Pending: ${line}`}
+        title={line}
       >
-        <span className="block text-[10px] font-semibold uppercase tracking-wider text-cyan-300/90 mb-1">
-          Pending
-        </span>
-        <span className="text-xs text-[#f0ebe3]/90">Loser of {label}</span>
+        <span className="tournament-pending-slot-badge">Pending</span>
+        <span className="tournament-pending-slot-label">{line}</span>
       </div>
     )
   }
@@ -170,15 +164,15 @@ function MatchCard({
 
 function BracketStageColumn({
   column,
+  gridRows,
   title,
-  subtitle,
   matches,
   onOpenPlayer,
   onComparePair,
 }: {
   column: number
+  gridRows: number
   title: string
-  subtitle?: ReactNode
   matches: TournamentBracketMatch[]
   onOpenPlayer: (id: number) => void
   onComparePair?: (participantIdA: number, participantIdB: number) => void
@@ -189,13 +183,12 @@ function BracketStageColumn({
     <section className="tournament-bracket-stage" style={{ display: 'contents' }} aria-label={title}>
       <div className="tournament-bracket-stage-head" style={{ gridColumn: column, gridRow: 1 }}>
         <h3 className="tournament-bracket-stage-title">{title}</h3>
-        {subtitle ? <p className="tournament-bracket-stage-subtitle">{subtitle}</p> : null}
       </div>
       {matches.map((m, i) => (
         <div
           key={m.key}
           className="tournament-bracket-match-slot"
-          style={{ gridColumn: column, gridRow: bracketMatchGridRow(i, count) }}
+          style={{ gridColumn: column, gridRow: bracketMatchGridRow(i, count, gridRows) }}
         >
           <MatchCard m={m} onOpenPlayer={onOpenPlayer} onComparePair={onComparePair} />
         </div>
@@ -206,12 +199,14 @@ function BracketStageColumn({
 
 function PodiumStageColumn({
   column,
+  gridRows,
   finalMatches,
   thirdMatches,
   onOpenPlayer,
   onComparePair,
 }: {
   column: number
+  gridRows: number
   finalMatches: TournamentBracketMatch[]
   thirdMatches: TournamentBracketMatch[]
   onOpenPlayer: (id: number) => void
@@ -222,16 +217,17 @@ function PodiumStageColumn({
   const third = thirdMatches[0]
   const champion = final ? matchWinnerName(final) : null
   const bronze = third ? matchWinnerName(third) : null
+  const podiumRows = podiumGridRows(gridRows)
 
   return (
     <section className="tournament-bracket-stage tournament-bracket-stage--podium" style={{ display: 'contents' }} aria-label="Finals">
-      <div className="tournament-bracket-stage-head tournament-bracket-stage-head--podium" style={{ gridColumn: column, gridRow: 1 }}>
+      <div className="tournament-bracket-stage-head" style={{ gridColumn: column, gridRow: 1 }}>
         <h3 className="tournament-bracket-stage-title">Finals</h3>
       </div>
       {finalMatches.length > 0 ? (
         <div
           className="tournament-podium-block tournament-podium-block--champion"
-          style={{ gridColumn: column, gridRow: '2 / 6' }}
+          style={{ gridColumn: column, gridRow: podiumRows.champion }}
         >
           <div className="tournament-podium-head">
             <span className="tournament-podium-icon" aria-hidden>
@@ -263,7 +259,7 @@ function PodiumStageColumn({
       {thirdMatches.length > 0 ? (
         <div
           className="tournament-podium-block tournament-podium-block--bronze"
-          style={{ gridColumn: column, gridRow: '6 / 10' }}
+          style={{ gridColumn: column, gridRow: podiumRows.bronze }}
         >
           <div className="tournament-podium-head">
             <span className="tournament-podium-icon" aria-hidden>
@@ -362,16 +358,21 @@ export function Tournament({
 
   const byRound = (r: TournamentBracketMatch['round']) => data?.bracket.filter((m) => m.round === r) ?? []
 
+  const r16Matches = byRound('round_of_16')
   const qualMatches = byRound('qualifying')
   const quarterMatches = byRound('quarter')
   const semiMatches = byRound('semi')
   const finalMatches = byRound('final')
   const thirdMatches = byRound('third')
   const hasPodium = finalMatches.length > 0 || thirdMatches.length > 0
+  const bracketSize = data?.tournament.bracketSize
+  const bracketGridRows = bracketGridRowsForSize(bracketSize)
+  const stageColWidth = bracketSize === 16 ? '15.75rem' : '12.75rem'
   const bracketGridColumns = [
-    ...(qualMatches.length > 0 ? ['12.75rem'] : []),
-    '12.75rem',
-    '12.75rem',
+    ...(r16Matches.length > 0 ? [stageColWidth] : []),
+    ...(qualMatches.length > 0 ? [stageColWidth] : []),
+    stageColWidth,
+    stageColWidth,
     ...(hasPodium ? ['14.5rem'] : []),
   ]
 
@@ -384,13 +385,17 @@ export function Tournament({
         <p className="text-sm text-muted m-0">
           {!data?.tournament ? (
             <>
-              Twelve-player brackets use a qualifying round (seeds 5–12); eight-player brackets start at quarter-finals
-              (1 vs 8 … 4 vs 5). Select a bracket to see the layout.
+              Brackets support 8, 12, or 16 players — eight- and sixteen-player formats start at quarter-finals or round
+              of 16; twelve-player uses a qualifying round (seeds 5–12). Select a bracket to see the layout.
             </>
           ) : data.tournament.bracketSize === 8 ? (
             <>
               Eight-player bracket: quarter-finals first (seeds 1 vs 8, 2 vs 7, 3 vs 6, 4 vs 5) → semi-finals → final & 3rd
               place — no qualifiers.
+            </>
+          ) : data.tournament.bracketSize === 16 ? (
+            <>
+              Sixteen-player bracket: round of 16 (1 vs 16 … 8 vs 9) → quarter-finals → semi-finals → final & 3rd place.
             </>
           ) : (
             <>
@@ -440,7 +445,13 @@ export function Tournament({
                   value: t.slug.toLowerCase(),
                   label:
                     t.title +
-                    (t.bracketSize === 8 ? ' · 8p' : t.bracketSize === 12 ? ' · 12p' : ''),
+                    (t.bracketSize === 8
+                      ? ' · 8p'
+                      : t.bracketSize === 16
+                        ? ' · 16p'
+                        : t.bracketSize === 12
+                          ? ' · 12p'
+                          : ''),
                 })),
               ]}
               className="w-full"
@@ -478,16 +489,25 @@ export function Tournament({
       ) : err ? (
         <p className="text-error text-sm">{err}</p>
       ) : data ? (
-        <div className="relative rounded-3xl border border-violet-900/35 bg-gradient-to-br from-[#17172a]/95 via-[#1d1a36]/55 to-[#0b0b12] p-4 sm:p-6">
-          <div
-            className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit] flex items-center justify-center opacity-[0.09] text-6xl sm:text-8xl md:text-9xl font-black text-cyan-300 tracking-widest select-none -rotate-[18deg]"
-            aria-hidden
-          >
-            AURORA COBBLE
+        <div className="tournament-panel relative rounded-3xl border border-violet-900/35 bg-gradient-to-br from-[#17172a]/95 via-[#1d1a36]/55 to-[#0b0b12] p-4 sm:p-6">
+          <div className="tournament-panel-watermark" aria-hidden>
+            <img src="/logo_icon.png" alt="" className="tournament-panel-watermark-img" draggable={false} />
           </div>
-          <div className="relative space-y-6 w-full min-w-0">
+          <div className="tournament-panel-brand-mark site-brand-mark" aria-hidden>
+            <img src="/logo_icon.png" alt="" draggable={false} />
+            <span>AuroraCobble</span>
+          </div>
+          <div className="relative z-[1] space-y-6 w-full min-w-0 pb-10">
             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-              <div>
+              <div className="flex items-start gap-4 min-w-0">
+                <img
+                  src="/logo_icon.png"
+                  alt=""
+                  className="tournament-title-logo shrink-0"
+                  draggable={false}
+                  aria-hidden
+                />
+                <div className="min-w-0">
                 <h2 className="text-xl font-bold text-[#f5efe6] m-0">{data.tournament.title}</h2>
                 {data.tournament.subtitle ? (
                   <p className="text-sm text-[#d9cec0]/85 m-0 mt-1">{data.tournament.subtitle}</p>
@@ -495,6 +515,7 @@ export function Tournament({
                 <p className="text-xs text-[#a29ac5]/75 m-0 mt-2">
                   Updated {new Date(data.tournament.updatedAt).toLocaleString()} · auto-refresh ~20s
                 </p>
+                </div>
               </div>
               {prizes.length > 0 ? (
                 <div className="rounded-xl border border-cyan-500/30 bg-cyan-950/20 px-4 py-3 text-sm shrink-0">
@@ -519,18 +540,34 @@ export function Tournament({
             >
               <div
                 className="tournament-bracket-track"
-                style={{ gridTemplateColumns: bracketGridColumns.join(' ') }}
+                style={{
+                  gridTemplateColumns: bracketGridColumns.join(' '),
+                  ['--bracket-grid-rows' as string]: String(bracketGridRows),
+                }}
               >
                 {(() => {
                   let col = 1
                   const nodes = []
+                  if (r16Matches.length > 0) {
+                    nodes.push(
+                      <BracketStageColumn
+                        key="r16"
+                        column={col++}
+                        gridRows={bracketGridRows}
+                        title="Round of 16"
+                        matches={r16Matches}
+                        onOpenPlayer={onOpenPlayer}
+                        onComparePair={onComparePair}
+                      />
+                    )
+                  }
                   if (qualMatches.length > 0) {
                     nodes.push(
                       <BracketStageColumn
                         key="qual"
                         column={col++}
+                        gridRows={bracketGridRows}
                         title="Qualifying"
-                        subtitle="Seeds 5–12"
                         matches={qualMatches}
                         onOpenPlayer={onOpenPlayer}
                         onComparePair={onComparePair}
@@ -541,10 +578,8 @@ export function Tournament({
                     <BracketStageColumn
                       key="quarter"
                       column={col++}
+                      gridRows={bracketGridRows}
                       title="Quarter-finals"
-                      subtitle={
-                        data.tournament.bracketSize === 8 ? '1v8 · 2v7 · 3v6 · 4v5' : undefined
-                      }
                       matches={quarterMatches}
                       onOpenPlayer={onOpenPlayer}
                       onComparePair={onComparePair}
@@ -552,6 +587,7 @@ export function Tournament({
                     <BracketStageColumn
                       key="semi"
                       column={col++}
+                      gridRows={bracketGridRows}
                       title="Semi-finals"
                       matches={semiMatches}
                       onOpenPlayer={onOpenPlayer}
@@ -563,6 +599,7 @@ export function Tournament({
                       <PodiumStageColumn
                         key="podium"
                         column={col++}
+                        gridRows={bracketGridRows}
                         finalMatches={finalMatches}
                         thirdMatches={thirdMatches}
                         onOpenPlayer={onOpenPlayer}

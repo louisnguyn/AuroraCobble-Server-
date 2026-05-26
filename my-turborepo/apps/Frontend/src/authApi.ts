@@ -764,7 +764,7 @@ export interface PublishedTournamentSummary {
   title: string
   updatedAt: string
   /** Omit = treat as 12 (legacy listings). */
-  bracketSize?: 8 | 12
+  bracketSize?: 8 | 12 | 16
 }
 
 export async function fetchPublishedTournaments(): Promise<{ tournaments: PublishedTournamentSummary[] }> {
@@ -785,7 +785,7 @@ export interface TournamentBracketSlot {
 
 export interface TournamentBracketMatch {
   key: string
-  round: 'qualifying' | 'quarter' | 'semi' | 'final' | 'third'
+  round: 'round_of_16' | 'qualifying' | 'quarter' | 'semi' | 'final' | 'third'
   label: string
   left: TournamentBracketSlot
   right: TournamentBracketSlot
@@ -802,7 +802,7 @@ export async function fetchPublicTournament(slug: string): Promise<{
     updatedAt: string
     /** QF slot i faces winner of qual qfQualFeed[i] (0–3). */
     qfQualFeed?: [number, number, number, number]
-    bracketSize?: 8 | 12
+    bracketSize?: 8 | 12 | 16
   }
   bracket: TournamentBracketMatch[]
 }> {

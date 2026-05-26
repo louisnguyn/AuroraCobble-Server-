@@ -1,9 +1,17 @@
 /**
+ * 16-player: round of 16 (1 vs 16 … 8 vs 9) → QF → SF → final + 3rd.
  * 12-player: seeds 5–12 qualify → QF vs seeds 1–4 → SF → final + 3rd.
  * 8-player: classic single-elim at QF — (1 vs 8), (2 vs 7), (3 vs 6), (4 vs 5) → SF → final + 3rd (no qualifying round).
  */
 
-export type BracketSizeMode = 8 | 12;
+export type BracketSizeMode = 8 | 12 | 16;
+
+export function parseBracketSize(raw: unknown): BracketSizeMode {
+  const n = typeof raw === "number" ? raw : parseInt(String(raw ?? ""), 10);
+  if (n === 8) return 8;
+  if (n === 16) return 16;
+  return 12;
+}
 
 export const QUAL_PAIRS: [number, number][] = [
   [5, 12],
@@ -20,6 +28,18 @@ export const QF_SEED_PAIRS_8: readonly [number, number][] = [
   [2, 7],
   [3, 6],
   [4, 5],
+];
+
+/** Sixteen-player bracket: round-of-16 seed pairings (high vs low within each matchup). */
+export const R16_SEED_PAIRS_16: readonly [number, number][] = [
+  [1, 16],
+  [2, 15],
+  [3, 14],
+  [4, 13],
+  [5, 12],
+  [6, 11],
+  [7, 10],
+  [8, 9],
 ];
 
 /** Legacy default: QF i faces winner of qual `DEFAULT_QF_QUAL_FEED[i]` (QF0 ← qual-3, QF1 ← qual-2, …). */
@@ -90,7 +110,7 @@ export function otherParticipantInMatch(aId: number, bId: number, winnerId: numb
 
 export type BuiltMatch = {
   key: string;
-  round: "qualifying" | "quarter" | "semi" | "final" | "third";
+  round: "round_of_16" | "qualifying" | "quarter" | "semi" | "final" | "third";
   label: string;
   left: SlotResolved;
   right: SlotResolved;
@@ -294,13 +314,80 @@ function buildBracketEightPlayers(participants: ParticipantRow[], results: Match
   return [...qfMatches, ...buildSemiFinalThroughThird(participants, res)];
 }
 
+function buildBracketSixteenPlayers(participants: ParticipantRow[], results: MatchResultRow[]): BuiltMatch[] {
+  const seedMap = bySeed(participants);
+  const res = new Map<string, number | null>();
+  for (const r of results) res.set(r.match_key, r.winner_participant_id);
+
+  const r16Matches: BuiltMatch[] = R16_SEED_PAIRS_16.map(([sa, sb], i) => {
+    const key = `r16-${i}`;
+    const pa = seedMap.get(sa);
+    const pb = seedMap.get(sb);
+    const left: SlotResolved = pa
+      ? { kind: "participant", id: pa.id, name: pa.display_name, teamPreview: teamPreview(pa.team_json) }
+      : { kind: "tbd" };
+    const right: SlotResolved = pb
+      ? { kind: "participant", id: pb.id, name: pb.display_name, teamPreview: teamPreview(pb.team_json) }
+      : { kind: "tbd" };
+    return {
+      key,
+      round: "round_of_16",
+      label: `Round of 16 ${i + 1}`,
+      left,
+      right,
+      winnerParticipantId: getWinner(res, key),
+      canSetWinner: !!(pa && pb),
+    };
+  });
+
+  const qfMatches: BuiltMatch[] = [0, 1, 2, 3].map((i) => {
+    const key = `qf-${i}`;
+    const leftKey = `r16-${i * 2}`;
+    const rightKey = `r16-${i * 2 + 1}`;
+    const wLeft = getWinner(res, leftKey);
+    const wRight = getWinner(res, rightKey);
+    const leftP = wLeft ? participantById(participants, wLeft) : undefined;
+    const rightP = wRight ? participantById(participants, wRight) : undefined;
+    const left: SlotResolved =
+      wLeft && leftP
+        ? { kind: "participant", id: leftP.id, name: leftP.display_name, teamPreview: teamPreview(leftP.team_json) }
+        : { kind: "winner_of", matchKey: leftKey };
+    const right: SlotResolved =
+      wRight && rightP
+        ? { kind: "participant", id: rightP.id, name: rightP.display_name, teamPreview: teamPreview(rightP.team_json) }
+        : { kind: "winner_of", matchKey: rightKey };
+    const canSet =
+      !!wLeft &&
+      !!wRight &&
+      !!leftP &&
+      !!rightP &&
+      left.kind === "participant" &&
+      right.kind === "participant";
+    return {
+      key,
+      round: "quarter",
+      label: `Quarter-final ${i + 1}`,
+      left,
+      right,
+      winnerParticipantId: getWinner(res, key),
+      canSetWinner: canSet,
+    };
+  });
+
+  return [...r16Matches, ...qfMatches, ...buildSemiFinalThroughThird(participants, res)];
+}
+
 export function buildBracketView(
   participants: ParticipantRow[],
   results: MatchResultRow[],
   options?: { qfQualFeed?: unknown; bracketSize?: BracketSizeMode }
 ): BuiltMatch[] {
-  if (options?.bracketSize === 8) {
+  const size = options?.bracketSize ?? 12;
+  if (size === 8) {
     return buildBracketEightPlayers(participants, results);
+  }
+  if (size === 16) {
+    return buildBracketSixteenPlayers(participants, results);
   }
   return buildBracketTwelvePlayers(participants, results, options?.qfQualFeed);
 }

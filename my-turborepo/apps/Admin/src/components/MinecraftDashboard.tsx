@@ -249,21 +249,15 @@ export function MinecraftDashboard({ viewerUsername }: { viewerUsername?: string
             {/* Grid (not flex) avoids flex-1 + nested grid overlap bugs on narrow / lg layouts */}
             <div className="relative grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:items-start lg:gap-10">
               <div className="flex min-w-0 items-start gap-5">
-                {data.faviconDataUri ? (
-                  <div className="shrink-0 rounded-2xl border border-white/20 bg-black/30 p-2 shadow-inner">
-                    <img
-                      src={data.faviconDataUri}
-                      alt=""
-                      width={72}
-                      height={72}
-                      className="rounded-xl [image-rendering:pixelated]"
-                    />
-                  </div>
-                ) : (
-                  <div className="shrink-0 w-[88px] h-[88px] rounded-2xl border border-dashed border-white/20 bg-white/5 flex items-center justify-center text-slate-500 text-xs text-center p-2">
-                    No icon
-                  </div>
-                )}
+                <div className="shrink-0 rounded-2xl border border-white/20 bg-black/30 p-2 shadow-inner">
+                  <img
+                    src="/logo_icon.png"
+                    alt="AuroraCobble"
+                    width={72}
+                    height={72}
+                    className="block rounded-xl w-[72px] h-[72px] object-contain [image-rendering:pixelated]"
+                  />
+                </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-semibold uppercase tracking-widest text-amber-300/80 m-0">Your server</p>
                   <p className="text-xl sm:text-2xl font-bold text-white m-0 mt-1 line-clamp-3">

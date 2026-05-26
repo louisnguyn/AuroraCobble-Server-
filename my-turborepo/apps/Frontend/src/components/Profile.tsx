@@ -222,14 +222,12 @@ export function Profile({ slugFromHashOrNav }: ProfileProps) {
     <div className="profile-page max-w-4xl mx-auto pb-16">
       <div className="profile-hero profile-ambient rounded-[2rem] overflow-hidden mb-10 border border-[#362f55]/90 profile-glass relative">
         <div className="profile-hero-grid-bg pointer-events-none" aria-hidden />
-        <a
-          href="/"
-          className="profile-hero-logo-link"
-          aria-label="Aurora Cobble — home"
-        >
-          <img src="/logo_text.png" alt="" className="profile-hero-logo-img" loading="lazy" decoding="async" />
-        </a>
-        <div className="relative z-[1] p-8 sm:p-10 flex flex-col sm:flex-row gap-8 items-start">
+        <div className="profile-hero-inner relative z-[1] p-5 sm:p-10">
+          <a href="/" className="profile-hero-brand-mark site-brand-mark" aria-label="Aurora Cobble — home">
+            <img src="/logo_icon.png" alt="" loading="lazy" decoding="async" draggable={false} />
+            <span>AuroraCobble</span>
+          </a>
+          <div className="flex flex-row gap-4 sm:gap-8 items-start w-full min-w-0">
           <div className="profile-avatar-shell shrink-0">
             <div className="profile-avatar-ring">
               {profile.avatarUrl ? (
@@ -242,15 +240,15 @@ export function Profile({ slugFromHashOrNav }: ProfileProps) {
             </div>
           </div>
 
-          <div className="min-w-0 flex-1 pt-2 pr-[min(62vw,16rem)] sm:pr-52 md:pr-56 lg:pr-60 xl:pr-72">
-            <div className="flex flex-wrap items-center gap-3 mb-2">
-              <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight m-0 bg-gradient-to-r from-[#f8fafc] via-[#c4b5fd] to-[#22d3ee] bg-clip-text text-transparent">
+          <div className="min-w-0 flex-1 w-full pt-0 sm:pt-2 sm:pr-52">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
+              <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight m-0 bg-gradient-to-r from-[#f8fafc] via-[#c4b5fd] to-[#22d3ee] bg-clip-text text-transparent break-words">
                 {headline}
               </h1>
               {isAuthenticated &&
               user?.username?.toLowerCase() === profile.username.toLowerCase() &&
               isAccountVerified(user) ? (
-                <VerifiedAccountBadge className="w-9 h-9 flex-shrink-0" title="Verified account" />
+                <VerifiedAccountBadge className="w-7 h-7 sm:w-9 sm:h-9 flex-shrink-0" title="Verified account" />
               ) : null}
             </div>
 
@@ -267,6 +265,7 @@ export function Profile({ slugFromHashOrNav }: ProfileProps) {
                 {copied ? 'Copied link' : 'Copy share link'}
               </button>
             </div>
+          </div>
           </div>
         </div>
       </div>

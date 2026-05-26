@@ -5,6 +5,8 @@ import {
   buildBracketView,
   DEFAULT_QF_QUAL_FEED,
   normalizeQfQualFeed,
+  parseBracketSize,
+  type BracketSizeMode,
   type BuiltMatch,
   type ParticipantRow,
 } from "./tournamentBracket.js";
@@ -14,14 +16,8 @@ function qfFeedFromRow(t: { qf_qual_feed?: unknown } | null | undefined): [numbe
   return normalizeQfQualFeed(t?.qf_qual_feed) ?? ([...DEFAULT_QF_QUAL_FEED] as [number, number, number, number]);
 }
 
-function bracketSizeFromRow(t: { bracket_size?: unknown } | null | undefined): 8 | 12 {
-  const n = Number(t?.bracket_size);
-  return n === 8 ? 8 : 12;
-}
-
-function parseBracketSizeInput(raw: unknown): 8 | 12 {
-  const n = typeof raw === "number" ? raw : parseInt(String(raw ?? ""), 10);
-  return n === 8 ? 8 : 12;
+function bracketSizeFromRow(t: { bracket_size?: unknown } | null | undefined): BracketSizeMode {
+  return parseBracketSize(t?.bracket_size);
 }
 
 function paramStr(v: string | string[] | undefined): string {
@@ -86,7 +82,7 @@ export function registerTournamentRoutes(
     const subtitle = typeof body.subtitle === "string" ? body.subtitle.trim() : null;
     const prizes = Array.isArray(body.prizes) ? body.prizes : [];
     const is_published = Boolean(body.is_published);
-    const bracket_size = parseBracketSizeInput((body as { bracket_size?: unknown }).bracket_size);
+    const bracket_size = parseBracketSize((body as { bracket_size?: unknown }).bracket_size);
     const now = new Date().toISOString();
     const qfRaw = (body as { qf_qual_feed?: unknown }).qf_qual_feed;
     const qfNorm = normalizeQfQualFeed(qfRaw);
@@ -134,7 +130,7 @@ export function registerTournamentRoutes(
     if (Array.isArray(body.prizes)) patch.prizes = body.prizes;
     if (typeof body.is_published === "boolean") patch.is_published = body.is_published;
     if ("bracket_size" in body) {
-      patch.bracket_size = parseBracketSizeInput((body as { bracket_size?: unknown }).bracket_size);
+      patch.bracket_size = parseBracketSize((body as { bracket_size?: unknown }).bracket_size);
     }
     if ("qf_qual_feed" in body) {
       const qfNorm = normalizeQfQualFeed((body as { qf_qual_feed?: unknown }).qf_qual_feed);

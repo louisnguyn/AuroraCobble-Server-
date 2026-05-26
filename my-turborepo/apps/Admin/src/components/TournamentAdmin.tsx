@@ -128,6 +128,7 @@ function slotLine(slot: TournamentBracketSlot): string {
 
 function roundPill(round: TournamentBracketMatch['round']): string {
   const labels: Record<TournamentBracketMatch['round'], string> = {
+    round_of_16: 'Round of 16',
     qualifying: 'Qualifier',
     quarter: 'Quarter-final',
     semi: 'Semi-final',
@@ -137,8 +138,15 @@ function roundPill(round: TournamentBracketMatch['round']): string {
   return labels[round]
 }
 
-function bracketSizeFromUnknown(v: unknown): 8 | 12 {
-  return Number(v) === 8 ? 8 : 12
+function bracketSizeFromUnknown(v: unknown): 8 | 12 | 16 {
+  const n = Number(v)
+  if (n === 8) return 8
+  if (n === 16) return 16
+  return 12
+}
+
+function bracketSizeLabel(size: 8 | 12 | 16): string {
+  return `${size} players`
 }
 
 function isoToDatetimeLocal(iso: string | null | undefined): string {
@@ -163,9 +171,9 @@ export function TournamentAdmin() {
   const [newTitle, setNewTitle] = useState('AuroraCobble Championship Season 1')
   const [newSubtitle, setNewSubtitle] = useState('National Dex OU Singles — Bo3')
   /** Bracket layout for newly created tournaments. */
-  const [newBracketSize, setNewBracketSize] = useState<8 | 12>(12)
+  const [newBracketSize, setNewBracketSize] = useState<8 | 12 | 16>(12)
   /** Loaded tournament bracket size (seeds + qualifying UI). */
-  const [loadedBracketSize, setLoadedBracketSize] = useState<8 | 12>(12)
+  const [loadedBracketSize, setLoadedBracketSize] = useState<8 | 12 | 16>(12)
 
   const [seedRank, setSeedRank] = useState(1)
   const [displayName, setDisplayName] = useState('')
@@ -213,7 +221,7 @@ export function TournamentAdmin() {
         const t = r.tournament as { qf_qual_feed?: unknown; prizes?: unknown; bracket_size?: unknown } | undefined
         const bs = bracketSizeFromUnknown(t?.bracket_size)
         setLoadedBracketSize(bs)
-        setSeedRank((prev) => Math.min(prev, bs === 8 ? 8 : 12))
+        setSeedRank((prev) => Math.min(prev, bs))
         setQfQualDraft(parseQfDraft(t?.qf_qual_feed))
         setPrizesDraft(prizesToDraft(t?.prizes))
         setParticipants(
@@ -433,13 +441,19 @@ export function TournamentAdmin() {
     }
   }
 
-  const handleSaveBracketSize = async (size: 8 | 12) => {
+  const handleSaveBracketSize = async (size: 8 | 12 | 16) => {
     if (selectedId == null) return
     setErr(null)
     try {
       await adminPatchTournament(selectedId, { bracket_size: size })
       setLoadedBracketSize(size)
-      setMsg(size === 8 ? 'Bracket set to 8 players (no qualifying round).' : 'Bracket set to 12 players.')
+      setMsg(
+        size === 8
+          ? 'Bracket set to 8 players (no qualifying round).'
+          : size === 16
+            ? 'Bracket set to 16 players (round of 16 → quarters).'
+            : 'Bracket set to 12 players.'
+      )
       refreshList()
       loadBracket(selectedId)
     } catch (e) {
@@ -486,7 +500,7 @@ export function TournamentAdmin() {
               <option value="">Choose a tournament…</option>
               {tournaments.map((t) => (
                 <option key={t.id} value={t.id}>
-                  {t.title} · {bracketSizeFromUnknown(t.bracket_size) === 8 ? '8p' : '12p'} · {t.slug}{' '}
+                  {t.title} · {bracketSizeFromUnknown(t.bracket_size)}p · {t.slug}{' '}
                   {t.is_published ? '· live' : '· draft'}
                 </option>
               ))}
@@ -509,7 +523,7 @@ export function TournamentAdmin() {
           <p className="text-xs text-slate-400 m-0">
             <span className="text-[#f5efe6] font-medium">{selectedTournament.title}</span>
             {' · '}
-            {bracketSizeFromUnknown(selectedTournament.bracket_size) === 8 ? '8 players' : '12 players'}
+            {bracketSizeLabel(bracketSizeFromUnknown(selectedTournament.bracket_size))}
             {' · '}
             {selectedTournament.is_published ? (
               <span className="text-emerald-300">Published on main site</span>
@@ -571,6 +585,20 @@ export function TournamentAdmin() {
                     <span className="font-medium text-[#f5efe6]">8 players</span>
                     <span className="block text-xs text-muted">
                       Quarter-finals immediately: seed 1 vs 8, 2 vs 7, 3 vs 6, 4 vs 5.
+                    </span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 text-sm text-slate-200 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="newBs"
+                    checked={newBracketSize === 16}
+                    onChange={() => setNewBracketSize(16)}
+                  />
+                  <span>
+                    <span className="font-medium text-[#f5efe6]">16 players</span>
+                    <span className="block text-xs text-muted">
+                      Round of 16 (1 vs 16 … 8 vs 9), then quarters, semis, final &amp; 3rd place.
                     </span>
                   </span>
                 </label>
@@ -877,11 +905,12 @@ export function TournamentAdmin() {
           <section className={panelClass}>
             <h3 className="text-sm font-semibold text-cyan-200 m-0 tracking-wide uppercase">Bracket format</h3>
             <p className="text-xs text-muted m-0 leading-relaxed">
-              Current: <strong className="text-slate-200">{loadedBracketSize === 8 ? '8 players' : '12 players'}</strong>
-              .
+              Current: <strong className="text-slate-200">{bracketSizeLabel(loadedBracketSize)}</strong>.
               {loadedBracketSize === 8
                 ? ' No qualifying matches — quarters use seeds 1–8 only.'
-                : ' Seeds 5–12 play qualifiers; edit QF vs qual pairings below.'}
+                : loadedBracketSize === 16
+                  ? ' Round of 16 uses seeds 1–16; quarters pair adjacent R16 winners.'
+                  : ' Seeds 5–12 play qualifiers; edit QF vs qual pairings below.'}
             </p>
             <div className="flex flex-wrap gap-3">
               <button
@@ -899,6 +928,14 @@ export function TournamentAdmin() {
                 className={btnSecondary}
               >
                 Use 8-player bracket
+              </button>
+              <button
+                type="button"
+                disabled={loadedBracketSize === 16}
+                onClick={() => handleSaveBracketSize(16)}
+                className={btnSecondary}
+              >
+                Use 16-player bracket
               </button>
             </div>
           </section>
@@ -970,6 +1007,14 @@ export function TournamentAdmin() {
               <button type="button" onClick={handleSaveQfPairings} disabled={!qfDraftIsPermutation} className={btnSecondary}>
                 Save pairings
               </button>
+            </section>
+          ) : loadedBracketSize === 16 ? (
+            <section className={panelClass}>
+              <h3 className="text-sm font-semibold text-cyan-200 m-0 tracking-wide uppercase">16-player round of 16</h3>
+              <p className="text-xs text-muted m-0 leading-relaxed">
+                Fixed pairings: 1 vs 16, 2 vs 15, 3 vs 14, 4 vs 13, 5 vs 12, 6 vs 11, 7 vs 10, 8 vs 9. Quarters pair
+                winners of adjacent R16 matches. Enter participants for seeds 1–16.
+              </p>
             </section>
           ) : (
             <section className={panelClass}>
