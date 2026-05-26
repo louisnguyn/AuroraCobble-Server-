@@ -16,8 +16,20 @@ import { TournamentTeamCompare } from './components/TournamentTeamCompare.tsx'
 import { TournamentTeamDetail } from './components/TournamentTeamDetail.tsx'
 import { TeamBuilder } from './components/TeamBuilder.tsx'
 import { TeamPasteViewPage } from './components/TeamPasteViewPage.tsx'
-import { parseProfileSlugFromHash, Profile } from './components/Profile.tsx'
+import { Profile } from './components/Profile.tsx'
+import {
+  clearProfilePath,
+  parseProfileSlugFromLocation,
+  parseProfileSlugFromPath,
+} from './profileShare.ts'
 import { isTeamPasteViewHash } from './teamPasteViewStorage.ts'
+import {
+  clearTournamentPath,
+  normalizeTournamentSlug,
+  parseTournamentSlugFromLocation,
+  parseTournamentSlugFromPath,
+  setTournamentPath,
+} from './tournamentShare.ts'
 import { isAccountVerified, VerifiedAccountBadge } from './components/VerifiedAccountBadge.tsx'
 type Page =
   | 'main'
@@ -130,20 +142,21 @@ function NavIcon({ page }: { page: Page }) {
   }
 }
 
-function initialPageFromHash(): Page {
+function initialPageFromLocation(): Page {
   if (typeof window === 'undefined') return 'main'
-  if (parseProfileSlugFromHash()) return 'profile'
+  if (parseProfileSlugFromLocation()) return 'profile'
   if (isTeamPasteViewHash()) return 'teampasteview'
+  if (parseTournamentSlugFromLocation()) return 'tournament'
   return 'main'
 }
 
 function AppContent() {
-  const [page, setPage] = useState<Page>(initialPageFromHash)
+  const [page, setPage] = useState<Page>(initialPageFromLocation)
   const [menuOpen, setMenuOpen] = useState(false)
   const [showAuth, setShowAuth] = useState(false)
   const { isAuthenticated, user, logout } = useAuth()
   const [hashProfileSlug, setHashProfileSlug] = useState<string | null>(() =>
-    typeof window !== 'undefined' ? parseProfileSlugFromHash() : null
+    typeof window !== 'undefined' ? parseProfileSlugFromLocation() : null
   )
   const [tournamentNav, setTournamentNav] = useState<{
     slug: string
@@ -151,13 +164,15 @@ function AppContent() {
     participantId?: number
     compareWithId?: number
     comparePickFirst?: number
-  }>({ slug: '' })
+  }>(() => ({
+    slug: typeof window !== 'undefined' ? (parseTournamentSlugFromLocation() ?? '') : '',
+  }))
 
   useEffect(() => {
     const sync = () => {
-      const slug = parseProfileSlugFromHash()
-      setHashProfileSlug(slug)
-      if (slug) {
+      const profileSlug = parseProfileSlugFromLocation()
+      setHashProfileSlug(profileSlug)
+      if (profileSlug) {
         setPage('profile')
         return
       }
@@ -165,24 +180,37 @@ function AppContent() {
         setPage('teampasteview')
         return
       }
+      const tournamentSlug = parseTournamentSlugFromLocation()
+      if (tournamentSlug) {
+        setPage('tournament')
+        setTournamentNav({ slug: tournamentSlug })
+        return
+      }
     }
     sync()
     window.addEventListener('hashchange', sync)
-    return () => window.removeEventListener('hashchange', sync)
+    window.addEventListener('popstate', sync)
+    return () => {
+      window.removeEventListener('hashchange', sync)
+      window.removeEventListener('popstate', sync)
+    }
   }, [])
 
   const goTo = (p: Page) => {
     if (typeof window !== 'undefined') {
-      const isProfileHash = window.location.hash.startsWith('#profile/')
       const isTeamPasteHash = isTeamPasteViewHash()
-      if (isProfileHash && p !== 'profile') {
-        window.history.replaceState(null, '', window.location.pathname + window.location.search)
+      const profilePathSlug = parseProfileSlugFromPath()
+      if (profilePathSlug && p !== 'profile') {
+        clearProfilePath()
         setHashProfileSlug(null)
-      } else if (p === 'profile' && isProfileHash) {
-        window.history.replaceState(null, '', window.location.pathname + window.location.search)
+      } else if (p === 'profile' && profilePathSlug) {
+        clearProfilePath()
         setHashProfileSlug(null)
-      } else if (p === 'profile' && !isProfileHash) {
+      } else if (p === 'profile' && !profilePathSlug) {
         setHashProfileSlug(null)
+      }
+      if (parseTournamentSlugFromPath() && p !== 'tournament') {
+        clearTournamentPath()
       }
       if (isTeamPasteHash && p !== 'teampasteview') {
         window.history.replaceState(null, '', window.location.pathname + window.location.search)
@@ -319,7 +347,12 @@ function AppContent() {
           ) : (
             <Tournament
               slug={tournamentNav.slug}
-              onSlugChange={(s) => setTournamentNav({ slug: s })}
+              onSlugChange={(s) => {
+                const slug = normalizeTournamentSlug(s)
+                setTournamentNav({ slug })
+                if (slug) setTournamentPath(slug)
+                else clearTournamentPath()
+              }}
               onOpenPredictions={() =>
                 setTournamentNav({ slug: tournamentNav.slug, view: 'predictions' })
               }

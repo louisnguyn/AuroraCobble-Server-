@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
-import { fetchBattleTowerLeaderboard, fetchLeaderboard } from '../api'
+import { fetchBattleTowerLeaderboard, fetchLeaderboard, fetchLeaderboardDisplaySettings } from '../api'
 import { useAuth } from '../contexts/AuthContext'
 import { ignNamesMatch, scrollElementIntoViewCentered } from '../ignMatch'
+import { hideZeroMatchForFormat } from '../leaderboardDisplaySettings'
 import type {
   BattleTowerLeaderboardResponse,
   BattleTowerLeaderboardRow,
+  LeaderboardDisplaySettings,
   LeaderboardResponse,
   LeaderboardFormat,
   LeaderboardPlayer,
@@ -242,6 +244,9 @@ export function Leaderboard() {
   const [lbData, setLbData] = useState<LeaderboardResponse | null>(null)
   const [lbLoading, setLbLoading] = useState(true)
   const [lbError, setLbError] = useState<string | null>(null)
+  const [displaySettings, setDisplaySettings] = useState<LeaderboardDisplaySettings>({
+    hideZeroMatchPlayers: { singles: true, doubles: true },
+  })
 
   const [btData, setBtData] = useState<BattleTowerLeaderboardResponse | null>(null)
   const [btLoading, setBtLoading] = useState(false)
@@ -250,8 +255,11 @@ export function Leaderboard() {
   useEffect(() => {
     setLbLoading(true)
     setLbError(null)
-    fetchLeaderboard()
-      .then(setLbData)
+    Promise.all([fetchLeaderboard(), fetchLeaderboardDisplaySettings()])
+      .then(([data, display]) => {
+        setLbData(data)
+        setDisplaySettings(display)
+      })
       .catch((e) => setLbError(e instanceof Error ? e.message : 'Failed to load'))
       .finally(() => setLbLoading(false))
   }, [])
@@ -279,18 +287,23 @@ export function Leaderboard() {
 
   const formats = lbData?.formats ?? {}
   const rankFormat = getFormatById(formats, rankFormatId)
+  const rankPlayersAll = rankFormat?.players ?? []
+  const hideZeroMatchPlayers = hideZeroMatchForFormat(displaySettings, rankFormatId)
+
   const rankPlayers: LeaderboardPlayer[] = useMemo(() => {
-    const players = rankFormat?.players ?? []
-    // Hide never-played players and re-rank by visible order.
-    return players
-      .filter((p) => p.matches > 0)
-      .map((p, idx) => ({ ...p, rank: idx + 1 }))
-  }, [rankFormat?.players])
+    const players = hideZeroMatchPlayers ? rankPlayersAll.filter((p) => p.matches > 0) : rankPlayersAll
+    return players.map((p, idx) => ({ ...p, rank: idx + 1 }))
+  }, [rankPlayersAll, hideZeroMatchPlayers])
 
   const yourRankPlayer = useMemo(() => {
     if (!viewerIgn) return undefined
-    return rankPlayers.find((p) => ignNamesMatch(viewerIgn, p.playerName))
-  }, [rankPlayers, viewerIgn])
+    return rankPlayersAll.find((p) => ignNamesMatch(viewerIgn, p.playerName))
+  }, [rankPlayersAll, viewerIgn])
+
+  const yourRankInTable = useMemo(() => {
+    if (!yourRankPlayer) return undefined
+    return rankPlayers.find((p) => p.uuid === yourRankPlayer.uuid)
+  }, [rankPlayers, yourRankPlayer])
 
   const yourRankTier = useMemo(
     () => (yourRankPlayer ? getPvpTierFromElo(yourRankPlayer.elo) : null),
@@ -298,9 +311,9 @@ export function Leaderboard() {
   )
 
   useEffect(() => {
-    if (mainSection !== 'ranks' || !yourRankPlayer) return
+    if (mainSection !== 'ranks' || !yourRankInTable) return
     scrollElementIntoViewCentered(rankYouRef.current)
-  }, [mainSection, yourRankPlayer?.uuid, rankFormatId])
+  }, [mainSection, yourRankInTable?.uuid, rankFormatId, hideZeroMatchPlayers])
 
   const battleFloorYou = useMemo(() => {
     if (!viewerIgn || !btData) return undefined
@@ -388,7 +401,9 @@ export function Leaderboard() {
 
               {rankPlayers.length === 0 ? (
                 <div className={`${panelClass} text-muted`}>
-                  No entries for {getFormatDisplayName(rankFormatId)} yet.
+                  {rankPlayersAll.length > 0 && hideZeroMatchPlayers
+                    ? `No players with matches on ${getFormatDisplayName(rankFormatId)} yet.`
+                    : `No entries for ${getFormatDisplayName(rankFormatId)} yet.`}
                 </div>
               ) : (
                 <>
@@ -402,7 +417,9 @@ export function Leaderboard() {
                         Your current rank
                       </p>
                       <div className="flex flex-wrap items-center gap-3">
-                        <span className={pvpRankPillClass(yourRankPlayer.rank)}>#{yourRankPlayer.rank}</span>
+                        <span className={pvpRankPillClass(yourRankInTable?.rank ?? yourRankPlayer.rank)}>
+                          #{yourRankInTable?.rank ?? yourRankPlayer.rank}
+                        </span>
                         <span className="lb-pvp-namebadge min-w-0" title={yourRankPlayer.playerName}>
                           {yourRankPlayer.playerName}
                         </span>
@@ -421,7 +438,12 @@ export function Leaderboard() {
                           </span>
                         ) : null}
                       </div>
-                      <p className="text-xs text-muted m-0 mt-2">{getFormatDisplayName(rankFormatId)}</p>
+                      <p className="text-xs text-muted m-0 mt-2">
+                        {getFormatDisplayName(rankFormatId)}
+                        {hideZeroMatchPlayers && yourRankPlayer.matches === 0 ? (
+                          <span className="text-amber-200/90"> · 0 matches (not listed publicly)</span>
+                        ) : null}
+                      </p>
                     </div>
                   ) : viewerIgn ? (
                     <p className="text-sm text-muted m-0 pixel-well px-3 py-2">
@@ -462,7 +484,7 @@ export function Leaderboard() {
                     <tbody>
                       {rankPlayers.map((p) => {
                         const tier = getPvpTierFromElo(p.elo)
-                        const isYou = yourRankPlayer?.uuid === p.uuid
+                        const isYou = yourRankInTable?.uuid === p.uuid
                         const streak = p.currentStreak
                         const streakStr = streak > 0 ? `+${streak}` : String(streak)
                         const winPct = Math.min(100, Math.max(0, p.winRate))

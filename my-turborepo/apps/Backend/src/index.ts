@@ -81,6 +81,12 @@ import {
   type CobbleRankedMemoryStore,
 } from "./cobbleRankedPersistence.js";
 import {
+  getLeaderboardDisplaySettings,
+  hydrateLeaderboardDisplaySettings,
+  parseLeaderboardDisplaySettingsInput,
+  persistLeaderboardDisplaySettings,
+} from "./leaderboardDisplaySettings.js";
+import {
   rankedFeedAttentionReasons,
   rankedFeedNeedsAttention,
   stableRankedFeedItemKey,
@@ -1054,6 +1060,47 @@ app.get("/minecraft/pco-leaderboard", async (_req, res) => {
     });
   }
 });
+
+const readLeaderboardDisplaySettings = (_req: express.Request, res: express.Response) => {
+  res.json(getLeaderboardDisplaySettings());
+};
+
+const putLeaderboardDisplaySettings = async (req: express.Request, res: express.Response) => {
+  const parsed = parseLeaderboardDisplaySettingsInput(req.body);
+  if (!parsed) {
+    res.status(400).json({
+      error: "hideZeroMatchPlayers must be { singles: boolean, doubles: boolean }",
+    });
+    return;
+  }
+  try {
+    await persistLeaderboardDisplaySettings(parsed);
+    res.json(getLeaderboardDisplaySettings());
+  } catch (e) {
+    console.error("[leaderboard-display] persist:", e);
+    res.status(500).json({ error: "Failed to save leaderboard display settings" });
+  }
+};
+
+app.get("/leaderboard/display-settings", readLeaderboardDisplaySettings);
+app.get("/admin/leaderboard/display-settings", requireAuth, requireAdmin, readLeaderboardDisplaySettings);
+app.put("/admin/leaderboard/display-settings", requireAuth, requireAdmin, putLeaderboardDisplaySettings);
+
+const leaderboardDisplayApiRouter = express.Router();
+leaderboardDisplayApiRouter.get("/leaderboard/display-settings", readLeaderboardDisplaySettings);
+leaderboardDisplayApiRouter.get(
+  "/admin/leaderboard/display-settings",
+  requireAuth,
+  requireAdmin,
+  readLeaderboardDisplaySettings
+);
+leaderboardDisplayApiRouter.put(
+  "/admin/leaderboard/display-settings",
+  requireAuth,
+  requireAdmin,
+  putLeaderboardDisplaySettings
+);
+app.use("/api", leaderboardDisplayApiRouter);
 
 /** Public Battle Tower leaderboard via RCON: `bt leaderboard <mode> top<N>` (Cobblemon Battle Tower). Cached ~90s per mode+top. */
 app.get("/minecraft/battle-tower-leaderboard", async (req, res) => {
@@ -6781,7 +6828,10 @@ registerTournamentPredictionRoutes(app, {
 app.listen(port, () => {
   console.log(`Backend http://localhost:${port}`);
   if (supabase) {
-    void hydrateCobbleRankedStore(cobbleStore as CobbleRankedMemoryStore, COBBLE_RANKED_FEED_MAX).then(() => {
+    void Promise.all([
+      hydrateCobbleRankedStore(cobbleStore as CobbleRankedMemoryStore, COBBLE_RANKED_FEED_MAX),
+      hydrateLeaderboardDisplaySettings(),
+    ]).then(() => {
       if (cobbleStore.leaderboard) void syncWebsitePvpRanksFromLeaderboard(cobbleStore.leaderboard);
     });
   }

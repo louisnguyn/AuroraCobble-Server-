@@ -6,6 +6,11 @@ import {
   fetchWebsiteCobbledollarsLeaderboard,
   fetchLeaderboard,
 } from '../api'
+import {
+  adminFetchLeaderboardDisplaySettings,
+  adminUpdateLeaderboardDisplaySettings,
+  type LeaderboardDisplaySettings,
+} from '../authApi'
 import { ignNamesMatch, scrollElementIntoViewCentered } from '../ignMatch'
 import type {
   BattleTowerLeaderboardResponse,
@@ -246,6 +251,11 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
   const [mainSection, setMainSection] = useState<MainSection>('ranks')
   const [economyKind, setEconomyKind] = useState<EconomyKind>('website_cobble')
   const [rankFormatId, setRankFormatId] = useState<RankFormatId>('singles')
+  const [displaySettings, setDisplaySettings] = useState<LeaderboardDisplaySettings>({
+    hideZeroMatchPlayers: { singles: true, doubles: true },
+  })
+  const [displaySettingsSaving, setDisplaySettingsSaving] = useState<RankFormatId | null>(null)
+  const [displaySettingsErr, setDisplaySettingsErr] = useState<string | null>(null)
   const [battleMode, setBattleMode] = useState<BattleModeId>('singles')
 
   const [lbData, setLbData] = useState<LeaderboardResponse | null>(null)
@@ -263,11 +273,39 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
   useEffect(() => {
     setLbLoading(true)
     setLbError(null)
-    fetchLeaderboard()
-      .then(setLbData)
+    Promise.all([fetchLeaderboard(), adminFetchLeaderboardDisplaySettings()])
+      .then(([data, display]) => {
+        setLbData(data)
+        setDisplaySettings(display)
+      })
       .catch((e) => setLbError(e instanceof Error ? e.message : 'Failed to load'))
       .finally(() => setLbLoading(false))
   }, [])
+
+  const onToggleHideZeroMatchPlayers = useCallback(
+    async (format: RankFormatId) => {
+      const prev = displaySettings.hideZeroMatchPlayers
+      const next = {
+        hideZeroMatchPlayers: {
+          ...prev,
+          [format]: !prev[format],
+        },
+      }
+      setDisplaySettings(next)
+      setDisplaySettingsSaving(format)
+      setDisplaySettingsErr(null)
+      try {
+        const saved = await adminUpdateLeaderboardDisplaySettings(next)
+        setDisplaySettings(saved)
+      } catch (e) {
+        setDisplaySettings({ hideZeroMatchPlayers: prev })
+        setDisplaySettingsErr(e instanceof Error ? e.message : 'Failed to save')
+      } finally {
+        setDisplaySettingsSaving(null)
+      }
+    },
+    [displaySettings.hideZeroMatchPlayers]
+  )
 
   useEffect(() => {
     if (mainSection !== 'economy') return
@@ -319,22 +357,30 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
 
   const formats = lbData?.formats ?? {}
   const rankFormat = getFormatById(formats, rankFormatId)
+  const rankPlayersAll = rankFormat?.players ?? []
+  const hideZeroMatchPlayers = displaySettings.hideZeroMatchPlayers[rankFormatId]
+
   const rankPlayers: LeaderboardPlayer[] = useMemo(() => {
-    const players = rankFormat?.players ?? []
-    return players.filter((p) => p.matches > 0).map((p, idx) => ({ ...p, rank: idx + 1 }))
-  }, [rankFormat?.players])
+    const players = hideZeroMatchPlayers ? rankPlayersAll.filter((p) => p.matches > 0) : rankPlayersAll
+    return players.map((p, idx) => ({ ...p, rank: idx + 1 }))
+  }, [rankPlayersAll, hideZeroMatchPlayers])
 
   const yourRankPlayer = useMemo(() => {
     if (!viewerIgn) return undefined
-    return rankPlayers.find((p) => ignNamesMatch(viewerIgn, p.playerName))
-  }, [rankPlayers, viewerIgn])
+    return rankPlayersAll.find((p) => ignNamesMatch(viewerIgn, p.playerName))
+  }, [rankPlayersAll, viewerIgn])
+
+  const yourRankInTable = useMemo(() => {
+    if (!yourRankPlayer) return undefined
+    return rankPlayers.find((p) => p.uuid === yourRankPlayer.uuid)
+  }, [rankPlayers, yourRankPlayer])
 
   const yourRankTier = useMemo(() => (yourRankPlayer ? getTier(yourRankPlayer.elo) : null), [yourRankPlayer])
 
   useEffect(() => {
-    if (mainSection !== 'ranks' || !yourRankPlayer) return
+    if (mainSection !== 'ranks' || !yourRankInTable) return
     scrollElementIntoViewCentered(rankYouRef.current)
-  }, [mainSection, yourRankPlayer?.uuid, rankFormatId])
+  }, [mainSection, yourRankInTable?.uuid, rankFormatId, hideZeroMatchPlayers])
 
   const cdYourIndex = useMemo(() => {
     if (!viewerIgn) return -1
@@ -432,12 +478,55 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
                   </SubTab>
                 ))}
               </div>
+              <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Public 0-match filter per format">
+                {RANK_FORMATS.map(({ id, label }) => {
+                  const hiding = displaySettings.hideZeroMatchPlayers[id]
+                  const saving = displaySettingsSaving === id
+                  return (
+                    <button
+                      key={`public-filter-${id}`}
+                      type="button"
+                      aria-pressed={hiding}
+                      disabled={displaySettingsSaving != null}
+                      onClick={() => void onToggleHideZeroMatchPlayers(id)}
+                      className={`py-2 px-3 rounded-xl text-xs font-medium transition-all duration-200 border disabled:opacity-50 ${
+                        hiding
+                          ? 'border-amber-400/45 text-amber-100 bg-amber-600/15 ring-1 ring-amber-400/25'
+                          : 'border-white/10 text-slate-400 bg-black/15 hover:text-white hover:bg-white/5'
+                      }`}
+                      title={
+                        hiding
+                          ? `Public ${label}: hide players with 0 matches`
+                          : `Public ${label}: show all players`
+                      }
+                    >
+                      {saving
+                        ? `${label}: saving…`
+                        : hiding
+                          ? `${label}: hide 0-match`
+                          : `${label}: show all`}
+                    </button>
+                  )
+                })}
+              </div>
+              {displaySettingsErr ? (
+                <p className="text-xs text-red-300 m-0">{displaySettingsErr}</p>
+              ) : (
+                <p className="text-xs text-slate-500 m-0">
+                  Each format controls the public Leaderboard → Ranks table independently. Preview below matches the
+                  selected tab.
+                </p>
+              )}
               {lbData.seasonName && (
                 <p className="text-sm font-medium text-slate-100 m-0">{lbData.seasonName}</p>
               )}
               {lbData.serverId && <p className="text-xs text-slate-500 m-0">Server: {lbData.serverId}</p>}
               {rankPlayers.length === 0 ? (
-                <div className={panelClass}>No entries for {getFormatDisplayName(rankFormatId)} yet.</div>
+                <div className={panelClass}>
+                  {rankPlayersAll.length > 0 && hideZeroMatchPlayers
+                    ? `Everyone on ${getFormatDisplayName(rankFormatId)} has 0 matches. Use “${getFormatDisplayName(rankFormatId)}: show all” to list them on the public site.`
+                    : `No entries for ${getFormatDisplayName(rankFormatId)} yet.`}
+                </div>
               ) : (
                 <>
                   {yourRankPlayer ? (
@@ -450,8 +539,10 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
                       </p>
                       <p className="text-sm text-slate-100 m-0">
                         <span className="font-mono font-semibold">{yourRankPlayer.playerName}</span> —{' '}
-                        <strong className="text-amber-200 tabular-nums">#{yourRankPlayer.rank}</strong> in{' '}
-                        {getFormatDisplayName(rankFormatId)} · {yourRankPlayer.elo} ELO ·{' '}
+                        <strong className="text-amber-200 tabular-nums">
+                          #{yourRankInTable?.rank ?? yourRankPlayer.rank}
+                        </strong>{' '}
+                        in {getFormatDisplayName(rankFormatId)} · {yourRankPlayer.elo} ELO ·{' '}
                         {yourRankTier ? (
                           <PvPTierBadge
                             slug={normalizePvpTierSlugForAssets(yourRankTier.slug)}
@@ -460,6 +551,9 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
                             imgHeightClass="h-6"
                             className="align-middle ml-1"
                           />
+                        ) : null}
+                        {hideZeroMatchPlayers && yourRankPlayer.matches === 0 ? (
+                          <span className="text-amber-300/90"> · 0 matches (hidden on public site)</span>
                         ) : null}
                       </p>
                     </div>
@@ -507,7 +601,7 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
                     <tbody>
                       {rankPlayers.map((p) => {
                         const tier = getTier(p.elo)
-                        const isYou = yourRankPlayer ? p.uuid === yourRankPlayer.uuid : false
+                        const isYou = yourRankInTable ? p.uuid === yourRankInTable.uuid : false
                         return (
                           <tr
                             key={p.uuid}

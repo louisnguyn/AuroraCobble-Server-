@@ -5,25 +5,14 @@ import { useAuth } from '../contexts/AuthContext'
 import { RoleBadge } from './RoleBadge.tsx'
 import { normalizePvpTierSlugForAssets, pvpTierHumanName, PvPTierBadge } from './PvPTierBadge.tsx'
 import { isAccountVerified, VerifiedAccountBadge } from './VerifiedAccountBadge.tsx'
+import { buildProfileShareUrl } from '../profileShare.ts'
 
-export function parseProfileSlugFromHash(): string | null {
-  if (typeof window === 'undefined') return null
-  const raw = window.location.hash.replace(/^#/, '')
-  if (!raw.startsWith('profile/')) return null
-  const rest = raw.slice('profile/'.length)
-  try {
-    const slug = decodeURIComponent(rest).trim()
-    return slug || null
-  } catch {
-    return rest.trim() || null
-  }
-}
-
-/** Full profile URL including hash — for clipboard. */
-export function buildProfileShareUrl(username: string) {
-  if (typeof window === 'undefined') return ''
-  return `${window.location.origin}${window.location.pathname.replace(/\/$/, '')}${window.location.search}#profile/${encodeURIComponent(username.trim())}`
-}
+export {
+  buildProfileShareUrl,
+  navigateToPublicProfile,
+  parseProfileSlugFromHash,
+  parseProfileSlugFromLocation,
+} from '../profileShare.ts'
 
 function formatJoined(iso: string): string {
   try {
@@ -84,7 +73,7 @@ export function Profile({ slugFromHashOrNav }: ProfileProps) {
   const isSelf = Boolean(
     isAuthenticated && profile && user?.username?.trim().toLowerCase() === profile.username.trim().toLowerCase()
   )
-  /** Hash URLs (#profile/name) are for sharing — never show bio/avatar editor there, even if it's your profile. */
+  /** Shared link URLs (/profile/name) — never show bio/avatar editor there, even if it's your profile. */
   const isShareLinkView = (slugFromHashOrNav?.trim() ?? '').length > 0
   const showOwnCardEditor = isSelf && !isShareLinkView
 
@@ -370,7 +359,7 @@ export function Profile({ slugFromHashOrNav }: ProfileProps) {
             </section>
           ) : null}
 
-          {showOwnCardEditor ? (
+          {showOwnCardEditor && (
             <section className="profile-glass rounded-2xl border border-[#4338ca]/55 p-6 profile-edit-outline">
               <h2 className="text-lg font-bold m-0 mb-4 profile-section-heading edit-glow-text">Your card</h2>
               <p className="text-xs text-muted m-0 mb-4 leading-relaxed">
@@ -436,10 +425,6 @@ export function Profile({ slugFromHashOrNav }: ProfileProps) {
                 {saving ? 'Saving…' : 'Save bio & pasted URL'}
               </button>
             </section>
-          ) : (
-            <p className="text-xs text-muted text-center px-4 m-0">
-              This trainer card reflects live site achievements and Cobble-ranked data.
-            </p>
           )}
         </div>
       </div>

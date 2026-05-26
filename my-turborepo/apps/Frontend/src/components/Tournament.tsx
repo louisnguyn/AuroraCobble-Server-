@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { buildTournamentShareUrl, normalizeTournamentSlug, setTournamentPath } from '../tournamentShare.ts'
 import {
   fetchPublicTournament,
   fetchPublishedTournaments,
@@ -9,6 +10,9 @@ import {
 import { PokemonSprite } from './PokemonSprite.tsx'
 import { CustomSelect } from './CustomSelect'
 import { formatBracketMatchKeyLabel } from '../bracketLabels.ts'
+import { TournamentOverview } from './TournamentOverview.tsx'
+import { TournamentPlacementsBanner } from './TournamentPlacements.tsx'
+import { computeTournamentBracketSummary } from '../tournamentBracketSummary.ts'
 
 function bracketGridRowsForSize(bracketSize?: 8 | 12 | 16): number {
   return bracketSize === 16 ? 16 : 8
@@ -25,13 +29,34 @@ function podiumGridRows(gridRows: number): { champion: string; bronze: string } 
   return { champion: `2 / ${2 + half}`, bronze: `${2 + half} / ${2 + gridRows}` }
 }
 
-function MonThumb({ speciesSlug, speciesDisplay }: { speciesSlug?: string; speciesDisplay?: string }) {
+function isBottomRightBracketSlot(
+  match: TournamentBracketMatch,
+  side: 'left' | 'right',
+  bracket: TournamentBracketMatch[],
+): boolean {
+  if (side !== 'right') return false
+  const third = bracket.find((m) => m.round === 'third')
+  if (third) return match.key === third.key
+  const final = bracket.find((m) => m.round === 'final')
+  return final != null && match.key === final.key
+}
+
+function MonThumb({
+  speciesSlug,
+  speciesDisplay,
+  size = 'md',
+}: {
+  speciesSlug?: string
+  speciesDisplay?: string
+  size?: 'md' | 'lg' | 'xl'
+}) {
+  const dim = size === 'xl' ? 'w-12 h-12' : size === 'lg' ? 'w-9 h-9' : 'w-7 h-7'
   return (
     <PokemonSprite
       speciesSlug={speciesSlug}
       speciesDisplay={speciesDisplay ?? speciesSlug}
-      className="w-7 h-7"
-      emptyClassName="inline-block w-7 h-7 rounded bg-surface-hover shrink-0"
+      className={dim}
+      emptyClassName={`inline-block ${dim} rounded bg-surface-hover shrink-0`}
     />
   )
 }
@@ -40,10 +65,12 @@ function PlayerSlot({
   slot,
   winnerId,
   onOpen,
+  size = 'default',
 }: {
   slot: TournamentBracketSlot
   winnerId: number | null
   onOpen?: (participantId: number) => void
+  size?: 'default' | 'large'
 }) {
   if (slot.kind === 'tbd') {
     return (
@@ -85,26 +112,47 @@ function PlayerSlot({
   const id = slot.id!
   const won = winnerId === id
   const preview = Array.isArray(slot.teamPreview) ? slot.teamPreview : []
+  const lead = preview[0]
+  const rest = preview.slice(1, 6)
+  const large = size === 'large'
+  const shell = won
+    ? 'border-emerald-500/60 bg-emerald-500/10 ring-1 ring-emerald-500/30'
+    : 'border-border bg-surface/80'
+
   return (
     <button
       type="button"
       onClick={() => onOpen?.(id)}
-      className={`w-full text-left rounded-lg border px-2 py-1.5 transition-all hover:border-accent/50 hover:bg-surface-hover/80 ${
-        won ? 'border-emerald-500/60 bg-emerald-500/10 ring-1 ring-emerald-500/30' : 'border-border bg-surface/80'
-      }`}
+      className={`tournament-player-slot w-full text-left rounded-lg border transition-all hover:border-accent/50 hover:bg-surface-hover/80 ${large ? 'tournament-player-slot--large' : ''} ${shell}`}
     >
-      <div className={`text-xs font-semibold truncate mb-1 ${won ? 'text-emerald-200' : 'text-cyan-200/90'}`}>
-        {slot.name}
-      </div>
-      <div className="flex w-full min-w-0 flex-nowrap items-center justify-between">
-        {preview.slice(0, 6).map((m, i) => (
+      <div className="tournament-player-slot-lead">
+        {lead ? (
           <MonThumb
-            key={`${id}-${i}`}
-            speciesSlug={m.speciesSlug || m.species}
-            speciesDisplay={m.species}
+            size={large ? 'xl' : 'lg'}
+            speciesSlug={lead.speciesSlug || lead.species}
+            speciesDisplay={lead.species}
           />
-        ))}
+        ) : (
+          <span
+            className={`tournament-player-slot-lead-placeholder ${large ? 'tournament-player-slot-lead-placeholder--large' : ''}`}
+            aria-hidden
+          />
+        )}
+        <span className={`tournament-player-slot-name ${won ? 'text-emerald-200' : 'text-cyan-200/90'}`}>
+          {slot.name}
+        </span>
       </div>
+      {rest.length > 0 ? (
+        <div className="tournament-player-slot-roster">
+          {rest.map((m, i) => (
+            <MonThumb
+              key={`${id}-${i + 1}`}
+              speciesSlug={m.speciesSlug || m.species}
+              speciesDisplay={m.species}
+            />
+          ))}
+        </div>
+      ) : null}
     </button>
   )
 }
@@ -119,11 +167,13 @@ function matchWinnerName(m: TournamentBracketMatch): string | null {
 
 function MatchCard({
   m,
+  bracket,
   onOpenPlayer,
   onComparePair,
   variant = 'default',
 }: {
   m: TournamentBracketMatch
+  bracket: TournamentBracketMatch[]
   onOpenPlayer: (id: number) => void
   onComparePair?: (participantIdA: number, participantIdB: number) => void
   variant?: 'default' | 'champion' | 'bronze'
@@ -148,7 +198,12 @@ function MatchCard({
     >
       <p className="text-[10px] uppercase tracking-wider text-[#c8c3e6]/85 font-semibold m-0 text-center">{m.label}</p>
       <PlayerSlot slot={m.left} winnerId={m.winnerParticipantId} onOpen={onOpenPlayer} />
-      <PlayerSlot slot={m.right} winnerId={m.winnerParticipantId} onOpen={onOpenPlayer} />
+      <PlayerSlot
+        slot={m.right}
+        winnerId={m.winnerParticipantId}
+        onOpen={onOpenPlayer}
+        size={isBottomRightBracketSlot(m, 'right', bracket) ? 'large' : 'default'}
+      />
       {canCompare ? (
         <button
           type="button"
@@ -167,6 +222,7 @@ function BracketStageColumn({
   gridRows,
   title,
   matches,
+  bracket,
   onOpenPlayer,
   onComparePair,
 }: {
@@ -174,6 +230,7 @@ function BracketStageColumn({
   gridRows: number
   title: string
   matches: TournamentBracketMatch[]
+  bracket: TournamentBracketMatch[]
   onOpenPlayer: (id: number) => void
   onComparePair?: (participantIdA: number, participantIdB: number) => void
 }) {
@@ -190,7 +247,7 @@ function BracketStageColumn({
           className="tournament-bracket-match-slot"
           style={{ gridColumn: column, gridRow: bracketMatchGridRow(i, count, gridRows) }}
         >
-          <MatchCard m={m} onOpenPlayer={onOpenPlayer} onComparePair={onComparePair} />
+          <MatchCard m={m} bracket={bracket} onOpenPlayer={onOpenPlayer} onComparePair={onComparePair} />
         </div>
       ))}
     </section>
@@ -202,6 +259,7 @@ function PodiumStageColumn({
   gridRows,
   finalMatches,
   thirdMatches,
+  bracket,
   onOpenPlayer,
   onComparePair,
 }: {
@@ -209,6 +267,7 @@ function PodiumStageColumn({
   gridRows: number
   finalMatches: TournamentBracketMatch[]
   thirdMatches: TournamentBracketMatch[]
+  bracket: TournamentBracketMatch[]
   onOpenPlayer: (id: number) => void
   onComparePair?: (participantIdA: number, participantIdB: number) => void
 }) {
@@ -249,6 +308,7 @@ function PodiumStageColumn({
             <MatchCard
               key={m.key}
               m={m}
+              bracket={bracket}
               variant="champion"
               onOpenPlayer={onOpenPlayer}
               onComparePair={onComparePair}
@@ -281,6 +341,7 @@ function PodiumStageColumn({
             <MatchCard
               key={m.key}
               m={m}
+              bracket={bracket}
               variant="bronze"
               onOpenPlayer={onOpenPlayer}
               onComparePair={onComparePair}
@@ -319,6 +380,7 @@ export function Tournament({
   const [loading, setLoading] = useState(false)
   const [catalog, setCatalog] = useState<PublishedTournamentSummary[]>([])
   const [catalogErr, setCatalogErr] = useState<string | null>(null)
+  const [shareCopied, setShareCopied] = useState(false)
   useEffect(() => {
     setCatalogErr(null)
     fetchPublishedTournaments()
@@ -327,7 +389,7 @@ export function Tournament({
   }, [])
 
   const load = useCallback(() => {
-    const s = slugInput.trim().toLowerCase()
+    const s = normalizeTournamentSlug(slugInput)
     if (!s) {
       setData(null)
       setErr(null)
@@ -373,38 +435,41 @@ export function Tournament({
     ...(qualMatches.length > 0 ? [stageColWidth] : []),
     stageColWidth,
     stageColWidth,
-    ...(hasPodium ? ['14.5rem'] : []),
+    ...(hasPodium ? [stageColWidth] : []),
   ]
 
   const prizes = Array.isArray(data?.tournament.prizes) ? data!.tournament.prizes : []
+  const bracketSummary =
+    data?.bracket != null
+      ? computeTournamentBracketSummary(data.bracket, data.tournament.bracketSize)
+      : null
+  const shareLink = data?.tournament.slug ? buildTournamentShareUrl(data.tournament.slug) : ''
+
+  const onCopyShare = async () => {
+    if (!shareLink || !data?.tournament.slug) return
+    try {
+      await navigator.clipboard.writeText(shareLink)
+      setTournamentPath(normalizeTournamentSlug(data.tournament.slug))
+      setShareCopied(true)
+      window.setTimeout(() => setShareCopied(false), 2000)
+    } catch {
+      setShareCopied(false)
+    }
+  }
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6 pb-12">
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold text-[#f5efe6] m-0">Tournament</h1>
-        <p className="text-sm text-muted m-0">
-          {!data?.tournament ? (
-            <>
-              Brackets support 8, 12, or 16 players — eight- and sixteen-player formats start at quarter-finals or round
-              of 16; twelve-player uses a qualifying round (seeds 5–12). Select a bracket to see the layout.
-            </>
-          ) : data.tournament.bracketSize === 8 ? (
-            <>
-              Eight-player bracket: quarter-finals first (seeds 1 vs 8, 2 vs 7, 3 vs 6, 4 vs 5) → semi-finals → final & 3rd
-              place — no qualifiers.
-            </>
-          ) : data.tournament.bracketSize === 16 ? (
-            <>
-              Sixteen-player bracket: round of 16 (1 vs 16 … 8 vs 9) → quarter-finals → semi-finals → final & 3rd place.
-            </>
-          ) : (
-            <>
-              Twelve-player bracket: qualifying (seeds 5–12) → quarter-finals → semi-finals → final & 3rd place.
-            </>
-          )}{' '}
-          Click a player for team details. Use <span className="text-[#f5efe6]/90">Compare both teams</span> when both
-          slots are filled.
-        </p>
+        {bracketSummary && data?.tournament ? (
+          <TournamentOverview summary={bracketSummary} />
+        ) : (
+          <p className="text-sm text-muted m-0">
+            {catalog.length > 0
+              ? `Choose a tournament below — ${catalog.length} bracket${catalog.length === 1 ? '' : 's'} available with live results, team sheets, and head-to-head compare.`
+              : 'Choose a tournament to view the bracket, team sheets, and match results.'}
+          </p>
+        )}
         {comparePickFirst != null ? (
           <div
             className="flex flex-wrap items-center justify-between gap-3 p-3 pixel-panel-soft border-l-4 border-accent"
@@ -515,6 +580,13 @@ export function Tournament({
                 <p className="text-xs text-[#a29ac5]/75 m-0 mt-2">
                   Updated {new Date(data.tournament.updatedAt).toLocaleString()} · auto-refresh ~20s
                 </p>
+                <button
+                  type="button"
+                  onClick={() => void onCopyShare()}
+                  className="mt-3 py-1.5 px-3 pixel-btn text-sm font-semibold"
+                >
+                  {shareCopied ? 'Copied link' : 'Copy share link'}
+                </button>
                 </div>
               </div>
               {prizes.length > 0 ? (
@@ -528,6 +600,8 @@ export function Tournament({
                 </div>
               ) : null}
             </div>
+
+            <TournamentPlacementsBanner bracket={data.bracket} onOpenPlayer={onOpenPlayer} />
 
             <p className="tournament-bracket-scroll-hint m-0 sm:hidden" aria-hidden>
               Swipe sideways to view all rounds →
@@ -556,6 +630,7 @@ export function Tournament({
                         gridRows={bracketGridRows}
                         title="Round of 16"
                         matches={r16Matches}
+                        bracket={data.bracket}
                         onOpenPlayer={onOpenPlayer}
                         onComparePair={onComparePair}
                       />
@@ -569,6 +644,7 @@ export function Tournament({
                         gridRows={bracketGridRows}
                         title="Qualifying"
                         matches={qualMatches}
+                        bracket={data.bracket}
                         onOpenPlayer={onOpenPlayer}
                         onComparePair={onComparePair}
                       />
@@ -581,6 +657,7 @@ export function Tournament({
                       gridRows={bracketGridRows}
                       title="Quarter-finals"
                       matches={quarterMatches}
+                      bracket={data.bracket}
                       onOpenPlayer={onOpenPlayer}
                       onComparePair={onComparePair}
                     />,
@@ -590,6 +667,7 @@ export function Tournament({
                       gridRows={bracketGridRows}
                       title="Semi-finals"
                       matches={semiMatches}
+                      bracket={data.bracket}
                       onOpenPlayer={onOpenPlayer}
                       onComparePair={onComparePair}
                     />
@@ -602,6 +680,7 @@ export function Tournament({
                         gridRows={bracketGridRows}
                         finalMatches={finalMatches}
                         thirdMatches={thirdMatches}
+                        bracket={data.bracket}
                         onOpenPlayer={onOpenPlayer}
                         onComparePair={onComparePair}
                       />

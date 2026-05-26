@@ -65,6 +65,26 @@ export async function fetchMe(): Promise<{ user: AuthUser; token?: string }> {
   return fetchJson<{ user: AuthUser; token?: string }>('/auth/me')
 }
 
+export interface LeaderboardDisplaySettings {
+  hideZeroMatchPlayers: {
+    singles: boolean
+    doubles: boolean
+  }
+}
+
+export async function adminFetchLeaderboardDisplaySettings(): Promise<LeaderboardDisplaySettings> {
+  return fetchJson<LeaderboardDisplaySettings>('/admin/leaderboard/display-settings')
+}
+
+export async function adminUpdateLeaderboardDisplaySettings(
+  body: LeaderboardDisplaySettings
+): Promise<LeaderboardDisplaySettings> {
+  return fetchJson<LeaderboardDisplaySettings>('/admin/leaderboard/display-settings', {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  })
+}
+
 // Admin APIs (require admin token)
 export interface AdminUser {
   id: number

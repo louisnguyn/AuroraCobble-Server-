@@ -20,6 +20,10 @@ export async function fetchLeaderboard() {
   return get<import('./types').LeaderboardResponse>('/leaderboard')
 }
 
+export async function fetchLeaderboardDisplaySettings() {
+  return get<import('./types').LeaderboardDisplaySettings>('/leaderboard/display-settings')
+}
+
 export async function fetchCobbleDollarsLeaderboard() {
   return get<import('./types').CobbleDollarsLeaderboardResponse>('/minecraft/cobbledollars-leaderboard')
 }

@@ -45,6 +45,14 @@ export interface LeaderboardResponse {
   [key: string]: unknown
 }
 
+/** GET /leaderboard/display-settings — admin-controlled public PvP table filter per format. */
+export interface LeaderboardDisplaySettings {
+  hideZeroMatchPlayers: {
+    singles: boolean
+    doubles: boolean
+  }
+}
+
 export interface LeaderboardFormat {
   format: string
   players?: LeaderboardPlayer[]

@@ -40,6 +40,7 @@ function siteSeoPlugin(): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig({
+  appType: 'spa',
   plugins: [react(), tailwindcss(), siteSeoPlugin()],
   /** Avoid stale pre-bundles after adding deps (504 "Outdated Optimize Dep" until restart). */
   optimizeDeps: {
