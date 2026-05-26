@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import {
   fetchPublicTournament,
   fetchPublishedTournaments,
@@ -20,6 +20,15 @@ function formatPendingMatchLabel(matchKey: string): string {
   if (matchKey === 'final') return 'Final'
   if (matchKey === 'third') return '3rd place'
   return matchKey
+}
+
+/** Shared row slots so each round’s matches align vertically (4 → 2 → 1). */
+const BRACKET_GRID_ROWS = 8
+
+function bracketMatchGridRow(matchIndex: number, matchCount: number): string {
+  const span = BRACKET_GRID_ROWS / matchCount
+  const start = 2 + matchIndex * span
+  return `${start} / ${start + span}`
 }
 
 function MonThumb({ speciesSlug, speciesDisplay }: { speciesSlug?: string; speciesDisplay?: string }) {
@@ -106,14 +115,24 @@ function PlayerSlot({
   )
 }
 
+function matchWinnerName(m: TournamentBracketMatch): string | null {
+  const w = m.winnerParticipantId
+  if (w == null) return null
+  if (m.left.kind === 'participant' && m.left.id === w) return m.left.name ?? null
+  if (m.right.kind === 'participant' && m.right.id === w) return m.right.name ?? null
+  return null
+}
+
 function MatchCard({
   m,
   onOpenPlayer,
   onComparePair,
+  variant = 'default',
 }: {
   m: TournamentBracketMatch
   onOpenPlayer: (id: number) => void
   onComparePair?: (participantIdA: number, participantIdB: number) => void
+  variant?: 'default' | 'champion' | 'bronze'
 }) {
   const canCompare =
     onComparePair &&
@@ -122,8 +141,17 @@ function MatchCard({
     m.left.id != null &&
     m.right.id != null
 
+  const shellClass =
+    variant === 'champion'
+      ? 'tournament-match-card--champion'
+      : variant === 'bronze'
+        ? 'tournament-match-card--bronze'
+        : ''
+
   return (
-    <div className="rounded-xl border border-violet-800/30 bg-[#141426]/70 p-2 space-y-1 w-full min-w-0">
+    <div
+      className={`rounded-xl border border-violet-800/30 bg-[#141426]/70 p-2 space-y-1 w-full min-w-0 ${shellClass}`}
+    >
       <p className="text-[10px] uppercase tracking-wider text-[#c8c3e6]/85 font-semibold m-0 text-center">{m.label}</p>
       <PlayerSlot slot={m.left} winnerId={m.winnerParticipantId} onOpen={onOpenPlayer} />
       <PlayerSlot slot={m.right} winnerId={m.winnerParticipantId} onOpen={onOpenPlayer} />
@@ -137,6 +165,134 @@ function MatchCard({
         </button>
       ) : null}
     </div>
+  )
+}
+
+function BracketStageColumn({
+  column,
+  title,
+  subtitle,
+  matches,
+  onOpenPlayer,
+  onComparePair,
+}: {
+  column: number
+  title: string
+  subtitle?: ReactNode
+  matches: TournamentBracketMatch[]
+  onOpenPlayer: (id: number) => void
+  onComparePair?: (participantIdA: number, participantIdB: number) => void
+}) {
+  if (matches.length === 0) return null
+  const count = matches.length
+  return (
+    <section className="tournament-bracket-stage" style={{ display: 'contents' }} aria-label={title}>
+      <div className="tournament-bracket-stage-head" style={{ gridColumn: column, gridRow: 1 }}>
+        <h3 className="tournament-bracket-stage-title">{title}</h3>
+        {subtitle ? <p className="tournament-bracket-stage-subtitle">{subtitle}</p> : null}
+      </div>
+      {matches.map((m, i) => (
+        <div
+          key={m.key}
+          className="tournament-bracket-match-slot"
+          style={{ gridColumn: column, gridRow: bracketMatchGridRow(i, count) }}
+        >
+          <MatchCard m={m} onOpenPlayer={onOpenPlayer} onComparePair={onComparePair} />
+        </div>
+      ))}
+    </section>
+  )
+}
+
+function PodiumStageColumn({
+  column,
+  finalMatches,
+  thirdMatches,
+  onOpenPlayer,
+  onComparePair,
+}: {
+  column: number
+  finalMatches: TournamentBracketMatch[]
+  thirdMatches: TournamentBracketMatch[]
+  onOpenPlayer: (id: number) => void
+  onComparePair?: (participantIdA: number, participantIdB: number) => void
+}) {
+  if (finalMatches.length === 0 && thirdMatches.length === 0) return null
+  const final = finalMatches[0]
+  const third = thirdMatches[0]
+  const champion = final ? matchWinnerName(final) : null
+  const bronze = third ? matchWinnerName(third) : null
+
+  return (
+    <section className="tournament-bracket-stage tournament-bracket-stage--podium" style={{ display: 'contents' }} aria-label="Finals">
+      <div className="tournament-bracket-stage-head tournament-bracket-stage-head--podium" style={{ gridColumn: column, gridRow: 1 }}>
+        <h3 className="tournament-bracket-stage-title">Finals</h3>
+      </div>
+      {finalMatches.length > 0 ? (
+        <div
+          className="tournament-podium-block tournament-podium-block--champion"
+          style={{ gridColumn: column, gridRow: '2 / 6' }}
+        >
+          <div className="tournament-podium-head">
+            <span className="tournament-podium-icon" aria-hidden>
+              🏆
+            </span>
+            <div className="tournament-podium-head-text">
+              <h3 className="tournament-podium-title">Champion</h3>
+              <p className="tournament-podium-label">Final</p>
+            </div>
+          </div>
+          {champion ? (
+            <p className="tournament-podium-winner tournament-podium-winner--gold" role="status">
+              {champion}
+            </p>
+          ) : (
+            <p className="tournament-podium-pending">Winner TBD</p>
+          )}
+          {finalMatches.map((m) => (
+            <MatchCard
+              key={m.key}
+              m={m}
+              variant="champion"
+              onOpenPlayer={onOpenPlayer}
+              onComparePair={onComparePair}
+            />
+          ))}
+        </div>
+      ) : null}
+      {thirdMatches.length > 0 ? (
+        <div
+          className="tournament-podium-block tournament-podium-block--bronze"
+          style={{ gridColumn: column, gridRow: '6 / 10' }}
+        >
+          <div className="tournament-podium-head">
+            <span className="tournament-podium-icon" aria-hidden>
+              🥉
+            </span>
+            <div className="tournament-podium-head-text">
+              <h3 className="tournament-podium-title">3rd place</h3>
+              <p className="tournament-podium-label">Bronze match</p>
+            </div>
+          </div>
+          {bronze ? (
+            <p className="tournament-podium-winner tournament-podium-winner--bronze" role="status">
+              {bronze}
+            </p>
+          ) : (
+            <p className="tournament-podium-pending">Winner TBD</p>
+          )}
+          {thirdMatches.map((m) => (
+            <MatchCard
+              key={m.key}
+              m={m}
+              variant="bronze"
+              onOpenPlayer={onOpenPlayer}
+              onComparePair={onComparePair}
+            />
+          ))}
+        </div>
+      ) : null}
+    </section>
   )
 }
 
@@ -205,6 +361,19 @@ export function Tournament({
   }, [load, slugInput])
 
   const byRound = (r: TournamentBracketMatch['round']) => data?.bracket.filter((m) => m.round === r) ?? []
+
+  const qualMatches = byRound('qualifying')
+  const quarterMatches = byRound('quarter')
+  const semiMatches = byRound('semi')
+  const finalMatches = byRound('final')
+  const thirdMatches = byRound('third')
+  const hasPodium = finalMatches.length > 0 || thirdMatches.length > 0
+  const bracketGridColumns = [
+    ...(qualMatches.length > 0 ? ['12.75rem'] : []),
+    '12.75rem',
+    '12.75rem',
+    ...(hasPodium ? ['14.5rem'] : []),
+  ]
 
   const prizes = Array.isArray(data?.tournament.prizes) ? data!.tournament.prizes : []
 
@@ -309,9 +478,9 @@ export function Tournament({
       ) : err ? (
         <p className="text-error text-sm">{err}</p>
       ) : data ? (
-        <div className="relative rounded-3xl border border-violet-900/35 overflow-hidden bg-gradient-to-br from-[#17172a]/95 via-[#1d1a36]/55 to-[#0b0b12] p-4 sm:p-6">
+        <div className="relative rounded-3xl border border-violet-900/35 bg-gradient-to-br from-[#17172a]/95 via-[#1d1a36]/55 to-[#0b0b12] p-4 sm:p-6">
           <div
-            className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-[0.09] text-6xl sm:text-8xl md:text-9xl font-black text-cyan-300 tracking-widest select-none -rotate-[18deg]"
+            className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit] flex items-center justify-center opacity-[0.09] text-6xl sm:text-8xl md:text-9xl font-black text-cyan-300 tracking-widest select-none -rotate-[18deg]"
             aria-hidden
           >
             AURORA COBBLE
@@ -339,70 +508,72 @@ export function Tournament({
               ) : null}
             </div>
 
-            {byRound('qualifying').length > 0 ? (
-              <section className="w-full min-w-0">
-                <h3 className="text-sm font-semibold text-[#d9cec0] m-0 mb-3">Qualifying (seeds 5–12)</h3>
-                {/*
-                  Space goes *between* cards: equal columns + wide column-gap (not a lump of empty space on the right).
-                  md+ = four across; smaller screens = 2×2 with the same gap logic.
-                */}
-                <div className="grid w-full min-w-0 grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-4 sm:gap-x-6 sm:gap-y-5 md:gap-x-8 md:gap-y-5 lg:gap-x-10">
-                  {byRound('qualifying').map((m) => (
-                    <MatchCard key={m.key} m={m} onOpenPlayer={onOpenPlayer} onComparePair={onComparePair} />
-                  ))}
-                </div>
-              </section>
-            ) : null}
-
-            <section className="w-full min-w-0">
-              <h3 className="text-sm font-semibold text-[#d9cec0] m-0 mb-3">
-                Quarter-finals
-                {data.tournament.bracketSize === 8 ? (
-                  <span className="block text-xs font-normal text-muted mt-1">
-                    Seeds 1 vs 8, 2 vs 7, 3 vs 6, 4 vs 5 (eight-player mode)
-                  </span>
-                ) : null}
-              </h3>
-              <div className="grid w-full min-w-0 grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-4 sm:gap-x-6 sm:gap-y-5 md:gap-x-8 md:gap-y-5 lg:gap-x-10">
-                {byRound('quarter').map((m) => (
-                  <MatchCard key={m.key} m={m} onOpenPlayer={onOpenPlayer} onComparePair={onComparePair} />
-                ))}
+            <p className="tournament-bracket-scroll-hint m-0 sm:hidden" aria-hidden>
+              Swipe sideways to view all rounds →
+            </p>
+            <div
+              className="tournament-bracket-outer"
+              role="region"
+              aria-label="Tournament bracket — scroll horizontally on small screens"
+              tabIndex={0}
+            >
+              <div
+                className="tournament-bracket-track"
+                style={{ gridTemplateColumns: bracketGridColumns.join(' ') }}
+              >
+                {(() => {
+                  let col = 1
+                  const nodes = []
+                  if (qualMatches.length > 0) {
+                    nodes.push(
+                      <BracketStageColumn
+                        key="qual"
+                        column={col++}
+                        title="Qualifying"
+                        subtitle="Seeds 5–12"
+                        matches={qualMatches}
+                        onOpenPlayer={onOpenPlayer}
+                        onComparePair={onComparePair}
+                      />
+                    )
+                  }
+                  nodes.push(
+                    <BracketStageColumn
+                      key="quarter"
+                      column={col++}
+                      title="Quarter-finals"
+                      subtitle={
+                        data.tournament.bracketSize === 8 ? '1v8 · 2v7 · 3v6 · 4v5' : undefined
+                      }
+                      matches={quarterMatches}
+                      onOpenPlayer={onOpenPlayer}
+                      onComparePair={onComparePair}
+                    />,
+                    <BracketStageColumn
+                      key="semi"
+                      column={col++}
+                      title="Semi-finals"
+                      matches={semiMatches}
+                      onOpenPlayer={onOpenPlayer}
+                      onComparePair={onComparePair}
+                    />
+                  )
+                  if (hasPodium) {
+                    nodes.push(
+                      <PodiumStageColumn
+                        key="podium"
+                        column={col++}
+                        finalMatches={finalMatches}
+                        thirdMatches={thirdMatches}
+                        onOpenPlayer={onOpenPlayer}
+                        onComparePair={onComparePair}
+                      />
+                    )
+                  }
+                  return nodes
+                })()}
               </div>
-            </section>
-
-            <section className="w-full min-w-0">
-              <div className="max-w-4xl mx-auto">
-                <h3 className="text-sm font-semibold text-[#d9cec0] m-0 mb-3 text-center">Semi-finals</h3>
-                <div className="grid w-full min-w-0 grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 sm:gap-x-8">
-                  {byRound('semi').map((m) => (
-                    <MatchCard key={m.key} m={m} onOpenPlayer={onOpenPlayer} onComparePair={onComparePair} />
-                  ))}
-                </div>
-              </div>
-            </section>
-
-            <section className="w-full min-w-0">
-              <div className="flex flex-wrap gap-6 sm:gap-8 items-start justify-center">
-                <div className="w-full max-w-md min-w-0">
-                  <h3 className="text-sm font-semibold text-cyan-200 m-0 mb-3 flex items-center justify-center gap-2">
-                    <span aria-hidden>🏆</span> Final
-                  </h3>
-                  <div className="grid grid-cols-1 gap-2 sm:gap-3 w-full min-w-0">
-                    {byRound('final').map((m) => (
-                      <MatchCard key={m.key} m={m} onOpenPlayer={onOpenPlayer} onComparePair={onComparePair} />
-                    ))}
-                  </div>
-                </div>
-                <div className="w-full max-w-md min-w-0">
-                  <h3 className="text-sm font-semibold text-slate-300 m-0 mb-3 text-center">3rd place</h3>
-                  <div className="grid grid-cols-1 gap-2 sm:gap-3 w-full min-w-0">
-                    {byRound('third').map((m) => (
-                      <MatchCard key={m.key} m={m} onOpenPlayer={onOpenPlayer} onComparePair={onComparePair} />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </section>
+            </div>
           </div>
         </div>
       ) : null}
