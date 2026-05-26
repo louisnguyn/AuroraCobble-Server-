@@ -112,9 +112,9 @@ function PlayerSlot({
   const id = slot.id!
   const won = winnerId === id
   const preview = Array.isArray(slot.teamPreview) ? slot.teamPreview : []
-  const lead = preview[0]
-  const rest = preview.slice(1, 6)
+  const roster = preview.slice(0, 6)
   const large = size === 'large'
+  const thumbSize = large ? 'lg' : 'md'
   const shell = won
     ? 'border-emerald-500/60 bg-emerald-500/10 ring-1 ring-emerald-500/30'
     : 'border-border bg-surface/80'
@@ -125,34 +125,19 @@ function PlayerSlot({
       onClick={() => onOpen?.(id)}
       className={`tournament-player-slot w-full text-left rounded-lg border transition-all hover:border-accent/50 hover:bg-surface-hover/80 ${large ? 'tournament-player-slot--large' : ''} ${shell}`}
     >
-      <div className="tournament-player-slot-lead">
-        {lead ? (
+      <span className={`tournament-player-slot-name ${won ? 'text-emerald-200' : 'text-cyan-200/90'}`}>
+        {slot.name}
+      </span>
+      <div className="tournament-player-slot-roster">
+        {roster.map((m, i) => (
           <MonThumb
-            size={large ? 'xl' : 'lg'}
-            speciesSlug={lead.speciesSlug || lead.species}
-            speciesDisplay={lead.species}
+            key={`${id}-${i}`}
+            size={thumbSize}
+            speciesSlug={m.speciesSlug || m.species}
+            speciesDisplay={m.species}
           />
-        ) : (
-          <span
-            className={`tournament-player-slot-lead-placeholder ${large ? 'tournament-player-slot-lead-placeholder--large' : ''}`}
-            aria-hidden
-          />
-        )}
-        <span className={`tournament-player-slot-name ${won ? 'text-emerald-200' : 'text-cyan-200/90'}`}>
-          {slot.name}
-        </span>
+        ))}
       </div>
-      {rest.length > 0 ? (
-        <div className="tournament-player-slot-roster">
-          {rest.map((m, i) => (
-            <MonThumb
-              key={`${id}-${i + 1}`}
-              speciesSlug={m.speciesSlug || m.species}
-              speciesDisplay={m.species}
-            />
-          ))}
-        </div>
-      ) : null}
     </button>
   )
 }
@@ -171,12 +156,14 @@ function MatchCard({
   onOpenPlayer,
   onComparePair,
   variant = 'default',
+  showLabel = true,
 }: {
   m: TournamentBracketMatch
   bracket: TournamentBracketMatch[]
   onOpenPlayer: (id: number) => void
   onComparePair?: (participantIdA: number, participantIdB: number) => void
   variant?: 'default' | 'champion' | 'bronze'
+  showLabel?: boolean
 }) {
   const canCompare =
     onComparePair &&
@@ -194,9 +181,11 @@ function MatchCard({
 
   return (
     <div
-      className={`rounded-xl border border-violet-800/30 bg-[#141426]/70 p-2 space-y-1 w-full min-w-0 ${shellClass}`}
+      className={`tournament-match-card rounded-xl border border-violet-800/30 bg-[#141426]/70 p-2 space-y-1 w-full ${shellClass}`}
     >
-      <p className="text-[10px] uppercase tracking-wider text-[#c8c3e6]/85 font-semibold m-0 text-center">{m.label}</p>
+      {showLabel ? (
+        <p className="text-[10px] uppercase tracking-wider text-[#c8c3e6]/85 font-semibold m-0 text-center">{m.label}</p>
+      ) : null}
       <PlayerSlot slot={m.left} winnerId={m.winnerParticipantId} onOpen={onOpenPlayer} />
       <PlayerSlot
         slot={m.right}
@@ -310,6 +299,7 @@ function PodiumStageColumn({
               m={m}
               bracket={bracket}
               variant="champion"
+              showLabel={false}
               onOpenPlayer={onOpenPlayer}
               onComparePair={onComparePair}
             />
@@ -343,6 +333,7 @@ function PodiumStageColumn({
               m={m}
               bracket={bracket}
               variant="bronze"
+              showLabel={false}
               onOpenPlayer={onOpenPlayer}
               onComparePair={onComparePair}
             />
@@ -429,14 +420,13 @@ export function Tournament({
   const hasPodium = finalMatches.length > 0 || thirdMatches.length > 0
   const bracketSize = data?.tournament.bracketSize
   const bracketGridRows = bracketGridRowsForSize(bracketSize)
-  const stageColWidth = bracketSize === 16 ? '15.75rem' : '12.75rem'
-  const bracketGridColumns = [
-    ...(r16Matches.length > 0 ? [stageColWidth] : []),
-    ...(qualMatches.length > 0 ? [stageColWidth] : []),
-    stageColWidth,
-    stageColWidth,
-    ...(hasPodium ? [stageColWidth] : []),
-  ]
+  /** Fixed columns on mobile (horizontal scroll); fluid columns on desktop — see index.css. */
+  const bracketColWidth = bracketSize === 16 ? '20.5rem' : '17.25rem'
+  const bracketColCount =
+    (r16Matches.length > 0 ? 1 : 0) +
+    (qualMatches.length > 0 ? 1 : 0) +
+    2 +
+    (hasPodium ? 1 : 0)
 
   const prizes = Array.isArray(data?.tournament.prizes) ? data!.tournament.prizes : []
   const bracketSummary =
@@ -615,8 +605,9 @@ export function Tournament({
               <div
                 className="tournament-bracket-track"
                 style={{
-                  gridTemplateColumns: bracketGridColumns.join(' '),
+                  ['--bracket-col-count' as string]: String(bracketColCount),
                   ['--bracket-grid-rows' as string]: String(bracketGridRows),
+                  ['--bracket-col-width' as string]: bracketColWidth,
                 }}
               >
                 {(() => {
