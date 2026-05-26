@@ -132,7 +132,7 @@ export default function App() {
       >
         <div className="md:pt-4">
           <img
-            src="/logo.png"
+            src="/logo_text.png"
             alt="Aurora Cobble"
             className="block w-full max-w-[180px] h-auto mx-auto mb-6 object-contain"
           />

@@ -35,7 +35,7 @@ export function Login({ onSuccess }: LoginProps) {
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="w-full max-w-md rounded-2xl bg-surface border border-border p-6 sm:p-8 shadow-xl">
         <div className="text-center mb-6">
-          <img src="/logo.png" alt="Aurora Cobble" className="w-32 h-auto mx-auto mb-4 object-contain" />
+          <img src="/logo_text.png" alt="Aurora Cobble" className="w-32 h-auto mx-auto mb-4 object-contain" />
           <h1 className="text-xl font-bold text-[#f5efe6]">Admin sign in</h1>
           <p className="text-sm text-muted mt-1">Only administrator accounts can access this site.</p>
         </div>

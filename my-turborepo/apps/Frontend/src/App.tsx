@@ -203,7 +203,7 @@ function AppContent() {
           className="shrink-0"
         >
           <img
-            src="/logo.png"
+            src="/logo_text.png"
             alt="Aurora Cobble"
             className="block h-24 w-auto max-w-[200px] sm:max-w-[280px] object-contain object-left shrink-0"
           />

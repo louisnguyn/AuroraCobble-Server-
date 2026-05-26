@@ -227,7 +227,7 @@ export function Profile({ slugFromHashOrNav }: ProfileProps) {
           className="profile-hero-logo-link"
           aria-label="Aurora Cobble — home"
         >
-          <img src="/logo.png" alt="" className="profile-hero-logo-img" loading="lazy" decoding="async" />
+          <img src="/logo_text.png" alt="" className="profile-hero-logo-img" loading="lazy" decoding="async" />
         </a>
         <div className="relative z-[1] p-8 sm:p-10 flex flex-col sm:flex-row gap-8 items-start">
           <div className="profile-avatar-shell shrink-0">

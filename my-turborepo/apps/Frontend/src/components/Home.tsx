@@ -69,7 +69,7 @@ export function Home({ onNavigate }: HomeProps) {
             <span className="hero-pokeball hero-ball-origin"><i className="hero-ball-mark mark-origin" /></span>
           </div>
           <img
-            src="/logo.png"
+            src="/logo_text.png"
             alt="Aurora Cobble"
             className="hero-logo-motion block w-full max-w-[min(500px,90vw)] h-auto mx-auto mb-6 object-contain drop-shadow-[0_0_45px_rgba(34,211,238,0.18)]"
           />

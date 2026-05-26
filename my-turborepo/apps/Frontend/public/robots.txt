@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+# Sitemap URL is added at build time when VITE_SITE_URL is set (see apps/Frontend/.env.example).

@@ -856,6 +856,7 @@
     max-width: min(92vw, 21rem);
     object-fit: contain;
     object-position: center right;
+    image-rendering: pixelated;
     filter: drop-shadow(0 3px 16px rgba(0, 0, 0, 0.5));
     display: block;
   }
