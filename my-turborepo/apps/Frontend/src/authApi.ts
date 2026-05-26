@@ -907,6 +907,9 @@ export async function fetchTournamentParticipantTeam(
     seedRank: number
     displayName: string
     team: unknown
+    pvpRank: number | null
+    pvpElo: number | null
+    pvpFormat: string | null
   }
 }> {
   const base = API_BASE.replace(/\/$/, '')

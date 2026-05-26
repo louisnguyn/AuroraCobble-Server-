@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { parsePokepaste } from '../pokepasteParse'
 import { loadTeamPasteView } from '../teamPasteViewStorage'
-import { TournamentMonCard } from './TournamentMonCard.tsx'
+import { TeamSheetGrid, TeamSheetPanel, TournamentMonCard } from './TournamentMonCard.tsx'
 
 export function TeamPasteViewPage({ onBack }: { onBack: () => void }) {
   const data = useMemo(() => loadTeamPasteView(), [])
@@ -21,37 +21,36 @@ export function TeamPasteViewPage({ onBack }: { onBack: () => void }) {
   }
 
   return (
-    <div className="w-full max-w-3xl mx-auto space-y-6 pb-12">
+    <div className="w-full max-w-5xl mx-auto space-y-6 pb-12 px-2 sm:px-4">
       <button type="button" onClick={onBack} className="pixel-btn text-sm py-2 px-4">
         ← Back to Team Builder
       </button>
-      <header className="text-center max-w-lg mx-auto">
-        <h1 className="text-2xl font-semibold text-[#f5efe6] m-0">{data.title || 'Team'}</h1>
-      </header>
 
-      {data.pokepastUrl ? (
-        <p className="text-sm m-0">
-          <span className="text-muted">Showdown import: </span>
-          <a
-            href={data.pokepastUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-accent hover:underline break-all"
-          >
-            {data.pokepastUrl}
-          </a>
-        </p>
-      ) : null}
+      <TeamSheetPanel title={data.title || 'Team'}>
+        {data.pokepastUrl ? (
+          <p className="text-sm m-0 mb-4 pb-3 border-b border-violet-900/35">
+            <span className="text-muted">Showdown import: </span>
+            <a
+              href={data.pokepastUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-accent hover:underline break-all"
+            >
+              {data.pokepastUrl}
+            </a>
+          </p>
+        ) : null}
 
-      <div className="flex flex-col gap-3 max-w-lg mx-auto w-full">
-        {team.map((mon, i) => (
-          <TournamentMonCard key={`${mon.speciesSlug}-${i}`} mon={mon} />
-        ))}
-      </div>
+        <TeamSheetGrid>
+          {team.map((mon, i) => (
+            <TournamentMonCard key={`${mon.speciesSlug}-${i}`} mon={mon} slot={i + 1} />
+          ))}
+        </TeamSheetGrid>
 
-      {team.length === 0 ? (
-        <p className="text-sm text-muted m-0">Could not parse any Pokémon from this paste.</p>
-      ) : null}
+        {team.length === 0 ? (
+          <p className="text-sm text-muted m-0 mt-4">Could not parse any Pokémon from this paste.</p>
+        ) : null}
+      </TeamSheetPanel>
 
       <details className="pixel-panel-soft p-4">
         <summary className="text-sm font-medium text-[#f5efe6] cursor-pointer">Showdown paste text</summary>

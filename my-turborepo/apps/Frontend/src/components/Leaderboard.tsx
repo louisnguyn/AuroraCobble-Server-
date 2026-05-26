@@ -10,7 +10,7 @@ import type {
   LeaderboardPlayer,
 } from '../types'
 import { CobbleDollars } from './CobbleDollars.tsx'
-import { normalizePvpTierSlugForAssets, PvPTierBadge } from './PvPTierBadge.tsx'
+import { getPvpTierFromElo, normalizePvpTierSlugForAssets, PvPTierBadge } from './PvPTierBadge.tsx'
 import { RankedApiFeed } from './RankedApiFeed.tsx'
 
 type MainSection = 'ranks' | 'economy' | 'battle' | 'ranked'
@@ -61,20 +61,6 @@ function getFormatDisplayName(id: string): string {
 function getFormatById(formats: Record<string, LeaderboardFormat>, id: string): LeaderboardFormat | undefined {
   const key = Object.keys(formats).find((k) => k.toLowerCase() === id)
   return key ? formats[key] : undefined
-}
-
-const RANK_TIERS_BY_ELO: { minElo: number; displayName: string; slug: string }[] = [
-  { minElo: 1350, displayName: 'Netherite', slug: 'netherite' },
-  { minElo: 1250, displayName: 'Diamond', slug: 'diamond' },
-  { minElo: 1175, displayName: 'Emerald', slug: 'emerald' },
-  { minElo: 1100, displayName: 'Gold', slug: 'gold' },
-  { minElo: 1050, displayName: 'Iron', slug: 'iron' },
-  { minElo: 0, displayName: 'Copper', slug: 'copper' },
-]
-
-function getTier(elo: number): { displayName: string; slug: string } {
-  const tier = RANK_TIERS_BY_ELO.find((t) => elo >= t.minElo)
-  return tier ?? { displayName: 'Copper', slug: 'copper' }
 }
 
 function pvpRankPillClass(rank: number): string {
@@ -306,7 +292,10 @@ export function Leaderboard() {
     return rankPlayers.find((p) => ignNamesMatch(viewerIgn, p.playerName))
   }, [rankPlayers, viewerIgn])
 
-  const yourRankTier = useMemo(() => (yourRankPlayer ? getTier(yourRankPlayer.elo) : null), [yourRankPlayer])
+  const yourRankTier = useMemo(
+    () => (yourRankPlayer ? getPvpTierFromElo(yourRankPlayer.elo) : null),
+    [yourRankPlayer]
+  )
 
   useEffect(() => {
     if (mainSection !== 'ranks' || !yourRankPlayer) return
@@ -472,7 +461,7 @@ export function Leaderboard() {
                     </thead>
                     <tbody>
                       {rankPlayers.map((p) => {
-                        const tier = getTier(p.elo)
+                        const tier = getPvpTierFromElo(p.elo)
                         const isYou = yourRankPlayer?.uuid === p.uuid
                         const streak = p.currentStreak
                         const streakStr = streak > 0 ? `+${streak}` : String(streak)

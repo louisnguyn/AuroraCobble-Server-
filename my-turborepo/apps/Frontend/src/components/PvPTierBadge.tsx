@@ -2,6 +2,21 @@ import { useCallback, useState } from 'react'
 
 type ImgExt = 'png' | 'webp'
 
+const RANK_TIERS_BY_ELO: { minElo: number; displayName: string; slug: string }[] = [
+  { minElo: 1350, displayName: 'Netherite', slug: 'netherite' },
+  { minElo: 1250, displayName: 'Diamond', slug: 'diamond' },
+  { minElo: 1175, displayName: 'Emerald', slug: 'emerald' },
+  { minElo: 1100, displayName: 'Gold', slug: 'gold' },
+  { minElo: 1050, displayName: 'Iron', slug: 'iron' },
+  { minElo: 0, displayName: 'Copper', slug: 'copper' },
+]
+
+/** Tier from ELO — same thresholds as Leaderboard and backend profiles. */
+export function getPvpTierFromElo(elo: number): { displayName: string; slug: string } {
+  const tier = RANK_TIERS_BY_ELO.find((t) => elo >= t.minElo)
+  return tier ?? { displayName: 'Copper', slug: 'copper' }
+}
+
 /** Map legacy API tier `"silver"` to asset slug `iron` after the tier rename. */
 export function normalizePvpTierSlugForAssets(slugOrTier: string): string {
   const t = slugOrTier.trim().toLowerCase()

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { fetchTournamentParticipantTeam } from '../authApi'
-import { type ParsedMon, TournamentMonCard } from './TournamentMonCard.tsx'
+import { TrainerTeamSheetPanel } from './TrainerTeamSheetHeader.tsx'
+import { type ParsedMon, TeamSheetGrid, TournamentMonCard } from './TournamentMonCard.tsx'
 
 export function TournamentTeamDetail({
   slug,
@@ -26,7 +27,7 @@ export function TournamentTeamDetail({
   const team = (data?.participant.team as ParsedMon[]) ?? []
 
   return (
-    <div className="w-full max-w-3xl mx-auto space-y-6 pb-12 px-2 sm:px-4">
+    <div className="w-full max-w-5xl mx-auto space-y-6 pb-12 px-2 sm:px-4">
       <div className="flex flex-wrap items-center justify-start gap-3">
         <button type="button" onClick={onBack} className="text-sm px-3 py-1.5 pixel-btn">
           ← Back to bracket
@@ -43,17 +44,13 @@ export function TournamentTeamDetail({
       </div>
       {err ? <p className="text-error">{err}</p> : null}
       {data ? (
-        <>
-          <header className="text-center max-w-lg mx-auto">
-            <h1 className="text-2xl font-semibold text-[#f5efe6] m-0">{data.participant.displayName}</h1>
-            <p className="text-sm text-muted m-0 mt-1">Seed #{data.participant.seedRank}</p>
-          </header>
-          <div className="space-y-3 max-w-lg mx-auto w-full">
+        <TrainerTeamSheetPanel participant={data.participant}>
+          <TeamSheetGrid>
             {team.map((mon, i) => (
-              <TournamentMonCard key={i} mon={mon} />
+              <TournamentMonCard key={i} mon={mon} slot={i + 1} />
             ))}
-          </div>
-        </>
+          </TeamSheetGrid>
+        </TrainerTeamSheetPanel>
       ) : !err ? (
         <p className="text-muted">Loading…</p>
       ) : null}

@@ -11,6 +11,10 @@ import {
   type ParticipantRow,
 } from "./tournamentBracket.js";
 import { resolveTournamentPredictionsForTournament } from "./tournamentPrediction.js";
+import {
+  leaderboardPayloadHasSyncedData,
+  livePvpSnapFromLeaderboardForWebsiteUser,
+} from "./leaderboardPvpDerived.js";
 
 function qfFeedFromRow(t: { qf_qual_feed?: unknown } | null | undefined): [number, number, number, number] {
   return normalizeQfQualFeed(t?.qf_qual_feed) ?? ([...DEFAULT_QF_QUAL_FEED] as [number, number, number, number]);
@@ -43,6 +47,7 @@ export function registerTournamentRoutes(
   deps: {
     requireAuth: (req: Request, res: Response, next: () => void) => void;
     requireAdmin: (req: Request, res: Response, next: () => void) => void;
+    getLiveLeaderboard?: () => unknown;
   }
 ): void {
   const { requireAuth, requireAdmin } = deps;
@@ -439,12 +444,29 @@ export function registerTournamentRoutes(
       res.status(404).json({ error: "Participant not found" });
       return;
     }
+
+    let pvpRank: number | null = null;
+    let pvpElo: number | null = null;
+    let pvpFormat: string | null = null;
+    const lb = deps.getLiveLeaderboard?.();
+    if (lb != null && leaderboardPayloadHasSyncedData(lb)) {
+      const snap = livePvpSnapFromLeaderboardForWebsiteUser(lb, p.display_name);
+      if (snap) {
+        pvpRank = snap.rank;
+        pvpElo = snap.elo;
+        pvpFormat = snap.formatKey;
+      }
+    }
+
     res.json({
       participant: {
         id: p.id,
         seedRank: p.seed_rank,
         displayName: p.display_name,
         team: p.team_json,
+        pvpRank,
+        pvpElo,
+        pvpFormat,
       },
     });
   });

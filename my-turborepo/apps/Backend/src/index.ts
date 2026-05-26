@@ -670,7 +670,11 @@ function requireAdmin(
 const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT?.trim() || "32mb";
 app.use(express.json({ limit: JSON_BODY_LIMIT }));
 
-registerTournamentRoutes(app, { requireAuth, requireAdmin });
+registerTournamentRoutes(app, {
+  requireAuth,
+  requireAdmin,
+  getLiveLeaderboard: () => cobbleStore.leaderboard,
+});
 registerBattleRestrictionsRoutes(app, { requireAuth, requireAdmin });
 
 const TEAM_AI_COOLDOWN_MS = 12 * 60 * 60 * 1000;

@@ -1,65 +1,109 @@
+import type { ReactNode } from 'react'
+import { typeAccentColor } from '../pokemonTypeStyles.ts'
+import { PokemonMoveList } from './PokemonMoveList.tsx'
+import { PokemonTypeBadges } from './PokemonTypeBadges.tsx'
 import { PokemonSprite } from './PokemonSprite.tsx'
 
 export type ParsedMon = {
   species?: string
   speciesSlug?: string
+  types?: string[]
   item?: string
   ability?: string | null
   teraType?: string | null
   moves?: string[]
 }
 
-export function TournamentMonCard({ mon }: { mon: ParsedMon }) {
+function cardAccentColor(mon: ParsedMon): string {
+  if (mon.teraType?.trim()) return typeAccentColor(mon.teraType)
+  const first = mon.types?.[0]
+  if (first) return typeAccentColor(first)
+  return 'rgba(139, 92, 246, 0.55)'
+}
+
+function MetaTag({ label, value, variant = 'default' }: { label: string; value: string; variant?: 'default' | 'item' }) {
+  return (
+    <div className={`team-mon-meta-tag${variant === 'item' ? ' team-mon-meta-tag--item' : ''}`}>
+      <span className="team-mon-meta-label">{label}</span>
+      <span className="team-mon-meta-value">{value}</span>
+    </div>
+  )
+}
+
+export function TournamentMonCard({ mon, slot }: { mon: ParsedMon; slot?: number }) {
   const slug = (mon.speciesSlug || mon.species || '').trim()
+  const accent = cardAccentColor(mon)
+  const moves = mon.moves?.filter((m) => m?.trim()) ?? []
 
   return (
-    <article className="pixel-panel-soft w-full max-w-lg mx-auto p-4 sm:p-5">
-      <div className="grid grid-cols-[7rem_1fr] gap-5 sm:gap-6 items-center">
-        <PokemonSprite
-          speciesSlug={slug}
-          speciesDisplay={mon.species}
-          centered={false}
-          className="w-28 h-28"
-          emptyClassName="w-28 h-28 rounded-lg bg-surface-hover/40 shrink-0"
-        />
-
-        <div className="flex justify-center min-w-0">
-          <div className="w-full max-w-[15rem] text-left">
-            <h3 className="text-base font-semibold text-[#f5efe6] m-0 leading-tight">
-              {mon.species ?? 'Pokemon'}
-            </h3>
-
-            <div className="mt-2 space-y-1 text-sm leading-snug">
-              {mon.item ? (
-                <p className="m-0">
-                  <span className="text-slate-500">Item </span>
-                  <span className="text-amber-200/95">{mon.item}</span>
-                </p>
-              ) : null}
-              {mon.ability ? (
-                <p className="m-0">
-                  <span className="text-slate-500">Ability </span>
-                  <span className="text-[#e8e4dc]/90">{mon.ability}</span>
-                </p>
-              ) : null}
-              {mon.teraType ? (
-                <p className="m-0">
-                  <span className="text-slate-500">Tera </span>
-                  <span className="text-amber-200/95">{mon.teraType}</span>
-                </p>
-              ) : null}
-            </div>
-
-            {mon.moves && mon.moves.length > 0 ? (
-              <ul className="m-0 mt-3 pl-4 text-sm text-[#f5efe6]/90 space-y-1 list-disc leading-snug">
-                {mon.moves.map((mv, i) => (
-                  <li key={i}>{mv}</li>
-                ))}
-              </ul>
-            ) : null}
+    <article
+      className="team-mon-card"
+      style={{ ['--team-mon-tera' as string]: accent }}
+    >
+      <div className="team-mon-card-accent" aria-hidden />
+      <div className="team-mon-card-inner">
+        <div className="team-mon-card-head">
+          {slot != null ? (
+            <span className="team-mon-slot" aria-label={`Slot ${slot}`}>
+              {slot}
+            </span>
+          ) : null}
+          <PokemonSprite
+            speciesSlug={slug}
+            speciesDisplay={mon.species}
+            centered={false}
+            className="team-mon-sprite"
+            emptyClassName="team-mon-sprite team-mon-sprite--empty"
+          />
+          <div className="team-mon-title-block min-w-0">
+            <h3 className="team-mon-name">{mon.species ?? 'Pokémon'}</h3>
           </div>
         </div>
+
+        <PokemonTypeBadges
+          speciesSlug={slug}
+          speciesDisplay={mon.species}
+          teraType={mon.teraType}
+          types={mon.types}
+        />
+
+        {mon.item || mon.ability ? (
+          <div className="team-mon-meta">
+            {mon.item ? <MetaTag label="Item" value={mon.item} variant="item" /> : null}
+            {mon.ability ? <MetaTag label="Ability" value={mon.ability} /> : null}
+          </div>
+        ) : null}
+
+        {moves.length > 0 ? <PokemonMoveList moves={moves} /> : null}
       </div>
     </article>
+  )
+}
+
+export function TeamSheetGrid({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return <div className={`team-sheet-grid ${className}`.trim()}>{children}</div>
+}
+
+export function TeamSheetPanel({
+  title,
+  subtitle,
+  accent = 'violet',
+  children,
+}: {
+  title: ReactNode
+  subtitle?: ReactNode
+  accent?: 'violet' | 'cyan'
+  children: ReactNode
+}) {
+  return (
+    <section className={`team-sheet-panel team-sheet-panel--${accent}`}>
+      <header className="team-sheet-panel-head">
+        <h2 className="team-sheet-panel-title">{title}</h2>
+        {subtitle != null && subtitle !== '' ? (
+          <p className="team-sheet-panel-sub">{subtitle}</p>
+        ) : null}
+      </header>
+      {children}
+    </section>
   )
 }
