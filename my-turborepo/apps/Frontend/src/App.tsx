@@ -18,6 +18,7 @@ import { TeamBuilder } from './components/TeamBuilder.tsx'
 import { TeamPasteViewPage } from './components/TeamPasteViewPage.tsx'
 import { Profile } from './components/Profile.tsx'
 import {
+  APP_ROUTE_SYNC_EVENT,
   clearProfilePath,
   parseProfileSlugFromLocation,
   parseProfileSlugFromPath,
@@ -190,9 +191,11 @@ function AppContent() {
     sync()
     window.addEventListener('hashchange', sync)
     window.addEventListener('popstate', sync)
+    window.addEventListener(APP_ROUTE_SYNC_EVENT, sync)
     return () => {
       window.removeEventListener('hashchange', sync)
       window.removeEventListener('popstate', sync)
+      window.removeEventListener(APP_ROUTE_SYNC_EVENT, sync)
     }
   }, [])
 

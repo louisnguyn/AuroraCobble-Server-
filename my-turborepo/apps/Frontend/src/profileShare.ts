@@ -94,8 +94,17 @@ export function clearProfilePath(): void {
   window.history.replaceState(null, '', '/')
 }
 
+/** Fired after programmatic history updates (pushState does not trigger popstate). */
+export const APP_ROUTE_SYNC_EVENT = 'aurora:route-sync'
+
+export function notifyAppRouteSync(): void {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new Event(APP_ROUTE_SYNC_EVENT))
+}
+
 export function navigateToPublicProfile(username: string): void {
   setProfilePath(username, 'push')
+  notifyAppRouteSync()
 }
 
 /** @deprecated Use parseProfileSlugFromLocation */
