@@ -28,8 +28,8 @@ export function parseRewardForGivePokemon(
 }
 
 /**
- * Cobblemon expects Galarian regional forms as two tokens: `meowth galarian`, not `meowthgalar` / `meowthgalarian`.
- * Reward text like "shiny meowth galar" collapses to meowthgalar — normalize before RCON.
+ * Cobblemon expects Galarian regional forms as two tokens: `moltres galarian`, not `moltresgalar`.
+ * Reward text like "shiny meowth galar" or "Galarian Moltres" — normalize before RCON.
  */
 export function normalizeSpeciesForCobblemon(species: string): string {
   const s = species.trim().toLowerCase();
@@ -39,6 +39,11 @@ export function normalizeSpeciesForCobblemon(species: string): string {
   };
   if (/\s/.test(s) && /\bgalarian\b$/i.test(s)) {
     return s.replace(/_/g, " ").replace(/\s+/g, " ").trim();
+  }
+  if (s.startsWith("galarian")) {
+    const base = s.slice("galarian".length);
+    if (base.length >= 2) return withSpaceBeforeRegional(base);
+    return s;
   }
   if (s.endsWith("galarian")) {
     const base = s.slice(0, -"galarian".length);
