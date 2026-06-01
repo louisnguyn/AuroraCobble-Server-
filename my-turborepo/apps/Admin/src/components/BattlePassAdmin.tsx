@@ -29,6 +29,11 @@ function formatTs(iso: string): string {
   }
 }
 
+/** Current in-game name: linked website username wins over stale grant snapshot. */
+function grantIgn(g: BattlePassGrantListItem): string {
+  return (g.website_username ?? g.minecraft_username).trim()
+}
+
 export function BattlePassAdmin() {
   const [tab, setTab] = useState<Tab>('premium')
   const [busy, setBusy] = useState<Busy>(null)
@@ -45,6 +50,9 @@ export function BattlePassAdmin() {
   const [grants, setGrants] = useState<BattlePassGrantListItem[]>([])
   const [grantsLoading, setGrantsLoading] = useState(false)
   const [grantsError, setGrantsError] = useState<string | null>(null)
+  const [revokingId, setRevokingId] = useState<number | null>(null)
+  const [revokeAllOpen, setRevokeAllOpen] = useState(false)
+  const [revokeAllBusy, setRevokeAllBusy] = useState(false)
   const pickWrapRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -152,6 +160,98 @@ export function BattlePassAdmin() {
       setBusy(null)
     }
   }
+
+  const revokeGrant = async (g: BattlePassGrantListItem) => {
+    setMsg(null)
+    setLast(null)
+    setRevokingId(g.id)
+    const ign = grantIgn(g)
+    try {
+      const body = {
+        minecraft_username: ign,
+        grant: false as const,
+        ...(g.website_user_id != null ? { user_id: g.website_user_id } : {}),
+      }
+      const res =
+        tab === 'premium' ? await adminBattlePassPremium(body) : await adminBattlePassParty(body)
+      setLast({
+        command: res.command ?? '',
+        output: res.output,
+        error: res.error,
+      })
+      if (res.ok) {
+        if (res.dbPersisted === false) {
+          setMsg(
+            'Server updated, but the grants list could not be updated — run the battle pass SQL migration.'
+          )
+        } else {
+          setMsg(
+            tab === 'premium'
+              ? `Premium revoked for ${ign}.`
+              : `Party permission revoked for ${ign}.`
+          )
+        }
+        void loadGrants()
+      } else {
+        setMsg(res.error ?? 'Could not update the server.')
+      }
+    } catch (e: unknown) {
+      setMsg((e as Error)?.message ?? 'Request failed')
+    } finally {
+      setRevokingId(null)
+    }
+  }
+
+  const revokeAllGrants = async () => {
+    if (grants.length === 0) return
+    setMsg(null)
+    setLast(null)
+    setRevokeAllBusy(true)
+    const label = tab === 'premium' ? 'premium' : 'party'
+    const failed: string[] = []
+    let okCount = 0
+    try {
+      for (const g of grants) {
+        const ign = grantIgn(g)
+        try {
+          const body = {
+            minecraft_username: ign,
+            grant: false as const,
+            ...(g.website_user_id != null ? { user_id: g.website_user_id } : {}),
+          }
+          const res =
+            tab === 'premium' ? await adminBattlePassPremium(body) : await adminBattlePassParty(body)
+          if (res.ok) {
+            okCount++
+            setLast({
+              command: res.command ?? '',
+              output: res.output,
+              error: res.error,
+            })
+          } else {
+            failed.push(`${ign}: ${res.error ?? 'Server rejected revoke'}`)
+          }
+        } catch (e: unknown) {
+          failed.push(`${ign}: ${(e as Error)?.message ?? 'Request failed'}`)
+        }
+      }
+      setRevokeAllOpen(false)
+      if (failed.length === 0) {
+        setMsg(`Revoked all ${okCount} active ${label} grant${okCount === 1 ? '' : 's'}.`)
+      } else if (okCount === 0) {
+        setMsg(`Failed to revoke any grants. ${failed[0] ?? 'Unknown error'}`)
+      } else {
+        setMsg(
+          `Revoked ${okCount} of ${grants.length} ${label} grant${grants.length === 1 ? '' : 's'}. Failed: ${failed.join('; ')}`
+        )
+      }
+      void loadGrants()
+    } finally {
+      setRevokeAllBusy(false)
+    }
+  }
+
+  const actionsDisabled = busy !== null || revokingId !== null || revokeAllBusy
 
   const tabBtn = (id: Tab, label: string) => (
     <button
@@ -265,10 +365,10 @@ export function BattlePassAdmin() {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <button type="button" className={btnGrant} disabled={busy !== null} onClick={() => run(true)}>
+          <button type="button" className={btnGrant} disabled={actionsDisabled} onClick={() => run(true)}>
             {busy === 'grant' ? 'Running…' : tab === 'premium' ? 'Grant premium' : 'Grant party permission'}
           </button>
-          <button type="button" className={btnRevoke} disabled={busy !== null} onClick={() => run(false)}>
+          <button type="button" className={btnRevoke} disabled={actionsDisabled} onClick={() => run(false)}>
             {busy === 'revoke' ? 'Running…' : tab === 'premium' ? 'Revoke premium' : 'Revoke party permission'}
           </button>
         </div>
@@ -311,14 +411,30 @@ export function BattlePassAdmin() {
           <h2 className="text-lg font-semibold text-[#f5efe6] m-0">
             Active grants ({tab === 'premium' ? 'premium' : 'party'})
           </h2>
-          <button
-            type="button"
-            className="text-xs font-semibold text-slate-400 hover:text-slate-200 border border-white/10 rounded-lg px-2 py-1"
-            onClick={() => void loadGrants()}
-            disabled={grantsLoading}
-          >
-            {grantsLoading ? 'Loading…' : 'Refresh'}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {grants.length > 0 ? (
+              <button
+                type="button"
+                className="text-xs font-semibold text-rose-200 hover:text-rose-100 border border-rose-500/40 rounded-lg px-2 py-1 bg-rose-600/15 disabled:opacity-45"
+                onClick={() => setRevokeAllOpen(true)}
+                disabled={actionsDisabled || grantsLoading}
+              >
+                {revokeAllBusy
+                  ? 'Revoking all…'
+                  : tab === 'premium'
+                    ? 'Revoke all premium'
+                    : 'Revoke all party'}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="text-xs font-semibold text-slate-400 hover:text-slate-200 border border-white/10 rounded-lg px-2 py-1"
+              onClick={() => void loadGrants()}
+              disabled={grantsLoading || revokeAllBusy}
+            >
+              {grantsLoading ? 'Loading…' : 'Refresh'}
+            </button>
+          </div>
         </div>
         {grantsError ? <p className="text-sm text-rose-300 m-0">{grantsError}</p> : null}
         {!grantsLoading && !grantsError && grants.length === 0 ? (
@@ -333,12 +449,13 @@ export function BattlePassAdmin() {
                   <th className="px-3 py-2 font-semibold">Website user</th>
                   <th className="px-3 py-2 font-semibold">Granted</th>
                   <th className="px-3 py-2 font-semibold">By</th>
+                  <th className="px-3 py-2 font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {grants.map((g) => (
                   <tr key={g.id} className="border-t border-white/10 hover:bg-white/[0.03]">
-                    <td className="px-3 py-2 font-mono text-slate-200">{g.minecraft_username}</td>
+                    <td className="px-3 py-2 font-mono text-slate-200">{grantIgn(g)}</td>
                     <td className="px-3 py-2 text-slate-300">
                       {g.website_username ?? '—'}
                       {g.website_email ? (
@@ -347,6 +464,20 @@ export function BattlePassAdmin() {
                     </td>
                     <td className="px-3 py-2 text-slate-400 whitespace-nowrap">{formatTs(g.granted_at)}</td>
                     <td className="px-3 py-2 text-slate-400">{g.granted_by_username ?? '—'}</td>
+                    <td className="px-3 py-2">
+                      <button
+                        type="button"
+                        className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-rose-600/25 border border-rose-500/40 text-rose-100 hover:bg-rose-600/35 disabled:opacity-45"
+                        disabled={actionsDisabled}
+                        onClick={() => void revokeGrant(g)}
+                      >
+                        {revokingId === g.id
+                          ? 'Revoking…'
+                          : tab === 'premium'
+                            ? 'Revoke premium'
+                            : 'Revoke party'}
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -354,6 +485,50 @@ export function BattlePassAdmin() {
           </div>
         ) : null}
       </div>
+
+      {revokeAllOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="revoke-all-title"
+          onClick={() => {
+            if (!revokeAllBusy) setRevokeAllOpen(false)
+          }}
+        >
+          <div
+            className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#12131a] shadow-2xl p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="revoke-all-title" className="text-lg font-semibold text-white m-0">
+              {tab === 'premium' ? 'Revoke all premium grants?' : 'Revoke all party permissions?'}
+            </h3>
+            <p className="text-sm text-slate-400 m-0 leading-relaxed">
+              This will revoke {tab === 'premium' ? 'premium battle pass access' : 'party creation permission'} for all{' '}
+              {grants.length} player{grants.length === 1 ? '' : 's'} in the active list. Each revoke runs a separate
+              Minecraft server command.
+            </p>
+            <div className="flex flex-wrap justify-end gap-2 pt-1">
+              <button
+                type="button"
+                disabled={revokeAllBusy}
+                onClick={() => setRevokeAllOpen(false)}
+                className="px-4 py-2 rounded-xl text-sm border border-white/15 text-slate-300 hover:bg-white/10 disabled:opacity-45 disabled:pointer-events-none"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={revokeAllBusy}
+                onClick={() => void revokeAllGrants()}
+                className="px-4 py-2 rounded-xl text-sm font-medium bg-rose-600/35 border border-rose-400/45 text-rose-100 hover:bg-rose-600/50 disabled:opacity-45 disabled:pointer-events-none"
+              >
+                {revokeAllBusy ? 'Revoking…' : 'Revoke all'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

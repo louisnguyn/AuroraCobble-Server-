@@ -58,6 +58,43 @@ export type BattlePassGrantListItem = {
   granted_by_username: string | null;
 };
 
+/** Keep stored IGN in sync when the linked website account was renamed (website username = Minecraft IGN). */
+async function syncStaleBattlePassGrantUsernames(grants: BattlePassGrantListItem[]): Promise<void> {
+  if (!supabase) return;
+  const now = new Date().toISOString();
+  for (const g of grants) {
+    if (!g.website_user_id || !g.website_username) continue;
+    if (g.website_username.toLowerCase() === g.minecraft_username.toLowerCase()) continue;
+    const { error } = await supabase
+      .from("battlepass_lp_grants")
+      .update({ minecraft_username: g.website_username, updated_at: now })
+      .eq("id", g.id);
+    if (!error) {
+      g.minecraft_username = g.website_username;
+    } else {
+      console.warn(`[battlepass] sync grant ${g.id} username:`, error.message);
+    }
+  }
+}
+
+export async function syncBattlePassGrantsForWebsiteUser(
+  websiteUserId: number,
+  newUsername: string
+): Promise<void> {
+  if (!supabase) return;
+  const name = newUsername.trim();
+  if (!name) return;
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from("battlepass_lp_grants")
+    .update({ minecraft_username: name, updated_at: now })
+    .eq("website_user_id", websiteUserId)
+    .eq("active", true);
+  if (error) {
+    console.warn(`[battlepass] sync user ${websiteUserId} grant usernames:`, error.message);
+  }
+}
+
 export async function listActiveBattlePassGrants(
   kind: BattlePassLpKind
 ): Promise<{ ok: true; grants: BattlePassGrantListItem[] } | { ok: false; error: string }> {
@@ -104,17 +141,16 @@ export async function listActiveBattlePassGrants(
     const row = u as { id: number; username: string; email: string };
     byId.set(row.id, { username: row.username, email: row.email });
   }
-  return {
-    ok: true,
-    grants: base.map((r) => {
-      const w = r.website_user_id != null ? byId.get(r.website_user_id) : undefined;
-      const g = r.granted_by_user_id != null ? byId.get(r.granted_by_user_id) : undefined;
-      return {
-        ...r,
-        website_username: w?.username ?? null,
-        website_email: w?.email ?? null,
-        granted_by_username: g?.username ?? null,
-      };
-    }),
-  };
+  const grants = base.map((r) => {
+    const w = r.website_user_id != null ? byId.get(r.website_user_id) : undefined;
+    const g = r.granted_by_user_id != null ? byId.get(r.granted_by_user_id) : undefined;
+    return {
+      ...r,
+      website_username: w?.username ?? null,
+      website_email: w?.email ?? null,
+      granted_by_username: g?.username ?? null,
+    };
+  });
+  await syncStaleBattlePassGrantUsernames(grants);
+  return { ok: true, grants };
 }

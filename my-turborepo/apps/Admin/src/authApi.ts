@@ -634,6 +634,14 @@ export async function fetchAdminCobbleRankedFeed(params?: { limit?: number }): P
   return fetchJson(`/admin/cobble-ranked/feed${q ? `?${q}` : ''}`)
 }
 
+export async function deleteAllAdminCobbleRankedFeed(): Promise<{
+  ok: boolean
+  matchCount: number
+  replayCount: number
+}> {
+  return fetchJson(`/admin/cobble-ranked/feed`, { method: 'DELETE' })
+}
+
 export async function setAdminCobbleRankedReview(body: {
   item_key: string
   feed_kind: 'match_result' | 'battle_replay'
@@ -683,7 +691,7 @@ export type RankedBattleStaffEvent = {
   created_at: string
   staff_user_id: number
   staff_username: string | null
-  event_kind: 'elo_add' | 'elo_remove' | 'feed_review'
+  event_kind: 'elo_add' | 'elo_remove' | 'feed_review' | 'feed_clear'
   minecraft_username: string | null
   elo_amount: number | null
   elo_format: string | null

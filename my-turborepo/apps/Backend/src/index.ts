@@ -74,6 +74,7 @@ import {
 import {
   COBBLE_RANKED_SNAPSHOT_LEADERBOARD,
   COBBLE_RANKED_SNAPSHOT_USAGE,
+  clearCobbleRankedFeed,
   hydrateCobbleRankedStore,
   persistCobbleBattleReplay,
   persistCobbleMatchResult,
@@ -98,6 +99,7 @@ import { runBattlePassLuckpermsCommand } from "./minecraftBattlePassLp.js";
 import {
   listActiveBattlePassGrants,
   persistBattlePassGrantMirror,
+  syncBattlePassGrantsForWebsiteUser,
 } from "./battlepassLpGrantsDb.js";
 import {
   insertRankedBattleStaffEvent,
@@ -5296,6 +5298,22 @@ app.get("/admin/cobble-ranked/feed", requireAuth, requireAdmin, async (req, res)
   res.json({ matches, replays, reviewedKeys });
 });
 
+app.delete("/admin/cobble-ranked/feed", requireAuth, requireAdmin, async (req, res) => {
+  const staff = res.locals.user!;
+  try {
+    const { matchCount, replayCount } = await clearCobbleRankedFeed(cobbleStore as CobbleRankedMemoryStore);
+    void insertRankedBattleStaffEvent({
+      staffUserId: staff.userId,
+      eventKind: "feed_clear",
+      staffReason: `Cleared ${matchCount} match result(s) and ${replayCount} battle replay(s) from the feed.`,
+    });
+    res.json({ ok: true, matchCount, replayCount });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.status(500).json({ error: msg });
+  }
+});
+
 app.get("/admin/ranked-battle/staff-history", requireAuth, requireAdmin, async (req, res) => {
   const raw = typeof req.query.limit === "string" ? Number.parseInt(req.query.limit, 10) : 100;
   const limit = Number.isFinite(raw) && raw > 0 ? raw : 100;
@@ -5804,6 +5822,9 @@ app.patch("/admin/users/:userId", requireAuth, requireAdmin, async (req, res) =>
   if (updErr) {
     res.status(500).json({ error: updErr.message });
     return;
+  }
+  if (hasUsername && typeof patch.username === "string" && patch.username !== row.username) {
+    void syncBattlePassGrantsForWebsiteUser(userId, patch.username);
   }
   res.json({ user: updated });
 });

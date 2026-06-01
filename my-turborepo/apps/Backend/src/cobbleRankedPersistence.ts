@@ -85,3 +85,23 @@ export async function persistCobbleMatchResult(payload: unknown, feedMax: number
   });
   if (trimErr) throw trimErr;
 }
+
+/** Remove all match results and battle replays from memory and database. */
+export async function clearCobbleRankedFeed(
+  target: CobbleRankedMemoryStore
+): Promise<{ matchCount: number; replayCount: number }> {
+  const matchCount = target.matchResults.length;
+  const replayCount = target.battleReplays.length;
+  target.matchResults = [];
+  target.battleReplays = [];
+  if (!supabase) return { matchCount, replayCount };
+
+  const { error: mrErr } = await supabase.from("cobble_ranked_match_results").delete().gte("id", 0);
+  if (mrErr) throw mrErr;
+  const { error: brErr } = await supabase.from("cobble_ranked_battle_replays").delete().gte("id", 0);
+  if (brErr) throw brErr;
+  const { error: revErr } = await supabase.from("cobble_ranked_feed_reviews").delete().neq("item_key", "");
+  if (revErr) throw revErr;
+
+  return { matchCount, replayCount };
+}

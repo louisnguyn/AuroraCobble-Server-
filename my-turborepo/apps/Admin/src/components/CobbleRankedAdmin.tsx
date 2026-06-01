@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   adminMinecraftRankedadminElo,
+  deleteAllAdminCobbleRankedFeed,
   fetchAdminCobbleRankedFeed,
   fetchAdminUsers,
   fetchRankedBattleStaffHistory,
@@ -82,6 +83,12 @@ function truncateKey(key: string, max = 48): string {
 }
 
 function staffEventSummary(ev: RankedBattleStaffEvent): { action: string; details: string } {
+  if (ev.event_kind === 'feed_clear') {
+    return {
+      action: 'Cleared match feed',
+      details: ev.staff_reason?.trim() || 'Removed all match results and battle replays.',
+    }
+  }
   if (ev.event_kind === 'feed_review') {
     const kindLabel =
       ev.review_feed_kind === 'battle_replay'
@@ -124,6 +131,8 @@ export function CobbleRankedAdmin() {
   const [refundBusyKey, setRefundBusyKey] = useState<string | null>(null)
   const [refundFlash, setRefundFlash] = useState<{ rowKey: string; ok: boolean; text: string } | null>(null)
   const [refundConfirm, setRefundConfirm] = useState<RefundConfirmState | null>(null)
+  const [deleteFeedOpen, setDeleteFeedOpen] = useState(false)
+  const [deleteFeedBusy, setDeleteFeedBusy] = useState(false)
 
   const [eloAmount, setEloAmount] = useState('30')
   const [pickQuery, setPickQuery] = useState('')
@@ -397,6 +406,24 @@ export function CobbleRankedAdmin() {
 
   const refundModalWorking = refundConfirm != null && refundBusyKey === refundConfirm.rowKey
 
+  const confirmDeleteAllFeed = async () => {
+    setDeleteFeedBusy(true)
+    setError(null)
+    try {
+      await deleteAllAdminCobbleRankedFeed()
+      setMatches([])
+      setReplays([])
+      setReviewedKeys(new Set())
+      setExpandedReplayKey(null)
+      setDeleteFeedOpen(false)
+      if (tab === 'staff') void loadStaff()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to delete match feed')
+    } finally {
+      setDeleteFeedBusy(false)
+    }
+  }
+
   return (
     <div className="space-y-8">
       <div>
@@ -560,15 +587,27 @@ export function CobbleRankedAdmin() {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             {tab === 'feed' ? (
-              <label className="inline-flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={attentionOnly}
-                  onChange={(e) => setAttentionOnly(e.target.checked)}
-                  className="rounded border-white/20"
-                />
-                Need attention only
-              </label>
+              <>
+                <label className="inline-flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={attentionOnly}
+                    onChange={(e) => setAttentionOnly(e.target.checked)}
+                    className="rounded border-white/20"
+                  />
+                  Need attention only
+                </label>
+                {feedRows.length > 0 ? (
+                  <button
+                    type="button"
+                    disabled={loading || deleteFeedBusy}
+                    onClick={() => setDeleteFeedOpen(true)}
+                    className="py-2 px-4 rounded-xl text-sm font-medium border border-rose-500/40 text-rose-200 bg-rose-600/15 hover:bg-rose-600/25 disabled:opacity-50"
+                  >
+                    Delete all match feed
+                  </button>
+                ) : null}
+              </>
             ) : null}
             <button
               type="button"
@@ -837,6 +876,51 @@ export function CobbleRankedAdmin() {
                 className="px-4 py-2 rounded-xl text-sm font-medium bg-violet-600/35 border border-violet-400/45 text-violet-100 hover:bg-violet-600/50 disabled:opacity-45 disabled:pointer-events-none"
               >
                 {refundModalWorking ? 'Applying…' : 'Confirm refund'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {deleteFeedOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-feed-title"
+          onClick={() => {
+            if (!deleteFeedBusy) setDeleteFeedOpen(false)
+          }}
+        >
+          <div
+            className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#12131a] shadow-2xl p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="delete-feed-title" className="text-lg font-semibold text-white m-0">
+              Delete all match feed?
+            </h3>
+            <p className="text-sm text-slate-400 m-0 leading-relaxed">
+              This permanently removes all {feedRows.length} feed row{feedRows.length === 1 ? '' : 's'} ({matches.length}{' '}
+              match result{matches.length === 1 ? '' : 's'}, {replays.length} replay{replays.length === 1 ? '' : 's'}) from
+              the admin feed and database. Review flags are cleared too. This does not change player ELO on the server.
+              New matches will still sync in from the game.
+            </p>
+            <div className="flex flex-wrap justify-end gap-2 pt-1">
+              <button
+                type="button"
+                disabled={deleteFeedBusy}
+                onClick={() => setDeleteFeedOpen(false)}
+                className="px-4 py-2 rounded-xl text-sm border border-white/15 text-slate-300 hover:bg-white/10 disabled:opacity-45 disabled:pointer-events-none"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteFeedBusy}
+                onClick={() => void confirmDeleteAllFeed()}
+                className="px-4 py-2 rounded-xl text-sm font-medium bg-rose-600/35 border border-rose-400/45 text-rose-100 hover:bg-rose-600/50 disabled:opacity-45 disabled:pointer-events-none"
+              >
+                {deleteFeedBusy ? 'Deleting…' : 'Delete all'}
               </button>
             </div>
           </div>

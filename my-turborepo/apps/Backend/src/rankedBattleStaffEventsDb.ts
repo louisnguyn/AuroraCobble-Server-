@@ -1,6 +1,6 @@
 import { supabase } from "./supabase.js";
 
-export type RankedBattleStaffEventKind = "elo_add" | "elo_remove" | "feed_review";
+export type RankedBattleStaffEventKind = "elo_add" | "elo_remove" | "feed_review" | "feed_clear";
 
 export type RankedBattleStaffEventListItem = {
   id: number;
