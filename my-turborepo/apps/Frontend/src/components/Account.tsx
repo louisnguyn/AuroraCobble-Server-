@@ -27,6 +27,7 @@ import {
   type PokemonShopOffer,
   type PokemonShopPurchase,
   type UserPvpRank,
+  type BattlePassShopItem,
   type ShopItem,
 } from '../authApi'
 import { AuthModal } from './AuthModal'
@@ -123,10 +124,13 @@ export function Account() {
   const [dailyResetCountdown, setDailyResetCountdown] = useState('-')
   const [inventory, setInventory] = useState<{ item_key: string; quantity: number }[]>([])
   const [shopItems, setShopItems] = useState<ShopItem[]>([])
+  const [battlePassShopItems, setBattlePassShopItems] = useState<BattlePassShopItem[]>([])
   const [shopDiscountPercent, setShopDiscountPercent] = useState(0)
   const [shopBusyItem, setShopBusyItem] = useState<string | null>(null)
   const [shopError, setShopError] = useState<string | null>(null)
   const [shopSuccess, setShopSuccess] = useState<string | null>(null)
+  const [battlePassShopError, setBattlePassShopError] = useState<string | null>(null)
+  const [battlePassShopSuccess, setBattlePassShopSuccess] = useState<string | null>(null)
   const [cobbleBalance, setCobbleBalance] = useState(0)
   const [claimBusyItem, setClaimBusyItem] = useState<string | null>(null)
   const [claimError, setClaimError] = useState<string | null>(null)
@@ -252,6 +256,7 @@ export function Account() {
         setDaily(d)
         setInventory(inv.inventory ?? [])
         setShopItems(shop.items ?? [])
+        setBattlePassShopItems(shop.battlePassItems ?? [])
         setShopDiscountPercent(shop.shopDiscountPercent ?? pOffers.shopDiscountPercent ?? 0)
         setCobbleBalance(
           currencies.currencies.find((c) => c.currency_type === 'cobbledollars')?.balance ?? 0
@@ -469,6 +474,28 @@ export function Account() {
     }
   }
 
+  const handleBuyBattlePass = async (item: BattlePassShopItem) => {
+    if (!canUseWebsiteShop) {
+      setBattlePassShopError('Account verification required to buy from the shop.')
+      return
+    }
+    if (item.owned) return
+    setBattlePassShopError(null)
+    setBattlePassShopSuccess(null)
+    setShopBusyItem(item.itemKey)
+    try {
+      const res = await buyShopItem(item.itemKey, 1)
+      setBattlePassShopSuccess(`Purchased ${item.label}. Access is active on the server.`)
+      setCobbleBalance(res.newBalance)
+      const shopUp = await fetchShopItems()
+      setBattlePassShopItems(shopUp.battlePassItems ?? [])
+    } catch (err) {
+      setBattlePassShopError(err instanceof Error ? err.message : 'Purchase failed')
+    } finally {
+      setShopBusyItem(null)
+    }
+  }
+
   const handleBuyItem = async (item: ShopItem) => {
     if (!canUseWebsiteShop) {
       setShopError('Account verification required to buy from the shop.')
@@ -575,6 +602,7 @@ export function Account() {
         fetchRoleRequestStatus().catch(() => null),
       ])
       setShopItems(shopUp.items ?? [])
+      setBattlePassShopItems(shopUp.battlePassItems ?? [])
       setShopDiscountPercent(shopUp.shopDiscountPercent ?? pOffersUp.shopDiscountPercent ?? 0)
       setPokemonOffers(pOffersUp.offers ?? [])
       setPokemonWindowEnd(pOffersUp.windowEnd ?? null)
@@ -894,7 +922,7 @@ export function Account() {
             >
               <p className="m-0 font-medium">Shop available after account verification</p>
               <p className="m-0 mt-1 text-xs text-amber-100/90">
-                If not verified, you cannot buy on the website (Shop / Pokemon Shop). Submit a verification request in the
+                If not verified, you cannot buy on the website (Shop, Battle pass, Pokemon Shop). Submit a verification request in the
                 Account tab.
               </p>
             </div>
@@ -903,7 +931,7 @@ export function Account() {
           <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-3">Shop</h2>
           {shopDiscountPercent > 0 ? (
             <p className="text-sm text-emerald-300/95 m-0 mb-3">
-              Rank discount: -{shopDiscountPercent}% on Cobble$ (item shop + Pokemon shop).
+              Rank discount: -{shopDiscountPercent}% on Cobble$ (item shop, battle pass, and Pokemon shop).
             </p>
           ) : null}
           <div className="mb-6 pixel-well p-4">
@@ -938,6 +966,58 @@ export function Account() {
             </div>
             {shopSuccess && <p className="text-sm text-emerald-300 mt-3 mb-0">{shopSuccess}</p>}
             {shopError && <p className="text-sm text-error mt-3 mb-0">{shopError}</p>}
+          </div>
+
+          <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-3">Battle pass</h2>
+          <div className="mb-6 pixel-well p-4">
+            <p className="text-sm text-muted m-0 mb-3">
+              One-time purchase per account. Permissions apply on the Minecraft server using your website username as
+              your in-game name. Staff can see and revoke active grants in the admin panel.
+            </p>
+            <div className="space-y-2">
+              {battlePassShopItems.map((item) => (
+                <div
+                  key={item.itemKey}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border/70 px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm text-[#e2e8f0] m-0">{item.label}</p>
+                    <p className="text-xs text-muted m-0">
+                      {item.owned ? (
+                        <span className="text-emerald-300/95">Already active on your account</span>
+                      ) : item.discountedCost < item.cost ? (
+                        <>
+                          <span className="line-through opacity-70">{item.cost.toLocaleString()}</span>{' '}
+                          <span className="text-[#fbbf24] tabular-nums">{item.discountedCost.toLocaleString()} Cobble$</span>
+                        </>
+                      ) : (
+                        <>Cost: {item.cost.toLocaleString()} Cobble$</>
+                      )}
+                    </p>
+                  </div>
+                  {item.owned ? (
+                    <span className="shrink-0 text-xs font-semibold text-emerald-300/90 px-2 py-1 rounded border border-emerald-500/35 bg-emerald-950/30">
+                      Owned
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void handleBuyBattlePass(item)}
+                      disabled={
+                        !canUseWebsiteShop || shopBusyItem === item.itemKey || cobbleBalance < item.discountedCost
+                      }
+                      className="shrink-0 py-2 px-3 pixel-btn-primary disabled:opacity-50 text-base"
+                    >
+                      {shopBusyItem === item.itemKey ? 'Buying...' : 'Buy'}
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            {battlePassShopSuccess && (
+              <p className="text-sm text-emerald-300 mt-3 mb-0">{battlePassShopSuccess}</p>
+            )}
+            {battlePassShopError && <p className="text-sm text-error mt-3 mb-0">{battlePassShopError}</p>}
           </div>
 
           <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-3">Pokemon Shop</h2>

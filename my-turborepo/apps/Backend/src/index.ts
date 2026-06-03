@@ -97,9 +97,11 @@ import { fetchReviewedKeySet, upsertFeedReview, upsertFeedReviewBundle } from ".
 import { runRankedAdminEloRcon, type RankedFormatArg } from "./minecraftRankedAdminElo.js";
 import { runBattlePassLuckpermsCommand } from "./minecraftBattlePassLp.js";
 import {
+  getBattlePassOwnershipForUser,
   listActiveBattlePassGrants,
   persistBattlePassGrantMirror,
   syncBattlePassGrantsForWebsiteUser,
+  userHasActiveBattlePassGrantForUser,
 } from "./battlepassLpGrantsDb.js";
 import {
   insertRankedBattleStaffEvent,
@@ -3156,6 +3158,25 @@ const SHOP_ITEMS = [
   { itemKey: "gold_bottle_cap", label: "Gold Bottle Cap", cost: 11_000_000 },
 ] as const;
 
+const BATTLEPASS_SHOP_ITEMS = [
+  {
+    itemKey: "battlepass_party",
+    label: "Battle Pass — Party creation",
+    cost: 550_000,
+    battlePassKind: "party" as const,
+  },
+  {
+    itemKey: "battlepass_premium",
+    label: "Battle Pass — Premium",
+    cost: 2_200_000,
+    battlePassKind: "premium" as const,
+  },
+] as const;
+
+function battlePassShopItemByKey(itemKey: string) {
+  return BATTLEPASS_SHOP_ITEMS.find((x) => x.itemKey === itemKey);
+}
+
 /** Cobble$ after integer percent-off (rank shop discount). */
 function applyCobbleShopDiscount(baseCobble: number, discountPercent: number): number {
   const b = Math.floor(Number(baseCobble));
@@ -4041,6 +4062,7 @@ app.get("/shop/items", requireAuth, async (_req, res) => {
   const user = res.locals.user!;
   const role = await getUserMinecraftRoleForShop(user.userId);
   const shopDiscountPercent = getWebsiteShopDiscountPercent(role);
+  const owned = await getBattlePassOwnershipForUser(user.userId);
   res.json({
     currency: COBBLEDOLLARS_CURRENCY,
     shopDiscountPercent,
@@ -4049,6 +4071,14 @@ app.get("/shop/items", requireAuth, async (_req, res) => {
       label: item.label,
       cost: item.cost,
       discountedCost: applyCobbleShopDiscount(item.cost, shopDiscountPercent),
+    })),
+    battlePassItems: BATTLEPASS_SHOP_ITEMS.map((item) => ({
+      itemKey: item.itemKey,
+      label: item.label,
+      cost: item.cost,
+      discountedCost: applyCobbleShopDiscount(item.cost, shopDiscountPercent),
+      battlePassKind: item.battlePassKind,
+      owned: item.battlePassKind === "premium" ? owned.premium : owned.party,
     })),
   });
 });
@@ -4069,6 +4099,114 @@ app.post("/shop/buy", requireAuth, async (req, res) => {
   const itemKey = typeof req.body?.itemKey === "string" ? req.body.itemKey.trim() : "";
   const qtyRaw = req.body?.quantity;
   const quantity = Number.isFinite(Number(qtyRaw)) ? Math.floor(Number(qtyRaw)) : 1;
+
+  const bpItem = battlePassShopItemByKey(itemKey);
+  if (bpItem) {
+    if (quantity !== 1) {
+      res.status(400).json({ error: "Battle pass purchases are one per account" });
+      return;
+    }
+    const ign = user.username.trim();
+    if (!isLikelyMinecraftUsername(ign)) {
+      res.status(400).json({
+        error:
+          "Your website username must match your Minecraft name (2–16 letters, numbers, underscore) to buy battle pass access.",
+      });
+      return;
+    }
+    if (await userHasActiveBattlePassGrantForUser(user.userId, bpItem.battlePassKind)) {
+      res.status(400).json({
+        code: "battlepass_already_owned",
+        error:
+          bpItem.battlePassKind === "premium"
+            ? "You already have premium battle pass access."
+            : "You already have party creation access.",
+      });
+      return;
+    }
+    const role = await getUserMinecraftRoleForShop(user.userId);
+    const shopDiscountPercent = getWebsiteShopDiscountPercent(role);
+    const totalCost = applyCobbleShopDiscount(bpItem.cost, shopDiscountPercent);
+
+    const wallet = await ensureUserCobbledollarsRow(user.userId);
+    if (!wallet) {
+      res.status(500).json({ error: "Could not open Cobble$ wallet" });
+      return;
+    }
+    if (wallet.balance < totalCost) {
+      res.status(400).json({
+        error: "Not enough Cobble$",
+        balance: wallet.balance,
+        required: totalCost,
+      });
+      return;
+    }
+
+    const exec = await runBattlePassLuckpermsCommand(bpItem.battlePassKind, ign, true);
+    if (!exec.ok) {
+      res.status(exec.command ? 502 : 400).json({ error: exec.error, command: exec.command || undefined });
+      return;
+    }
+
+    const newBalance = wallet.balance - totalCost;
+    const now = new Date().toISOString();
+    const { data: updated, error: updErr } = await supabase
+      .from("user_currency")
+      .update({ balance: newBalance, updated_at: now })
+      .eq("id", wallet.id)
+      .eq("balance", wallet.balance)
+      .select("balance");
+    if (updErr) {
+      await runBattlePassLuckpermsCommand(bpItem.battlePassKind, ign, false);
+      res.status(500).json({ error: updErr.message });
+      return;
+    }
+    if (!updated?.length) {
+      await runBattlePassLuckpermsCommand(bpItem.battlePassKind, ign, false);
+      res.status(409).json({ error: "Balance changed — try again" });
+      return;
+    }
+
+    const mirror = await persistBattlePassGrantMirror({
+      kind: bpItem.battlePassKind,
+      minecraftUsername: ign,
+      grant: true,
+      websiteUserId: user.userId,
+      grantedByUserId: user.userId,
+    });
+    if (!mirror.ok) {
+      await supabase
+        .from("user_currency")
+        .update({ balance: wallet.balance, updated_at: new Date().toISOString() })
+        .eq("id", wallet.id);
+      await runBattlePassLuckpermsCommand(bpItem.battlePassKind, ign, false);
+      res.status(500).json({
+        error:
+          "Server permission was applied but the grant could not be saved. Your Cobble$ was refunded. Contact staff if this persists.",
+        dbPersisted: false,
+      });
+      return;
+    }
+
+    const ledgerDetail =
+      shopDiscountPercent > 0
+        ? `${bpItem.label} (−${shopDiscountPercent}% rank)`
+        : bpItem.label;
+    await recordCobbledollarLedger(user.userId, -totalCost, newBalance, "shop", ledgerDetail);
+
+    res.json({
+      ok: true,
+      itemKey: bpItem.itemKey,
+      battlePassKind: bpItem.battlePassKind,
+      quantityPurchased: 1,
+      totalCost,
+      shopDiscountPercent,
+      newBalance,
+      dbPersisted: true,
+    });
+    return;
+  }
+
   if (quantity < 1 || quantity > 999) {
     res.status(400).json({ error: "quantity must be between 1 and 999" });
     return;

@@ -77,6 +77,36 @@ async function syncStaleBattlePassGrantUsernames(grants: BattlePassGrantListItem
   }
 }
 
+export async function getBattlePassOwnershipForUser(
+  websiteUserId: number
+): Promise<{ premium: boolean; party: boolean }> {
+  const out = { premium: false, party: false };
+  if (!supabase) return out;
+  const { data, error } = await supabase
+    .from("battlepass_lp_grants")
+    .select("kind")
+    .eq("website_user_id", websiteUserId)
+    .eq("active", true);
+  if (error) {
+    console.warn(`[battlepass] ownership check user ${websiteUserId}:`, error.message);
+    return out;
+  }
+  for (const row of data ?? []) {
+    const k = (row as { kind?: string }).kind;
+    if (k === "premium") out.premium = true;
+    if (k === "party") out.party = true;
+  }
+  return out;
+}
+
+export async function userHasActiveBattlePassGrantForUser(
+  websiteUserId: number,
+  kind: BattlePassLpKind
+): Promise<boolean> {
+  const o = await getBattlePassOwnershipForUser(websiteUserId);
+  return kind === "premium" ? o.premium : o.party;
+}
+
 export async function syncBattlePassGrantsForWebsiteUser(
   websiteUserId: number,
   newUsername: string

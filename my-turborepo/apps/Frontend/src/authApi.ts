@@ -544,12 +544,23 @@ export interface ShopItem {
   discountedCost: number
 }
 
+export interface BattlePassShopItem extends ShopItem {
+  battlePassKind: 'premium' | 'party'
+  owned: boolean
+}
+
 export async function fetchShopItems(): Promise<{
   currency: string
   shopDiscountPercent: number
   items: ShopItem[]
+  battlePassItems: BattlePassShopItem[]
 }> {
-  return fetchApi<{ currency: string; shopDiscountPercent: number; items: ShopItem[] }>('/shop/items')
+  return fetchApi<{
+    currency: string
+    shopDiscountPercent: number
+    items: ShopItem[]
+    battlePassItems: BattlePassShopItem[]
+  }>('/shop/items')
 }
 
 export async function buyShopItem(itemKey: string, quantity = 1): Promise<{
@@ -559,7 +570,9 @@ export async function buyShopItem(itemKey: string, quantity = 1): Promise<{
   totalCost: number
   shopDiscountPercent: number
   newBalance: number
-  newInventoryQuantity: number
+  newInventoryQuantity?: number
+  battlePassKind?: 'premium' | 'party'
+  dbPersisted?: boolean
 }> {
   return fetchApi<{
     ok: boolean
@@ -568,7 +581,9 @@ export async function buyShopItem(itemKey: string, quantity = 1): Promise<{
     totalCost: number
     shopDiscountPercent: number
     newBalance: number
-    newInventoryQuantity: number
+    newInventoryQuantity?: number
+    battlePassKind?: 'premium' | 'party'
+    dbPersisted?: boolean
   }>('/shop/buy', {
     method: 'POST',
     body: JSON.stringify({ itemKey, quantity }),
