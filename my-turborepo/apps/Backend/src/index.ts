@@ -4775,14 +4775,14 @@ app.post("/user/daily-login/claim", requireAuth, async (_req, res) => {
   }
 });
 
-// Ticket exchange: spend tickets for special ticket types
+// Ticket exchange: spend tickets for special ticket types (50% off shiny variants only).
 const EXCHANGE_RATES: { to_currency: string; cost_tickets: number; label: string }[] = [
   { to_currency: "mythic tickets", cost_tickets: 20, label: "Mythic Tickets" },
-  { to_currency: "shiny mythic tickets", cost_tickets: 80, label: "Shiny Mythic Tickets" },
+  { to_currency: "shiny mythic tickets", cost_tickets: 40, label: "Shiny Mythic Tickets" },
   { to_currency: "legendary tickets", cost_tickets: 30, label: "Legend Tickets" },
   { to_currency: "paradox tickets", cost_tickets: 20, label: "Paradox Tickets" },
-  { to_currency: "shiny legendary tickets", cost_tickets: 90, label: "Shiny Legend Tickets" },
-  { to_currency: "shiny paradox tickets", cost_tickets: 80, label: "Shiny Paradox Tickets" },
+  { to_currency: "shiny legendary tickets", cost_tickets: 45, label: "Shiny Legend Tickets" },
+  { to_currency: "shiny paradox tickets", cost_tickets: 40, label: "Shiny Paradox Tickets" },
 ];
 
 app.get("/user/exchange-rates", requireAuth, (_req, res) => {
