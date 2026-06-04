@@ -4780,7 +4780,7 @@ const EXCHANGE_RATES: { to_currency: string; cost_tickets: number; label: string
   { to_currency: "mythic tickets", cost_tickets: 20, label: "Mythic Tickets" },
   { to_currency: "shiny mythic tickets", cost_tickets: 40, label: "Shiny Mythic Tickets" },
   { to_currency: "legendary tickets", cost_tickets: 30, label: "Legend Tickets" },
-  { to_currency: "paradox tickets", cost_tickets: 20, label: "Paradox Tickets" },
+  { to_currency: "paradox tickets", cost_tickets: 15, label: "Paradox Tickets" },
   { to_currency: "shiny legendary tickets", cost_tickets: 45, label: "Shiny Legend Tickets" },
   { to_currency: "shiny paradox tickets", cost_tickets: 40, label: "Shiny Paradox Tickets" },
 ];
