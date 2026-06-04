@@ -3162,7 +3162,7 @@ const BATTLEPASS_SHOP_ITEMS = [
   {
     itemKey: "battlepass_party",
     label: "Battle Pass — Party creation",
-    cost: 550_000,
+    cost: 750_000,
     battlePassKind: "party" as const,
   },
   {
