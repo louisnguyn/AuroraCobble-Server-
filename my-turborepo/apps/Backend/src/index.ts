@@ -286,11 +286,12 @@ console.log(
 
 function pvpTierFromElo(elo: number | null): string {
   const n = Number(elo ?? 0);
-  if (n >= 1350) return "netherite";
-  if (n >= 1250) return "diamond";
-  if (n >= 1175) return "emerald";
-  if (n >= 1100) return "gold";
-  if (n >= 1050) return "iron";
+  if (n >= 1600) return "netherite";
+  if (n >= 1400) return "diamond";
+  if (n >= 1300) return "emerald";
+  if (n >= 1200) return "gold";
+  if (n >= 1100) return "iron";
+  if (n >= 1000) return "copper";
   return "copper";
 }
 

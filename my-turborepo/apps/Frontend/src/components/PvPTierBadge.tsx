@@ -3,12 +3,12 @@ import { useCallback, useState } from 'react'
 type ImgExt = 'png' | 'webp'
 
 const RANK_TIERS_BY_ELO: { minElo: number; displayName: string; slug: string }[] = [
-  { minElo: 1350, displayName: 'Netherite', slug: 'netherite' },
-  { minElo: 1250, displayName: 'Diamond', slug: 'diamond' },
-  { minElo: 1175, displayName: 'Emerald', slug: 'emerald' },
-  { minElo: 1100, displayName: 'Gold', slug: 'gold' },
-  { minElo: 1050, displayName: 'Iron', slug: 'iron' },
-  { minElo: 0, displayName: 'Copper', slug: 'copper' },
+  { minElo: 1600, displayName: 'Netherite', slug: 'netherite' },
+  { minElo: 1400, displayName: 'Diamond', slug: 'diamond' },
+  { minElo: 1300, displayName: 'Emerald', slug: 'emerald' },
+  { minElo: 1200, displayName: 'Gold', slug: 'gold' },
+  { minElo: 1100, displayName: 'Iron', slug: 'iron' },
+  { minElo: 1000, displayName: 'Copper', slug: 'copper' },
 ]
 
 /** Tier from ELO — same thresholds as Leaderboard and backend profiles. */
