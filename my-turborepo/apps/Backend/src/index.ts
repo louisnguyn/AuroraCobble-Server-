@@ -63,6 +63,7 @@ import {
 } from "./leaderboardPvpDerived.js";
 import { registerTournamentRoutes } from "./tournamentRoutes.js";
 import { registerTournamentPredictionRoutes } from "./tournamentPrediction.js";
+import { registerClanRoutes, startClanDailyIncomeScheduler } from "./clanRoutes.js";
 import { registerBattleRestrictionsRoutes } from "./battleRestrictionsRoutes.js";
 import { analyzeTeamPokepaste } from "./teamAnalyzeAi.js";
 import { createPokepasteShareUrl } from "./pokepasteLink.js";
@@ -6986,6 +6987,15 @@ registerTournamentPredictionRoutes(app, {
   recordCobbledollarLedger,
 });
 
+registerClanRoutes(app, {
+  requireAuth,
+  ensureUserCobbledollarsRow,
+  recordCobbledollarLedger,
+  incrementUserCurrency,
+  cobbledollarsCurrency: COBBLEDOLLARS_CURRENCY,
+  ticketsCurrency: PVP_TICKETS_CURRENCY,
+});
+
 app.listen(port, () => {
   console.log(`Backend http://localhost:${port}`);
   if (supabase) {
@@ -6998,4 +7008,12 @@ app.listen(port, () => {
   }
   startDailyPvpAutoPayoutScheduler();
   startBossSpawnCronScheduler();
+  startClanDailyIncomeScheduler({
+    requireAuth,
+    ensureUserCobbledollarsRow,
+    recordCobbledollarLedger,
+    incrementUserCurrency,
+    cobbledollarsCurrency: COBBLEDOLLARS_CURRENCY,
+    ticketsCurrency: PVP_TICKETS_CURRENCY,
+  });
 });

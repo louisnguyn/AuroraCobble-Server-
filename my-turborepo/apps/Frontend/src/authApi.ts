@@ -933,3 +933,119 @@ export async function fetchTournamentParticipantTeam(
   if (!res.ok) throw new Error((data as { error?: string }).error ?? `Request failed: ${res.status}`)
   return data as Awaited<ReturnType<typeof fetchTournamentParticipantTeam>>
 }
+
+// --- Clans ---
+
+export interface ClanPublic {
+  id: number
+  name: string
+  bio: string | null
+  avatar_url: string
+  leader_id: number
+  leader_username: string
+  member_count: number
+  max_members: number
+  bank_balance: number
+  total_donated: number
+  daily_income_per_day: number
+  daily_income_multiplier: number
+  daily_income_per_member: number
+  has_daily_ticket_bonus: boolean
+  daily_ticket_bonus: number
+  next_member_unlock_donation: number | null
+  donate_milestone: number
+  multiplier_threshold_50: number
+  multiplier_threshold_100: number
+  created_at: string
+}
+
+export interface ClanMemberRow {
+  user_id: number
+  username: string
+  role: string
+  donated_total: number
+  joined_at: string
+}
+
+export interface ClanJoinRequestRow {
+  id: number
+  requester_id: number
+  requester_username: string
+  created_at: string
+}
+
+export interface MyClanResponse {
+  clan: (ClanPublic & {
+    my_role: string
+    my_donated_total: number
+    members: ClanMemberRow[]
+  }) | null
+  pending_join_requests: ClanJoinRequestRow[]
+  my_pending_join_requests: Array<{ id: number; clan_id: number; created_at: string }>
+}
+
+export async function fetchClans(params?: { q?: string; limit?: number }): Promise<{
+  rows: ClanPublic[]
+  create_cost: number
+}> {
+  const sp = new URLSearchParams()
+  if (params?.q?.trim()) sp.set('q', params.q.trim())
+  if (params?.limit) sp.set('limit', String(params.limit))
+  const q = sp.toString()
+  return fetchApi(`/clans${q ? `?${q}` : ''}`, { skipAuth: true })
+}
+
+export async function fetchMyClan(): Promise<MyClanResponse> {
+  return fetchApi<MyClanResponse>('/clans/mine')
+}
+
+export async function createClan(form: FormData): Promise<{ ok: boolean; new_balance: number; clan: ClanPublic }> {
+  const base = API_BASE.replace(/\/$/, '')
+  const headers: HeadersInit = {}
+  const token = getStoredToken()
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  const res = await fetch(`${base}/clans/create`, { method: 'POST', headers, body: form })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error((data as { error?: string })?.error ?? `Request failed: ${res.status}`)
+  return data as { ok: boolean; new_balance: number; clan: ClanPublic }
+}
+
+export async function donateToClan(
+  clanId: number,
+  amount: number
+): Promise<{ ok: boolean; new_balance: number; clan: ClanPublic }> {
+  return fetchApi(`/clans/${clanId}/donate`, {
+    method: 'POST',
+    body: JSON.stringify({ amount }),
+  })
+}
+
+export async function requestJoinClan(clanId: number): Promise<{
+  ok: boolean
+  request: { id: number; clan_id: number; created_at: string }
+}> {
+  return fetchApi(`/clans/${clanId}/join-request`, { method: 'POST', body: '{}' })
+}
+
+export async function acceptClanJoinRequest(requestId: number): Promise<{ ok: boolean; clan_id: number }> {
+  return fetchApi(`/clans/join-requests/${requestId}/accept`, { method: 'POST', body: '{}' })
+}
+
+export async function rejectClanJoinRequest(requestId: number): Promise<{ ok: boolean }> {
+  return fetchApi(`/clans/join-requests/${requestId}/reject`, { method: 'POST', body: '{}' })
+}
+
+export async function disburseClanFunds(
+  clanId: number,
+  username: string,
+  amount: number
+): Promise<{ ok: boolean; bank_balance: number }> {
+  return fetchApi(`/clans/${clanId}/disburse`, {
+    method: 'POST',
+    body: JSON.stringify({ username, amount }),
+  })
+}
+
+export async function leaveClan(): Promise<{ ok: boolean }> {
+  return fetchApi('/clans/leave', { method: 'POST', body: '{}' })
+}

@@ -23,6 +23,12 @@ const LEDGER_KIND_LABEL: Record<string, string> = {
   gacha_reward: 'Gacha reward',
   transfer_to_user: 'Sent to player',
   transfer_from_user: 'Received from player',
+  clan_create: 'Clan creation',
+  clan_create_refund: 'Clan creation refund',
+  clan_donate: 'Clan donation',
+  clan_donate_refund: 'Clan donation refund',
+  clan_disburse: 'Clan fund payout',
+  clan_daily_tickets: 'Clan daily tickets',
 }
 
 const TICKET_LEDGER_KIND_LABEL: Record<string, string> = {

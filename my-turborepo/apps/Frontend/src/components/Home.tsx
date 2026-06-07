@@ -9,6 +9,7 @@ type Page =
   | 'spawn'
   | 'tournament'
   | 'account'
+  | 'clan'
 
 const QUICK_LINKS: { id: Exclude<Page, 'main'>; label: string; description: string }[] = [
   {
@@ -30,6 +31,11 @@ const QUICK_LINKS: { id: Exclude<Page, 'main'>; label: string; description: stri
     id: 'tournament',
     label: 'Tournament',
     description: 'Brackets, qualifiers, prizes, and predictions',
+  },
+  {
+    id: 'clan',
+    label: 'Clan',
+    description: 'Create a clan, request to join, donate, and grow your fund',
   },
   {
     id: 'account',

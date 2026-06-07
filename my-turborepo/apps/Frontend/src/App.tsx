@@ -17,6 +17,7 @@ import { TournamentTeamDetail } from './components/TournamentTeamDetail.tsx'
 import { TeamBuilder } from './components/TeamBuilder.tsx'
 import { TeamPasteViewPage } from './components/TeamPasteViewPage.tsx'
 import { Profile } from './components/Profile.tsx'
+import { Clan } from './components/Clan.tsx'
 import {
   APP_ROUTE_SYNC_EVENT,
   clearProfilePath,
@@ -45,6 +46,7 @@ type Page =
   | 'teambuilder'
   | 'teampasteview'
   | 'profile'
+  | 'clan'
 
 const PAGES: { id: Page; label: string }[] = [
   { id: 'main', label: 'Home' },
@@ -58,6 +60,7 @@ const PAGES: { id: Page; label: string }[] = [
   { id: 'account', label: 'Account' },
   { id: 'profile', label: 'Profile' },
   { id: 'tournament', label: 'Tournament' },
+  { id: 'clan', label: 'Clan' },
 ]
 
 function NavIcon({ page }: { page: Page }) {
@@ -138,6 +141,13 @@ function NavIcon({ page }: { page: Page }) {
           <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" />
           <path d="M4 21a8 8 0 0 1 16 0" />
           <path d="M19 8h2M21 10v4M21 14h-2M19 14h2M19 17h2M17 21h4" opacity="0.85" strokeLinecap="round" />
+        </svg>
+      )
+    case 'clan':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={cls}>
+          <path d="M4 20V10l8-5 8 5v10H4Z" />
+          <path d="M9 20v-6h6v6" />
         </svg>
       )
   }
@@ -320,6 +330,7 @@ function AppContent() {
         )}
         {page === 'gacha' && <Gacha />}
         {page === 'spawn' && <Spawn />}
+        {page === 'clan' && <Clan />}
         {page === 'account' && <Account />}
         {page === 'profile' && <Profile slugFromHashOrNav={hashProfileSlug} />}
         {page === 'tournament' &&
