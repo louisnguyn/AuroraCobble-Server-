@@ -3980,6 +3980,24 @@
   color: #d4a853;
 }
 
+.clan-stat-value--elo {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 0.35rem;
+}
+
+.clan-stat-elo-num {
+  flex-shrink: 0;
+  line-height: 1.2;
+}
+
+.clan-stat-value--elo img {
+  display: block;
+  max-height: 1.25rem;
+  width: auto;
+}
+
 .clan-stat-sub {
   display: block;
   margin-top: 0.35rem;

@@ -1279,13 +1279,14 @@ export function Clan() {
             <div className="clan-stat-card">
               <span className="clan-stat-label">Average ELO</span>
               {myClan.average_elo != null ? (
-                <span className="clan-stat-value inline-flex items-center gap-2 flex-wrap">
-                  {fmt(myClan.average_elo)}
+                <span className="clan-stat-value clan-stat-value--elo">
+                  <span className="clan-stat-elo-num">{fmt(myClan.average_elo)}</span>
                   {myClanAvgTier ? (
                     <PvPTierBadge
                       slug={myClanAvgTier.slug}
                       displayName={myClanAvgTier.displayName}
-                      imgHeightClass="h-6"
+                      imgHeightClass="h-5"
+                      className="!min-h-0 shrink-0"
                     />
                   ) : null}
                 </span>
