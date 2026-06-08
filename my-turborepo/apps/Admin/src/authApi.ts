@@ -911,3 +911,156 @@ export async function uploadBattleRestrictionImage(file: File): Promise<string> 
   }
   return (data as { url: string }).url
 }
+
+// --- Admin clans ---
+
+export interface AdminClanTreasuryMilestone {
+  key: string
+  threshold: number
+  label: string
+  kind: 'income' | 'tickets'
+}
+
+export interface AdminClanSummary {
+  id: number
+  name: string
+  bio: string | null
+  avatar_url: string
+  leader_id: number
+  leader_username: string
+  leader_email: string | null
+  member_count: number
+  max_members: number
+  bank_balance: number
+  total_elo: number | null
+  xp: number
+  level: number
+  xp_in_level: number
+  xp_per_level: number
+  daily_income_per_day: number
+  daily_income_multiplier?: number
+  daily_income_per_member?: number
+  has_daily_ticket_bonus?: boolean
+  daily_ticket_bonus?: number
+  next_member_unlock_treasury?: number | null
+  treasury_milestone?: number
+  treasury_milestones?: AdminClanTreasuryMilestone[]
+  created_at: string
+}
+
+export interface AdminClansSummary {
+  total_clans: number
+  total_members: number
+  total_treasury: number
+  total_elo: number
+  avg_level: number
+}
+
+export interface AdminClanMember {
+  user_id: number
+  username: string
+  role: string
+  donated_total: number
+  joined_at: string
+  elo: number
+}
+
+export interface AdminClanJoinRequest {
+  id: number
+  requester_id: number
+  requester_username: string
+  created_at: string
+}
+
+export interface AdminClanLeaderboardPayout {
+  payout_date: string
+  category: string
+  amount: number
+  paid_at: string
+  rank_position: number
+}
+
+export interface AdminClanXpGrant {
+  user_id: number
+  username: string
+  claim_date: string
+  streak_day: number
+  xp_amount: number
+  created_at: string
+}
+
+export interface AdminClanDonation {
+  id: number
+  user_id: number
+  username: string
+  amount: number
+  created_at: string
+}
+
+export interface AdminClanDisbursement {
+  id: number
+  leader_id: number
+  leader_username: string
+  recipient_id: number
+  recipient_username: string
+  amount: number
+  created_at: string
+}
+
+export interface AdminClanDetailStats {
+  total_member_donations: number
+  recent_donations_count: number
+  recent_disbursements_total: number
+  pending_join_requests_count: number
+  avg_member_elo: number | null
+}
+
+export interface AdminClanDetail {
+  clan: AdminClanSummary & {
+    last_daily_income_date: string | null
+    leaderboard_ranks: {
+      top_treasury: number | null
+      top_total_elo: number | null
+      top_level: number | null
+    }
+    leaderboard_daily_bonus: number
+    daily_income_multiplier: number
+    daily_income_per_member: number
+    has_daily_ticket_bonus: boolean
+    daily_ticket_bonus: number
+  }
+  members: AdminClanMember[]
+  pending_join_requests: AdminClanJoinRequest[]
+  recent_leaderboard_payouts: AdminClanLeaderboardPayout[]
+  recent_xp_grants: AdminClanXpGrant[]
+  recent_donations: AdminClanDonation[]
+  recent_disbursements: AdminClanDisbursement[]
+  stats: AdminClanDetailStats
+  leaderboard_rewards?: {
+    top1_per_category: number
+    top2_per_category: number
+    categories: { key: string; label: string }[]
+    timezone: string
+    schedule: string
+  }
+}
+
+export async function fetchAdminClans(q?: string): Promise<{
+  clans: AdminClanSummary[]
+  count: number
+  summary: AdminClansSummary
+}> {
+  const qs =
+    typeof q === 'string' && q.trim().length > 0 ? `?q=${encodeURIComponent(q.trim())}` : ''
+  return fetchJson<{ clans: AdminClanSummary[]; count: number; summary: AdminClansSummary }>(
+    `/admin/clans${qs}`
+  )
+}
+
+export async function fetchAdminClanDetail(clanId: number): Promise<AdminClanDetail> {
+  return fetchJson<AdminClanDetail>(`/admin/clans/${clanId}`)
+}
+
+export async function adminDisbandClan(clanId: number): Promise<{ ok: true }> {
+  return fetchJson<{ ok: true }>(`/admin/clans/${clanId}/disband`, { method: 'POST', body: '{}' })
+}

@@ -12,11 +12,13 @@ import { CobbleRankedAdmin } from './components/CobbleRankedAdmin.tsx'
 import { ProfileAchievementsAdmin } from './components/ProfileAchievementsAdmin.tsx'
 import { BattlePassAdmin } from './components/BattlePassAdmin.tsx'
 import { BattleRestrictionsAdmin } from './components/BattleRestrictionsAdmin.tsx'
+import { ClansAdmin } from './components/ClansAdmin.tsx'
 import { RoleBadge } from './components/RoleBadge.tsx'
 
 type Section =
   | 'usage'
   | 'users'
+  | 'clans'
   | 'verifications'
   | 'role_requests'
   | 'minecraft'
@@ -34,6 +36,7 @@ const SECTIONS: { id: Section; label: string }[] = [
   { id: 'battle_pass', label: 'Battle pass' },
   { id: 'usage', label: 'Usage stats' },
   { id: 'users', label: 'Website users' },
+  { id: 'clans', label: 'Clans' },
   { id: 'profile_badges', label: 'Profile badges' },
   { id: 'verifications', label: 'Verification requests' },
   { id: 'role_requests', label: 'Rank requests' },
@@ -196,13 +199,16 @@ export default function App() {
             section === 'tournament' ||
             section === 'cobble_ranked' ||
             section === 'profile_badges' ||
-            section === 'battle_pass' || section === 'battle_restrictions'
+            section === 'battle_pass' ||
+            section === 'battle_restrictions' ||
+            section === 'clans'
               ? 'max-w-6xl mx-auto'
               : 'max-w-5xl mx-auto'
           }
         >
           {section === 'usage' && <UsageStatsAdmin />}
           {section === 'users' && <UsersAdmin currentAdminId={user.id} />}
+          {section === 'clans' && <ClansAdmin />}
           {section === 'profile_badges' && <ProfileAchievementsAdmin />}
           {section === 'battle_pass' && <BattlePassAdmin />}
           {section === 'verifications' && <VerificationRequestsAdmin />}

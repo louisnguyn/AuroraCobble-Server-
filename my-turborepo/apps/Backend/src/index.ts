@@ -63,7 +63,7 @@ import {
 } from "./leaderboardPvpDerived.js";
 import { registerTournamentRoutes } from "./tournamentRoutes.js";
 import { registerTournamentPredictionRoutes } from "./tournamentPrediction.js";
-import { registerClanRoutes, startClanDailyIncomeScheduler } from "./clanRoutes.js";
+import { registerAdminClanRoutes, registerClanRoutes, startClanDailyIncomeScheduler } from "./clanRoutes.js";
 import { grantClanXpForDailyLoginClaim } from "./clanXp.js";
 import { registerBattleRestrictionsRoutes } from "./battleRestrictionsRoutes.js";
 import { analyzeTeamPokepaste } from "./teamAnalyzeAi.js";
@@ -7017,6 +7017,12 @@ registerClanRoutes(app, {
   incrementUserCurrency,
   cobbledollarsCurrency: COBBLEDOLLARS_CURRENCY,
   ticketsCurrency: PVP_TICKETS_CURRENCY,
+  getLiveLeaderboard: () => cobbleStore.leaderboard,
+});
+
+registerAdminClanRoutes(app, {
+  requireAuth,
+  requireAdmin,
   getLiveLeaderboard: () => cobbleStore.leaderboard,
 });
 
