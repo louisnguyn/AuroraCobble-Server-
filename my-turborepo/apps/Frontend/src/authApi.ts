@@ -498,6 +498,14 @@ export async function claimDailyLoginReward(): Promise<{
   reward: string
   message: string
   dailyRankBonus?: { flatCobbleBonus: number; ticketBonus: number }
+  clanXp?: {
+    granted: number
+    totalXp: number
+    level: number
+    xpInLevel: number
+    xpPerLevel: number
+    streakDay: number
+  }
 }> {
   return fetchApi<{
     ok: boolean
@@ -506,6 +514,14 @@ export async function claimDailyLoginReward(): Promise<{
     reward: string
     message: string
     dailyRankBonus?: { flatCobbleBonus: number; ticketBonus: number }
+    clanXp?: {
+      granted: number
+      totalXp: number
+      level: number
+      xpInLevel: number
+      xpPerLevel: number
+      streakDay: number
+    }
   }>('/user/daily-login/claim', {
     method: 'POST',
     body: JSON.stringify({}),
@@ -946,7 +962,11 @@ export interface ClanPublic {
   member_count: number
   max_members: number
   bank_balance: number
-  average_elo: number | null
+  total_elo: number | null
+  xp: number
+  level: number
+  xp_in_level: number
+  xp_per_level: number
   daily_income_per_day: number
   daily_income_multiplier: number
   daily_income_per_member: number
@@ -962,6 +982,8 @@ export interface ClanPublic {
   }[]
   /** Treasury bonus for holding #1 on a leaderboard category (per category, daily). */
   leaderboard_daily_reward_top1: number
+  /** Treasury bonus for holding #2 on a leaderboard category (per category, daily). */
+  leaderboard_daily_reward_top2: number
   created_at: string
 }
 
@@ -983,7 +1005,9 @@ export interface ClanLeaderboardEntry {
   leader_username: string
   member_count: number
   bank_balance: number
-  average_elo: number | null
+  total_elo: number | null
+  xp: number
+  level: number
 }
 
 export interface ClanJoinRequestRow {
@@ -995,16 +1019,18 @@ export interface ClanJoinRequestRow {
 
 export interface ClanLeaderboardRewardsMeta {
   top1_per_category: number
-  categories: { key: 'top_treasury' | 'top_average_elo'; label: string }[]
+  top2_per_category: number
+  categories: { key: 'top_treasury' | 'top_average_elo' | 'top_level'; label: string }[]
   timezone: string
   schedule: string
 }
 
 export interface ClanLeaderboardPayoutRow {
   payout_date: string
-  category: 'top_treasury' | 'top_average_elo'
+  category: 'top_treasury' | 'top_average_elo' | 'top_level'
   amount: number
   paid_at: string
+  rank_position?: number
 }
 
 export interface MyClanResponse {
@@ -1014,9 +1040,10 @@ export interface MyClanResponse {
     members: ClanMemberRow[]
     leaderboard_ranks: {
       top_treasury: number | null
-      top_average_elo: number | null
+      top_total_elo: number | null
+      top_level: number | null
     }
-    /** Extra daily treasury from holding #1 on leaderboard categories (0–2× top1 reward). */
+    /** Extra daily treasury from leaderboard placement (#1 and #2 on each category). */
     leaderboard_daily_treasury_bonus: number
     recent_leaderboard_payouts: ClanLeaderboardPayoutRow[]
   }) | null
@@ -1039,13 +1066,14 @@ export async function fetchClans(params?: { q?: string; limit?: number }): Promi
 
 export async function fetchClanLeaderboards(params?: { limit?: number }): Promise<{
   top_treasury: ClanLeaderboardEntry[]
-  top_average_elo: ClanLeaderboardEntry[]
+  top_total_elo: ClanLeaderboardEntry[]
+  top_level: ClanLeaderboardEntry[]
   rewards?: ClanLeaderboardRewardsMeta
 }> {
   const sp = new URLSearchParams()
   if (params?.limit) sp.set('limit', String(params.limit))
   const q = sp.toString()
-  return fetchApi<{ top_treasury: ClanLeaderboardEntry[]; top_average_elo: ClanLeaderboardEntry[]; rewards?: ClanLeaderboardRewardsMeta }>(
+  return fetchApi<{ top_treasury: ClanLeaderboardEntry[]; top_total_elo: ClanLeaderboardEntry[]; top_level: ClanLeaderboardEntry[]; rewards?: ClanLeaderboardRewardsMeta }>(
     `/clans/leaderboards${q ? `?${q}` : ''}`,
     { skipAuth: true }
   )
@@ -1122,4 +1150,24 @@ export async function leaveClan(): Promise<{ ok: boolean; rejoin_available_at?: 
 
 export async function disbandClan(): Promise<{ ok: boolean }> {
   return fetchApi<{ ok: boolean }>('/clans/disband', { method: 'POST', body: '{}' })
+}
+
+export async function kickClanMember(
+  clanId: number,
+  username: string
+): Promise<{ ok: boolean; kicked_username: string }> {
+  return fetchApi(`/clans/${clanId}/kick`, {
+    method: 'POST',
+    body: JSON.stringify({ username }),
+  })
+}
+
+export async function transferClanLeadership(
+  clanId: number,
+  username: string
+): Promise<{ ok: boolean; new_leader_username: string; new_leader_id: number }> {
+  return fetchApi(`/clans/${clanId}/transfer-leader`, {
+    method: 'POST',
+    body: JSON.stringify({ username }),
+  })
 }

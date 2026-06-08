@@ -452,7 +452,11 @@ export function Account() {
     setRewardsClaimBusy(true)
     try {
       const r = await claimDailyLoginReward()
-      setRewardsClaimSuccess(r.message)
+      const clanXpLine =
+        r.clanXp && r.clanXp.granted > 0
+          ? ` · +${r.clanXp.granted.toLocaleString()} Clan XP (now level ${r.clanXp.level})`
+          : ''
+      setRewardsClaimSuccess(`${r.message}${clanXpLine}`)
     } catch (e) {
       setRewardsClaimError(e instanceof Error ? e.message : 'Claim failed')
     } finally {

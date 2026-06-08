@@ -17,24 +17,58 @@ export const CLAN_DAILY_PER_MEMBER = 50_000;
 /** Daily treasury bonus for #1 on each clan leaderboard category (Asia/Ho_Chi_Minh). */
 export const CLAN_LEADERBOARD_DAILY_REWARD_TOP1 = 200_000;
 
-export type ClanLeaderboardRewardCategory = "top_treasury" | "top_average_elo";
+/** Daily treasury bonus for #2 on each clan leaderboard category. */
+export const CLAN_LEADERBOARD_DAILY_REWARD_TOP2 = 100_000;
+
+/** Base clan XP when a member claims their daily login reward. */
+export const CLAN_XP_BASE_PER_DAILY_CLAIM = 50;
+
+/** Extra clan XP per streak day beyond day 1 (day 7 → +60 streak bonus). */
+export const CLAN_XP_STREAK_BONUS_PER_DAY = 10;
+
+/** Total XP required per clan level (level 1 starts at 0 XP). */
+export const CLAN_XP_PER_LEVEL = 500;
+
+export function clanXpFromDailyLoginStreak(streakDay: number): number {
+  const day = Math.max(1, Math.min(7, Math.floor(streakDay)));
+  return CLAN_XP_BASE_PER_DAILY_CLAIM + (day - 1) * CLAN_XP_STREAK_BONUS_PER_DAY;
+}
+
+export function clanLevelFromXp(xp: number): number {
+  return Math.floor(Math.max(0, xp) / CLAN_XP_PER_LEVEL) + 1;
+}
+
+export function clanXpInCurrentLevel(xp: number): number {
+  return Math.max(0, xp) % CLAN_XP_PER_LEVEL;
+}
+
+export type ClanLeaderboardRewardCategory = "top_treasury" | "top_average_elo" | "top_level";
 
 export const CLAN_LEADERBOARD_REWARD_CATEGORIES: readonly {
   key: ClanLeaderboardRewardCategory;
   label: string;
 }[] = [
   { key: "top_treasury", label: "Top treasury" },
-  { key: "top_average_elo", label: "Average ELO" },
+  { key: "top_average_elo", label: "Total ELO" },
+  { key: "top_level", label: "Top level" },
 ];
 
-export function clanLeaderboardDailyTreasuryBonus(
-  rankTopTreasury: number | null,
-  rankTopAverageElo: number | null
-): number {
-  let bonus = 0;
-  if (rankTopTreasury === 1) bonus += CLAN_LEADERBOARD_DAILY_REWARD_TOP1;
-  if (rankTopAverageElo === 1) bonus += CLAN_LEADERBOARD_DAILY_REWARD_TOP1;
-  return bonus;
+export function clanLeaderboardDailyRewardForRank(rank: number | null | undefined): number {
+  if (rank === 1) return CLAN_LEADERBOARD_DAILY_REWARD_TOP1;
+  if (rank === 2) return CLAN_LEADERBOARD_DAILY_REWARD_TOP2;
+  return 0;
+}
+
+export function clanLeaderboardDailyTreasuryBonus(ranks: {
+  top_treasury: number | null;
+  top_total_elo: number | null;
+  top_level: number | null;
+}): number {
+  return (
+    clanLeaderboardDailyRewardForRank(ranks.top_treasury) +
+    clanLeaderboardDailyRewardForRank(ranks.top_total_elo) +
+    clanLeaderboardDailyRewardForRank(ranks.top_level)
+  );
 }
 
 export type ClanTreasuryMilestoneDef = {

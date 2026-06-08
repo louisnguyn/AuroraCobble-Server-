@@ -11,8 +11,10 @@ import {
   fetchClanLeaderboards,
   fetchMyClan,
   disbandClan,
+  kickClanMember,
   leaveClan,
   rejectClanJoinRequest,
+  transferClanLeadership,
   requestJoinClan,
   type ClanLeaderboardEntry,
   type ClanLeaderboardPayoutRow,
@@ -20,13 +22,14 @@ import {
   type MyClanResponse,
 } from '../authApi'
 import { getPvpTierFromElo, PvPTierBadge } from './PvPTierBadge.tsx'
+import { isAccountVerified } from './VerifiedAccountBadge.tsx'
 
 function fmt(n: number): string {
   return n.toLocaleString('en-US')
 }
 
-function clanAverageEloHint(): string {
-  return "Your clan's overall skill level — each member's best singles or doubles rating, averaged together. Not on the ladder yet? That counts as 1,000 ELO."
+function clanTotalEloHint(): string {
+  return "Sum of each member's best singles or doubles rating. Not on the ladder yet? That counts as 1,000 ELO per member."
 }
 
 function pct(current: number, target: number): number {
@@ -70,6 +73,33 @@ function ClanProgressBar({ value, complete }: { value: number; complete?: boolea
         style={{ width: `${complete ? 100 : value}%` }}
       />
     </span>
+  )
+}
+
+function ClanLevelProgress({ clan }: { clan: ClanPublic }) {
+  const pctInLevel =
+    clan.xp_per_level > 0 ? Math.min(100, Math.max(0, (clan.xp_in_level / clan.xp_per_level) * 100)) : 0
+
+  return (
+    <div className="clan-milestones clan-level-progress">
+      <h3 className="clan-section-title">Clan level</h3>
+      <p className="clan-section-hint">
+        Members earn clan XP when they claim their daily login reward — 50 XP base, +10 XP per streak day (up to 110 XP
+        on day 7). Every {fmt(clan.xp_per_level)} XP levels up the clan.
+      </p>
+      <ul className="clan-milestone-list">
+        <li className="clan-milestone-item">
+          <div className="clan-milestone-head">
+            <span className="clan-milestone-label">Level {clan.level}</span>
+            <span className="clan-milestone-pct">{Math.round(pctInLevel)}%</span>
+          </div>
+          <ClanProgressBar value={pctInLevel} />
+          <p className="clan-milestone-detail">
+            {fmt(clan.xp_in_level)} / {fmt(clan.xp_per_level)} XP to level {clan.level + 1} · {fmt(clan.xp)} XP total
+          </p>
+        </li>
+      </ul>
+    </div>
   )
 }
 
@@ -129,55 +159,62 @@ function ClanMilestones({ clan }: { clan: ClanPublic }) {
   )
 }
 
-function clanLbCategoryLabel(category: 'top_treasury' | 'top_average_elo' | 'top_donated'): string {
+function clanLbCategoryLabel(category: 'top_treasury' | 'top_average_elo' | 'top_level' | 'top_donated'): string {
   if (category === 'top_treasury' || category === 'top_donated') return 'Top treasury'
-  return 'Average ELO'
+  if (category === 'top_level') return 'Top level'
+  return 'Total ELO'
+}
+
+function clanLbDailyRewardAmount(rank: number | null, top1: number, top2: number): number | null {
+  if (rank === 1) return top1
+  if (rank === 2) return top2
+  return null
 }
 
 function ClanLeaderboardRewardsPanel({
   rewardTop1,
+  rewardTop2,
   ranks,
   dailyBonus,
   recentPayouts,
 }: {
   rewardTop1: number
-  ranks: { top_treasury: number | null; top_average_elo: number | null }
+  rewardTop2: number
+  ranks: { top_treasury: number | null; top_total_elo: number | null; top_level: number | null }
   dailyBonus: number
   recentPayouts: ClanLeaderboardPayoutRow[]
 }) {
-  const holdingTop1 =
-    ranks.top_treasury === 1 || ranks.top_average_elo === 1
+  const rewardSlots = [
+    { label: 'Top treasury', rank: ranks.top_treasury },
+    { label: 'Total ELO', rank: ranks.top_total_elo },
+    { label: 'Top level', rank: ranks.top_level },
+  ]
+  const earningReward = rewardSlots.some((s) => s.rank === 1 || s.rank === 2)
 
   return (
-    <div className={`clan-lb-rewards${holdingTop1 ? ' clan-lb-rewards--active' : ''}`}>
+    <div className={`clan-lb-rewards${earningReward ? ' clan-lb-rewards--active' : ''}`}>
       <h3 className="clan-section-title">Leaderboard daily rewards</h3>
       <p className="clan-section-hint">
-        #1 on each clan leaderboard earns {fmt(rewardTop1)} CD in the treasury every day at 00:00 Asia/Ho_Chi_Minh — same
-        schedule as member daily income and PvP rank rewards.
+        #1 on each board earns {fmt(rewardTop1)} CD/day in treasury; #2 earns {fmt(rewardTop2)} CD/day — paid at 00:00
+        Asia/Ho_Chi_Minh (same schedule as member daily income).
       </p>
       <div className="clan-lb-rewards-grid">
-        <div className="clan-lb-reward-slot">
-          <span className="clan-lb-reward-slot-label">Top treasury</span>
-          <span className="clan-lb-reward-slot-rank">
-            {ranks.top_treasury != null ? `#${ranks.top_treasury}` : '—'}
-          </span>
-          {ranks.top_treasury === 1 ? (
-            <span className="clan-lb-reward-slot-badge">+{fmt(rewardTop1)} CD/day</span>
-          ) : (
-            <span className="clan-lb-reward-slot-hint">Hold #1 for +{fmt(rewardTop1)} CD/day</span>
-          )}
-        </div>
-        <div className="clan-lb-reward-slot">
-          <span className="clan-lb-reward-slot-label">Average ELO</span>
-          <span className="clan-lb-reward-slot-rank">
-            {ranks.top_average_elo != null ? `#${ranks.top_average_elo}` : '—'}
-          </span>
-          {ranks.top_average_elo === 1 ? (
-            <span className="clan-lb-reward-slot-badge">+{fmt(rewardTop1)} CD/day</span>
-          ) : (
-            <span className="clan-lb-reward-slot-hint">Hold #1 for +{fmt(rewardTop1)} CD/day</span>
-          )}
-        </div>
+        {rewardSlots.map((slot) => {
+          const payout = clanLbDailyRewardAmount(slot.rank, rewardTop1, rewardTop2)
+          return (
+            <div key={slot.label} className="clan-lb-reward-slot">
+              <span className="clan-lb-reward-slot-label">{slot.label}</span>
+              <span className="clan-lb-reward-slot-rank">{slot.rank != null ? `#${slot.rank}` : '—'}</span>
+              {payout != null ? (
+                <span className="clan-lb-reward-slot-badge">+{fmt(payout)} CD/day</span>
+              ) : (
+                <span className="clan-lb-reward-slot-hint">
+                  #1 +{fmt(rewardTop1)} · #2 +{fmt(rewardTop2)} CD/day
+                </span>
+              )}
+            </div>
+          )
+        })}
       </div>
       {dailyBonus > 0 ? (
         <p className="clan-lb-rewards-total">
@@ -189,9 +226,12 @@ function ClanLeaderboardRewardsPanel({
           <h4 className="clan-lb-rewards-history-title">Recent treasury credits</h4>
           <ul className="clan-lb-rewards-history-list">
             {recentPayouts.map((p) => (
-              <li key={`${p.payout_date}-${p.category}`} className="clan-lb-rewards-history-row">
+              <li key={`${p.payout_date}-${p.category}-${p.rank_position ?? 1}`} className="clan-lb-rewards-history-row">
                 <span className="clan-lb-rewards-history-date">{p.payout_date}</span>
-                <span className="clan-lb-rewards-history-cat">{clanLbCategoryLabel(p.category)}</span>
+                <span className="clan-lb-rewards-history-cat">
+                  {clanLbCategoryLabel(p.category)}
+                  {p.rank_position ? ` #${p.rank_position}` : ''}
+                </span>
                 <span className="clan-lb-rewards-history-amount">+{fmt(p.amount)} CD</span>
               </li>
             ))}
@@ -209,14 +249,16 @@ function ClanLeaderboardTable({
   valueKey,
   valueLabel,
   rewardTop1,
+  rewardTop2,
   showTitle = true,
 }: {
   title: string
   hint?: string
   rows: ClanLeaderboardEntry[]
-  valueKey: 'bank_balance' | 'average_elo'
+  valueKey: 'bank_balance' | 'total_elo' | 'level'
   valueLabel: string
   rewardTop1?: number
+  rewardTop2?: number
   showTitle?: boolean
 }) {
   return (
@@ -228,30 +270,39 @@ function ClanLeaderboardTable({
       ) : (
         <ol className="clan-lb-list">
           {rows.map((row) => {
-            const tier = row.average_elo != null ? getPvpTierFromElo(row.average_elo) : null
+            const rewardAmount = clanLbDailyRewardAmount(row.rank, rewardTop1 ?? 0, rewardTop2 ?? 0)
+            const rowClass =
+              row.rank === 1 && rewardTop1
+                ? ' clan-lb-row--top1'
+                : row.rank === 2 && rewardTop2
+                  ? ' clan-lb-row--top2'
+                  : ''
             return (
-              <li key={`${valueKey}-${row.id}`} className={`clan-lb-row${row.rank === 1 ? ' clan-lb-row--top1' : ''}`}>
+              <li key={`${valueKey}-${row.id}`} className={`clan-lb-row${rowClass}`}>
                 <span className="clan-lb-rank">#{row.rank}</span>
                 <img src={row.avatar_url} alt="" className="clan-lb-avatar" />
                 <span className="clan-lb-name">{row.name}</span>
-                {row.rank === 1 && rewardTop1 ? (
-                  <span className="clan-lb-reward-pill">+{fmt(rewardTop1)} CD/day</span>
+                {rewardAmount != null ? (
+                  <span
+                    className={`clan-lb-reward-pill${row.rank === 2 ? ' clan-lb-reward-pill--top2' : ''}`}
+                  >
+                    +{fmt(rewardAmount)} CD/day
+                  </span>
                 ) : null}
                 <div className="clan-lb-metric">
-                  {valueKey === 'average_elo' && row.average_elo != null ? (
+                  {valueKey === 'total_elo' && row.total_elo != null ? (
                     <>
-                      <span className="clan-lb-metric-main clan-lb-metric-main--elo">
-                        <span className="clan-lb-metric-num">{fmt(row.average_elo)}</span>
-                        {tier ? (
-                          <PvPTierBadge
-                            slug={tier.slug}
-                            displayName={tier.displayName}
-                            imgHeightClass="h-3.5"
-                            className="!min-h-0 shrink-0"
-                          />
-                        ) : null}
+                      <span className="clan-lb-metric-main">
+                        <span className="clan-lb-metric-num">{fmt(row.total_elo)}</span>
                       </span>
                       <span className="clan-lb-metric-label">{valueLabel}</span>
+                    </>
+                  ) : valueKey === 'level' ? (
+                    <>
+                      <span className="clan-lb-metric-main">
+                        <span className="clan-lb-metric-num">Lv. {row.level}</span>
+                      </span>
+                      <span className="clan-lb-metric-label">{fmt(row.xp)} XP</span>
                     </>
                   ) : (
                     <>
@@ -293,7 +344,6 @@ function ClanCard({
   onJoin: () => void
 }) {
   const isFull = clan.member_count >= clan.max_members
-  const tier = clan.average_elo != null ? getPvpTierFromElo(clan.average_elo) : null
   const incomeBonus = incomeBonusLabel(clan.daily_income_multiplier)
   const nextMilestone = (clan.treasury_milestones ?? []).find((m) => clan.bank_balance < m.threshold)
   const nextMilestonePct = nextMilestone ? pct(clan.bank_balance, nextMilestone.threshold) : 100
@@ -304,7 +354,10 @@ function ClanCard({
       <div className="clan-card-body">
         <div className="clan-card-header">
           <div className="clan-card-title-block">
-            <h3 className="clan-card-name">{clan.name}</h3>
+            <h3 className="clan-card-name">
+              {clan.name}
+              <span className="clan-card-level">Lv. {clan.level}</span>
+            </h3>
             <ClanLeaderDisplay username={clan.leader_username} compact />
           </div>
           <div className="clan-card-aside">
@@ -344,20 +397,10 @@ function ClanCard({
             <span className="clan-card-stat-label">Daily income</span>
             <span className="clan-card-stat-value">+{fmt(clan.daily_income_per_day)} CD</span>
           </div>
-          {clan.average_elo != null ? (
+          {clan.total_elo != null ? (
             <div className="clan-card-stat clan-card-stat--elo">
-              <span className="clan-card-stat-label">Avg ELO</span>
-              <span className="clan-card-stat-value clan-card-stat-value--elo">
-                <span className="clan-card-stat-elo-num">{fmt(clan.average_elo)}</span>
-                {tier ? (
-                  <PvPTierBadge
-                    slug={tier.slug}
-                    displayName={tier.displayName}
-                    imgHeightClass="h-3.5"
-                    className="!min-h-0 shrink-0"
-                  />
-                ) : null}
-              </span>
+              <span className="clan-card-stat-label">Total ELO</span>
+              <span className="clan-card-stat-value">{fmt(clan.total_elo)}</span>
             </div>
           ) : null}
         </div>
@@ -447,6 +490,88 @@ function ClanLeaveConfirmModal({
   )
 }
 
+function ClanKickConfirmModal({
+  username,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  username: string
+  busy: boolean
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  return (
+    <div
+      className="clan-modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="clan-kick-title"
+      onClick={onCancel}
+    >
+      <div className="clan-modal clan-modal--danger" onClick={(e) => e.stopPropagation()}>
+        <h3 id="clan-kick-title" className="clan-modal-title">
+          Remove {username}?
+        </h3>
+        <p className="clan-modal-body">
+          They will be removed from the clan immediately and must wait <strong>24 hours</strong> before joining another
+          clan.
+        </p>
+        <div className="clan-modal-actions">
+          <button type="button" className="clan-btn clan-btn-ghost" disabled={busy} onClick={onCancel}>
+            Cancel
+          </button>
+          <button type="button" className="clan-btn clan-btn-kick" disabled={busy} onClick={onConfirm}>
+            {busy ? 'Removing…' : 'Remove member'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ClanTransferLeaderModal({
+  username,
+  clanName,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  username: string
+  clanName: string
+  busy: boolean
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  return (
+    <div
+      className="clan-modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="clan-transfer-title"
+      onClick={onCancel}
+    >
+      <div className="clan-modal" onClick={(e) => e.stopPropagation()}>
+        <h3 id="clan-transfer-title" className="clan-modal-title">
+          Make {username} leader?
+        </h3>
+        <p className="clan-modal-body">
+          <strong>{username}</strong> will become leader of {clanName}. You will become a regular member and lose access
+          to treasury payouts, join requests, and clan settings.
+        </p>
+        <div className="clan-modal-actions">
+          <button type="button" className="clan-btn clan-btn-ghost" disabled={busy} onClick={onCancel}>
+            Cancel
+          </button>
+          <button type="button" className="clan-btn clan-btn-primary" disabled={busy} onClick={onConfirm}>
+            {busy ? 'Transferring…' : 'Transfer leadership'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ClanDisbandConfirmModal({
   clanName,
   memberCount,
@@ -525,7 +650,7 @@ function ClanTabButton({
 }
 
 type ClanPageTab = 'browse' | 'leaderboard' | 'mine'
-type ClanLbView = 'top_treasury' | 'top_average_elo'
+type ClanLbView = 'top_treasury' | 'top_total_elo' | 'top_level'
 
 export function Clan() {
   const { isAuthenticated, user } = useAuth()
@@ -558,8 +683,10 @@ export function Clan() {
   const [requestActionBusy, setRequestActionBusy] = useState<number | null>(null)
   const [actionMsg, setActionMsg] = useState<string | null>(null)
   const [lbTreasury, setLbTreasury] = useState<ClanLeaderboardEntry[]>([])
-  const [lbAvgElo, setLbAvgElo] = useState<ClanLeaderboardEntry[]>([])
+  const [lbTotalElo, setLbTotalElo] = useState<ClanLeaderboardEntry[]>([])
+  const [lbLevel, setLbLevel] = useState<ClanLeaderboardEntry[]>([])
   const [lbRewardTop1, setLbRewardTop1] = useState(200_000)
+  const [lbRewardTop2, setLbRewardTop2] = useState(100_000)
   const [lbLoading, setLbLoading] = useState(true)
   const [lbView, setLbView] = useState<ClanLbView>('top_treasury')
   const [activeTab, setActiveTab] = useState<ClanPageTab>('browse')
@@ -567,6 +694,10 @@ export function Clan() {
   const [leaveBusy, setLeaveBusy] = useState(false)
   const [showDisbandConfirm, setShowDisbandConfirm] = useState(false)
   const [disbandBusy, setDisbandBusy] = useState(false)
+  const [kickTarget, setKickTarget] = useState<{ user_id: number; username: string } | null>(null)
+  const [kickBusy, setKickBusy] = useState(false)
+  const [transferTarget, setTransferTarget] = useState<{ user_id: number; username: string } | null>(null)
+  const [transferBusy, setTransferBusy] = useState(false)
 
   const [editName, setEditName] = useState('')
   const [editBio, setEditBio] = useState('')
@@ -598,14 +729,17 @@ export function Clan() {
   const loadLeaderboards = useCallback(() => {
     setLbLoading(true)
     fetchClanLeaderboards({ limit: 10 })
-      .then(({ top_treasury, top_average_elo, rewards }) => {
+      .then(({ top_treasury, top_total_elo, top_level, rewards }) => {
         setLbTreasury(top_treasury ?? [])
-        setLbAvgElo(top_average_elo ?? [])
+        setLbTotalElo(top_total_elo ?? [])
+        setLbLevel(top_level ?? [])
         if (rewards?.top1_per_category) setLbRewardTop1(rewards.top1_per_category)
+        if (rewards?.top2_per_category) setLbRewardTop2(rewards.top2_per_category)
       })
       .catch(() => {
         setLbTreasury([])
-        setLbAvgElo([])
+        setLbTotalElo([])
+        setLbLevel([])
       })
       .finally(() => setLbLoading(false))
   }, [])
@@ -668,16 +802,16 @@ export function Clan() {
     [myClan]
   )
 
-  const myClanAvgTier = myClan?.average_elo != null ? getPvpTierFromElo(myClan.average_elo) : null
-
   const rejoinAvailableAt = mine?.rejoin_available_at ?? null
   const inRejoinCooldown =
     rejoinAvailableAt != null && new Date(rejoinAvailableAt).getTime() > Date.now()
-  const canRequestJoin = isAuthenticated && !myClan && !inRejoinCooldown
+  const isVerified = Boolean(user?.is_admin) || isAccountVerified(user)
+  const canRequestJoin = isAuthenticated && isVerified && !myClan && !inRejoinCooldown
 
   const getClanJoinHint = (clan: ClanPublic): string | null => {
     if (!isAuthenticated) return null
     if (myClan) return myClan.id === clan.id ? 'Your clan' : 'Already in a clan'
+    if (!isVerified) return 'Verification required'
     if (inRejoinCooldown && rejoinAvailableAt) {
       return `Rejoin in ${formatRejoinWait(rejoinAvailableAt)}`
     }
@@ -698,6 +832,40 @@ export function Clan() {
       setActionMsg(err instanceof Error ? err.message : 'Disband failed')
     } finally {
       setDisbandBusy(false)
+    }
+  }
+
+  const handleKickMember = async () => {
+    if (!myClan || !kickTarget) return
+    setKickBusy(true)
+    try {
+      await kickClanMember(myClan.id, kickTarget.username)
+      setKickTarget(null)
+      setActionMsg(`Removed ${kickTarget.username} from the clan.`)
+      loadMine()
+      loadList()
+      loadLeaderboards()
+    } catch (err) {
+      setActionMsg(err instanceof Error ? err.message : 'Remove member failed')
+    } finally {
+      setKickBusy(false)
+    }
+  }
+
+  const handleTransferLeadership = async () => {
+    if (!myClan || !transferTarget) return
+    setTransferBusy(true)
+    try {
+      const { new_leader_username } = await transferClanLeadership(myClan.id, transferTarget.username)
+      setTransferTarget(null)
+      setActionMsg(`${new_leader_username} is now clan leader.`)
+      loadMine()
+      loadList()
+      loadLeaderboards()
+    } catch (err) {
+      setActionMsg(err instanceof Error ? err.message : 'Transfer failed')
+    } finally {
+      setTransferBusy(false)
     }
   }
 
@@ -843,6 +1011,10 @@ export function Clan() {
       setShowAuth(true)
       return
     }
+    if (!isVerified) {
+      setActionMsg('Account verification is required to request joining a clan.')
+      return
+    }
     setJoinBusyClanId(clanId)
     requestJoinClan(clanId)
       .then(() => {
@@ -887,7 +1059,7 @@ export function Clan() {
       <header className="clan-page-header">
         <h1 className="clan-page-title">Clans</h1>
         <p className="clan-page-lead">
-          Pool Cobble$ in a shared treasury, unlock perks as the balance grows, and compete on treasury and average ELO
+          Pool Cobble$ in a shared treasury, unlock perks as the balance grows, and compete on treasury and total ELO
           leaderboards.
         </p>
       </header>
@@ -929,7 +1101,7 @@ export function Clan() {
                     <strong>Create a clan</strong> — one-time fee of {fmt(createCost)} CD from your website balance.
                   </li>
                   <li>
-                    <strong>Join a clan</strong> — send a request; the leader approves new members.
+                    <strong>Join a clan</strong> — verified accounts can send a request; the leader approves new members.
                   </li>
                 </ul>
               </div>
@@ -949,23 +1121,27 @@ export function Clan() {
                     <strong>{fmt(50_000)} CD × members</strong> credited to treasury daily at 00:00 Asia/Ho_Chi_Minh.
                   </li>
                   <li>
-                    <strong>#{1} on each leaderboard</strong> (Top treasury &amp; Average ELO) earns an additional{' '}
-                    {fmt(lbRewardTop1)} CD/day per board, paid automatically into treasury.
+                    <strong>#1 on each leaderboard</strong> earns {fmt(lbRewardTop1)} CD/day; <strong>#2</strong> earns{' '}
+                    {fmt(lbRewardTop2)} CD/day (treasury, total ELO, and level) — paid into clan treasury at 00:00.
                   </li>
                 </ul>
               </div>
               <div className="clan-how-block">
                 <h3 className="clan-how-block-title">Membership</h3>
                 <ul className="clan-how-list">
-                  <li>Leaders may distribute treasury funds to members at their discretion.</li>
+                  <li>Each daily login claim while in a clan earns <strong>50+ XP</strong> for the clan (more on streak days).</li>
+                  <li>Leaders may distribute treasury funds, remove members, or transfer leadership.</li>
                   <li>After leaving a clan, a <strong>24-hour cooldown</strong> applies before you can join another.</li>
+                  <li>
+                    <strong>Account verification</strong> is required to request joining a clan (same as the website shop).
+                  </li>
                 </ul>
               </div>
               <div className="clan-how-block clan-how-block--wide">
-                <h3 className="clan-how-block-title">Clan strength (Average ELO)</h3>
+                <h3 className="clan-how-block-title">Clan strength (Total ELO)</h3>
                 <p className="clan-how-text">
-                  Rankings use each member&apos;s best singles or doubles rating, averaged across the roster. Players
-                  without a ranked ladder entry count as 1,000 ELO.
+                  Rankings use the sum of each member&apos;s best singles or doubles rating. Players without a ranked
+                  ladder entry count as 1,000 ELO each.
                 </p>
               </div>
             </div>
@@ -1005,8 +1181,9 @@ export function Clan() {
         <section className="clan-panel">
           <h2 className="clan-section-title">Clan leaderboards</h2>
           <p className="clan-section-hint">
-            Site-wide rankings by treasury balance and average ELO. #1 on each board earns{' '}
-            <strong className="text-[#f0d48a]">{fmt(lbRewardTop1)} CD/day</strong> in clan treasury (00:00
+            Site-wide rankings by treasury, total ELO, and clan level. #1 on each board earns{' '}
+            <strong className="text-[#f0d48a]">{fmt(lbRewardTop1)} CD/day</strong>; #2 earns{' '}
+            <strong className="text-[#f0d48a]">{fmt(lbRewardTop2)} CD/day</strong> in clan treasury (00:00
             Asia/Ho_Chi_Minh).
           </p>
           {lbLoading ? (
@@ -1017,8 +1194,11 @@ export function Clan() {
                 <ClanTabButton active={lbView === 'top_treasury'} onClick={() => setLbView('top_treasury')}>
                   Top treasury
                 </ClanTabButton>
-                <ClanTabButton active={lbView === 'top_average_elo'} onClick={() => setLbView('top_average_elo')}>
-                  Average ELO
+                <ClanTabButton active={lbView === 'top_total_elo'} onClick={() => setLbView('top_total_elo')}>
+                  Total ELO
+                </ClanTabButton>
+                <ClanTabButton active={lbView === 'top_level'} onClick={() => setLbView('top_level')}>
+                  Top level
                 </ClanTabButton>
               </div>
               {lbView === 'top_treasury' ? (
@@ -1029,16 +1209,29 @@ export function Clan() {
                   valueKey="bank_balance"
                   valueLabel="treasury"
                   rewardTop1={lbRewardTop1}
+                  rewardTop2={lbRewardTop2}
+                  showTitle={false}
+                />
+              ) : lbView === 'top_total_elo' ? (
+                <ClanLeaderboardTable
+                  title="Total ELO"
+                  hint="Highest combined member ELO — each member's best singles or doubles rating, summed together."
+                  rows={lbTotalElo}
+                  valueKey="total_elo"
+                  valueLabel="total ELO"
+                  rewardTop1={lbRewardTop1}
+                  rewardTop2={lbRewardTop2}
                   showTitle={false}
                 />
               ) : (
                 <ClanLeaderboardTable
-                  title="Average ELO"
-                  hint="Highest clan average ELO — each member's best singles or doubles rating, averaged together."
-                  rows={lbAvgElo}
-                  valueKey="average_elo"
-                  valueLabel="avg ELO"
+                  title="Top level"
+                  hint="Highest clan level from member daily login claims. Ties break on total XP."
+                  rows={lbLevel}
+                  valueKey="level"
+                  valueLabel="level"
                   rewardTop1={lbRewardTop1}
+                  rewardTop2={lbRewardTop2}
                   showTitle={false}
                 />
               )}
@@ -1176,7 +1369,10 @@ export function Clan() {
           <div className="clan-mine-header">
             <img src={myClan.avatar_url} alt="" className="clan-mine-avatar" />
             <div className="clan-mine-head-text">
-              <h2 className="clan-mine-name">{myClan.name}</h2>
+              <h2 className="clan-mine-name">
+                {myClan.name}
+                <span className="clan-mine-level">Level {myClan.level}</span>
+              </h2>
               <div className="clan-mine-head-meta">
                 <ClanLeaderDisplay username={myClan.leader_username} />
                 {myClan.my_role !== 'leader' ? (
@@ -1294,23 +1490,13 @@ export function Clan() {
               ) : null}
             </div>
             <div className="clan-stat-card">
-              <span className="clan-stat-label">Average ELO</span>
-              {myClan.average_elo != null ? (
-                <span className="clan-stat-value clan-stat-value--elo">
-                  <span className="clan-stat-elo-num">{fmt(myClan.average_elo)}</span>
-                  {myClanAvgTier ? (
-                    <PvPTierBadge
-                      slug={myClanAvgTier.slug}
-                      displayName={myClanAvgTier.displayName}
-                      imgHeightClass="h-5"
-                      className="!min-h-0 shrink-0"
-                    />
-                  ) : null}
-                </span>
+              <span className="clan-stat-label">Total ELO</span>
+              {myClan.total_elo != null ? (
+                <span className="clan-stat-value">{fmt(myClan.total_elo)}</span>
               ) : (
                 <span className="clan-stat-value text-muted">—</span>
               )}
-              <span className="clan-stat-sub">{clanAverageEloHint()}</span>
+              <span className="clan-stat-sub">{clanTotalEloHint()}</span>
             </div>
             <div className="clan-stat-card">
               <span className="clan-stat-label">Your donations</span>
@@ -1321,10 +1507,13 @@ export function Clan() {
 
           <ClanLeaderboardRewardsPanel
             rewardTop1={myClan.leaderboard_daily_reward_top1 ?? lbRewardTop1}
-            ranks={myClan.leaderboard_ranks ?? { top_treasury: null, top_average_elo: null }}
+            rewardTop2={myClan.leaderboard_daily_reward_top2 ?? lbRewardTop2}
+            ranks={myClan.leaderboard_ranks ?? { top_treasury: null, top_total_elo: null, top_level: null }}
             dailyBonus={myClan.leaderboard_daily_treasury_bonus ?? 0}
             recentPayouts={myClan.recent_leaderboard_payouts ?? []}
           />
+
+          <ClanLevelProgress clan={myClan} />
 
           <ClanMilestones clan={myClan} />
 
@@ -1412,6 +1601,24 @@ export function Clan() {
                         </span>
                         <span className="clan-member-donated">{fmt(m.donated_total)} CD donated</span>
                       </div>
+                      {isLeader && m.role !== 'leader' ? (
+                        <div className="clan-member-actions">
+                          <button
+                            type="button"
+                            className="clan-btn clan-btn-sm clan-btn-secondary"
+                            onClick={() => setTransferTarget({ user_id: m.user_id, username: m.username })}
+                          >
+                            Make leader
+                          </button>
+                          <button
+                            type="button"
+                            className="clan-btn clan-btn-sm clan-btn-kick"
+                            onClick={() => setKickTarget({ user_id: m.user_id, username: m.username })}
+                          >
+                            Kick
+                          </button>
+                        </div>
+                      ) : null}
                     </li>
                   )
                 })}
@@ -1521,6 +1728,25 @@ export function Clan() {
           busy={disbandBusy}
           onCancel={() => setShowDisbandConfirm(false)}
           onConfirm={() => void handleDisbandClan()}
+        />
+      ) : null}
+
+      {kickTarget ? (
+        <ClanKickConfirmModal
+          username={kickTarget.username}
+          busy={kickBusy}
+          onCancel={() => setKickTarget(null)}
+          onConfirm={() => void handleKickMember()}
+        />
+      ) : null}
+
+      {transferTarget && myClan ? (
+        <ClanTransferLeaderModal
+          username={transferTarget.username}
+          clanName={myClan.name}
+          busy={transferBusy}
+          onCancel={() => setTransferTarget(null)}
+          onConfirm={() => void handleTransferLeadership()}
         />
       ) : null}
 

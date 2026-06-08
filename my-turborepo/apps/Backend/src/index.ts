@@ -64,6 +64,7 @@ import {
 import { registerTournamentRoutes } from "./tournamentRoutes.js";
 import { registerTournamentPredictionRoutes } from "./tournamentPrediction.js";
 import { registerClanRoutes, startClanDailyIncomeScheduler } from "./clanRoutes.js";
+import { grantClanXpForDailyLoginClaim } from "./clanXp.js";
 import { registerBattleRestrictionsRoutes } from "./battleRestrictionsRoutes.js";
 import { analyzeTeamPokepaste } from "./teamAnalyzeAi.js";
 import { createPokepasteShareUrl } from "./pokepasteLink.js";
@@ -4766,6 +4767,8 @@ app.post("/user/daily-login/claim", requireAuth, async (_req, res) => {
       .eq("user_id", user.userId)
       .eq("claim_date", today);
 
+    const clanXp = await grantClanXpForDailyLoginClaim(user.userId, streakDay, today);
+
     res.json({
       ok: true,
       date: today,
@@ -4776,6 +4779,7 @@ app.post("/user/daily-login/claim", requireAuth, async (_req, res) => {
         flatCobbleBonus,
         ticketBonus,
       },
+      clanXp: clanXp ?? undefined,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

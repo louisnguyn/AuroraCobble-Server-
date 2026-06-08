@@ -3762,6 +3762,22 @@
   font-size: 1.375rem;
   font-weight: 700;
   color: #f5efe6;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.clan-mine-level {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #c4b5fd;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(196, 181, 253, 0.35);
+  background: rgba(139, 92, 246, 0.12);
 }
 
 .clan-mine-meta,
@@ -3856,11 +3872,19 @@
   font-weight: 600;
 }
 
+.clan-mine-head-text {
+  flex: 1;
+  min-width: 0;
+}
+
 .clan-mine-bio {
   margin: 0.75rem 0 0;
   font-size: 0.875rem;
   color: #b8b4c8;
   line-height: 1.5;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  max-width: 100%;
 }
 
 .clan-settings {
@@ -4013,6 +4037,11 @@
   background: rgba(15, 13, 11, 0.35);
 }
 
+.clan-level-progress {
+  border-color: rgba(139, 92, 246, 0.2);
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.08) 0%, rgba(15, 13, 11, 0.35) 55%);
+}
+
 .clan-milestone-list {
   list-style: none;
   margin: 0;
@@ -4124,7 +4153,7 @@
 }
 
 .clan-lb-tabs {
-  max-width: 22rem;
+  max-width: 100%;
   margin-bottom: 1rem;
 }
 
@@ -4158,8 +4187,16 @@
   grid-template-columns: 2rem 2.25rem minmax(0, 1fr) auto auto;
 }
 
+.clan-lb-row--top2 {
+  grid-template-columns: 2rem 2.25rem minmax(0, 1fr) auto auto;
+}
+
 .clan-lb-row--top1 .clan-lb-rank {
   color: #f0d48a;
+}
+
+.clan-lb-row--top2 .clan-lb-rank {
+  color: #c8d4e0;
 }
 
 .clan-lb-reward-pill {
@@ -4172,6 +4209,12 @@
   color: #1a1510;
   background: linear-gradient(135deg, #f0d48a 0%, #d4a853 100%);
   border: 1px solid rgba(212, 168, 83, 0.5);
+}
+
+.clan-lb-reward-pill--top2 {
+  color: #1a1510;
+  background: linear-gradient(135deg, #dce8f0 0%, #a8b8c8 100%);
+  border-color: rgba(168, 184, 200, 0.5);
 }
 
 .clan-lb-rewards {
@@ -4485,6 +4528,36 @@
   font-size: 0.75rem;
 }
 
+.clan-member-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  width: 100%;
+}
+
+@media (min-width: 640px) {
+  .clan-member-actions {
+    width: auto;
+    flex-shrink: 0;
+  }
+}
+
+.clan-btn-kick {
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+.clan-btn-kick:hover:not(:disabled) {
+  color: #fecaca;
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+.clan-btn-kick:disabled {
+  opacity: 0.55;
+}
+
 .clan-treasury-actions {
   padding: 1rem 1.125rem;
   border-radius: 0.875rem;
@@ -4715,6 +4788,23 @@
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+}
+
+.clan-card-level {
+  flex-shrink: 0;
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #c4b5fd;
+  padding: 0.15rem 0.4rem;
+  border-radius: 999px;
+  border: 1px solid rgba(196, 181, 253, 0.3);
+  background: rgba(139, 92, 246, 0.1);
 }
 
 .clan-card-leader {
@@ -4884,6 +4974,8 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .clan-card-actions {
@@ -4909,5 +5001,331 @@
 
 .clan-empty--error {
   color: #f87171;
+}
+
+/* --- Clan mobile layout (< 640px) --- */
+@media (max-width: 639px) {
+  .clan-page {
+    padding: 1rem 0.75rem 2.5rem;
+    overflow-x: clip;
+  }
+
+  .clan-page-header {
+    margin-bottom: 1.25rem;
+  }
+
+  .clan-page-lead {
+    font-size: 0.875rem;
+  }
+
+  .clan-tabs {
+    gap: 0.3rem;
+    padding: 0.3rem;
+  }
+
+  .clan-tabs:not(.clan-lb-tabs) .clan-tab {
+    flex: 1 1 calc(50% - 0.2rem);
+    min-width: 0;
+    padding: 0.55rem 0.5rem;
+    font-size: 0.8125rem;
+    line-height: 1.25;
+  }
+
+  .clan-lb-tabs .clan-tab {
+    flex: 1 1 100%;
+    padding: 0.6rem 0.625rem;
+  }
+
+  .clan-panel,
+  .clan-panel--mine,
+  .clan-panel--how {
+    padding: 1rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .clan-section-hint {
+    font-size: 0.8125rem;
+  }
+
+  .clan-card {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 1rem;
+    gap: 0.75rem;
+  }
+
+  .clan-card-avatar {
+    width: 4rem;
+    height: 4rem;
+    align-self: flex-start;
+  }
+
+  .clan-card-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.65rem;
+  }
+
+  .clan-card-aside {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .clan-card-name {
+    white-space: normal;
+    flex-wrap: wrap;
+    font-size: 1.0625rem;
+  }
+
+  .clan-card-members {
+    text-align: left;
+  }
+
+  .clan-card-actions {
+    align-items: stretch;
+    width: auto;
+    margin-top: 0;
+  }
+
+  .clan-card-actions .clan-btn {
+    width: 100%;
+  }
+
+  .clan-card-action-hint {
+    max-width: none;
+    text-align: left;
+  }
+
+  .clan-card-stat-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .clan-card-stat--elo {
+    grid-column: auto;
+  }
+
+  .clan-mine-avatar {
+    width: 5rem;
+    height: 5rem;
+    align-self: flex-start;
+  }
+
+  .clan-mine-name {
+    font-size: 1.25rem;
+  }
+
+  .clan-stat-value {
+    font-size: 1.125rem;
+  }
+
+  .clan-lb-row,
+  .clan-lb-row--top1,
+  .clan-lb-row--top2 {
+    grid-template-columns: 2rem 2.25rem minmax(0, 1fr);
+    grid-template-areas:
+      "rank avatar name"
+      "rank avatar metric";
+    gap: 0.35rem 0.65rem;
+    padding: 0.85rem 0;
+    align-items: start;
+  }
+
+  .clan-lb-row--top1,
+  .clan-lb-row--top2 {
+    grid-template-areas:
+      "rank avatar name"
+      "rank avatar metric"
+      "pill pill pill";
+  }
+
+  .clan-lb-rank {
+    grid-area: rank;
+    padding-top: 0.2rem;
+  }
+
+  .clan-lb-avatar {
+    grid-area: avatar;
+  }
+
+  .clan-lb-name {
+    grid-area: name;
+    white-space: normal;
+    line-height: 1.3;
+  }
+
+  .clan-lb-metric {
+    grid-area: metric;
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .clan-lb-reward-pill {
+    grid-area: pill;
+    justify-self: start;
+    max-width: 100%;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.25;
+  }
+
+  .clan-lb-rewards-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .clan-lb-reward-slot-hint {
+    line-height: 1.35;
+  }
+
+  .clan-lb-rewards-history-row {
+    grid-template-columns: 1fr;
+    gap: 0.15rem;
+    padding: 0.35rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  }
+
+  .clan-lb-rewards-history-row:last-child {
+    border-bottom: none;
+  }
+
+  .clan-member-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.625rem;
+    padding: 0.875rem 0.875rem;
+  }
+
+  .clan-member-row--leader {
+    padding-left: calc(0.875rem - 3px);
+  }
+
+  .clan-member-side {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 0.35rem 0.75rem;
+  }
+
+  .clan-member-elo {
+    flex-wrap: wrap;
+  }
+
+  .clan-member-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+  }
+
+  .clan-member-actions .clan-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .clan-join-item {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.625rem;
+  }
+
+  .clan-join-actions {
+    width: 100%;
+  }
+
+  .clan-join-actions .clan-btn {
+    flex: 1 1 calc(50% - 0.25rem);
+  }
+
+  .clan-treasury-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .clan-treasury-field,
+  .clan-treasury-field--amount {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .clan-treasury-form .clan-btn {
+    width: 100%;
+  }
+
+  .clan-create-icon-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .clan-create-preview-col {
+    align-self: center;
+  }
+
+  .clan-create-fields {
+    gap: 0.875rem;
+  }
+
+  .clan-flash {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .clan-flash-dismiss {
+    margin-left: 0;
+    align-self: flex-end;
+  }
+
+  .clan-leave-wrap {
+    justify-content: stretch;
+  }
+
+  .clan-leave-wrap .clan-btn {
+    width: 100%;
+  }
+
+  .clan-modal-backdrop {
+    padding: 0.75rem;
+    align-items: flex-end;
+  }
+
+  .clan-modal {
+    max-width: none;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    padding: 1.125rem 1rem 1.25rem;
+  }
+
+  .clan-modal-actions {
+    flex-direction: column-reverse;
+    gap: 0.5rem;
+  }
+
+  .clan-modal-actions .clan-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .clan-search {
+    width: 100%;
+  }
+
+  .clan-btn-disband {
+    width: 100%;
+  }
+
+  .clan-milestone-head {
+    flex-wrap: wrap;
+  }
+
+  .clan-milestone-label {
+    font-size: 0.8125rem;
+  }
+
+  .clan-top-donors-row {
+    flex-wrap: wrap;
+    gap: 0.25rem 0.5rem;
+  }
 }
 
