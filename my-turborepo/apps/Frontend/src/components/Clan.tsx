@@ -209,6 +209,7 @@ function ClanLeaderboardTable({
   valueKey,
   valueLabel,
   rewardTop1,
+  showTitle = true,
 }: {
   title: string
   hint?: string
@@ -216,10 +217,11 @@ function ClanLeaderboardTable({
   valueKey: 'bank_balance' | 'average_elo'
   valueLabel: string
   rewardTop1?: number
+  showTitle?: boolean
 }) {
   return (
     <div className="clan-lb-panel">
-      <h3 className="clan-section-title">{title}</h3>
+      {showTitle ? <h3 className="clan-section-title">{title}</h3> : null}
       {hint ? <p className="clan-section-hint">{hint}</p> : null}
       {rows.length === 0 ? (
         <p className="clan-empty clan-empty--compact">No clans yet.</p>
@@ -523,6 +525,7 @@ function ClanTabButton({
 }
 
 type ClanPageTab = 'browse' | 'leaderboard' | 'mine'
+type ClanLbView = 'top_treasury' | 'top_average_elo'
 
 export function Clan() {
   const { isAuthenticated, user } = useAuth()
@@ -558,6 +561,7 @@ export function Clan() {
   const [lbAvgElo, setLbAvgElo] = useState<ClanLeaderboardEntry[]>([])
   const [lbRewardTop1, setLbRewardTop1] = useState(200_000)
   const [lbLoading, setLbLoading] = useState(true)
+  const [lbView, setLbView] = useState<ClanLbView>('top_treasury')
   const [activeTab, setActiveTab] = useState<ClanPageTab>('browse')
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
   const [leaveBusy, setLeaveBusy] = useState(false)
@@ -1008,24 +1012,37 @@ export function Clan() {
           {lbLoading ? (
             <p className="clan-empty clan-empty--compact">Loading leaderboards…</p>
           ) : (
-            <div className="clan-lb-grid">
-              <ClanLeaderboardTable
-                title="Top treasury"
-                hint="Highest current clan treasury balance."
-                rows={lbTreasury}
-                valueKey="bank_balance"
-                valueLabel="treasury"
-                rewardTop1={lbRewardTop1}
-              />
-            <ClanLeaderboardTable
-              title="Average ELO"
-              hint="Highest clan average ELO"
-              rows={lbAvgElo}
-              valueKey="average_elo"
-              valueLabel="avg ELO"
-              rewardTop1={lbRewardTop1}
-            />
-            </div>
+            <>
+              <div className="clan-tabs clan-lb-tabs" role="tablist" aria-label="Leaderboard category">
+                <ClanTabButton active={lbView === 'top_treasury'} onClick={() => setLbView('top_treasury')}>
+                  Top treasury
+                </ClanTabButton>
+                <ClanTabButton active={lbView === 'top_average_elo'} onClick={() => setLbView('top_average_elo')}>
+                  Average ELO
+                </ClanTabButton>
+              </div>
+              {lbView === 'top_treasury' ? (
+                <ClanLeaderboardTable
+                  title="Top treasury"
+                  hint="Highest current clan treasury balance."
+                  rows={lbTreasury}
+                  valueKey="bank_balance"
+                  valueLabel="treasury"
+                  rewardTop1={lbRewardTop1}
+                  showTitle={false}
+                />
+              ) : (
+                <ClanLeaderboardTable
+                  title="Average ELO"
+                  hint="Highest clan average ELO — each member's best singles or doubles rating, averaged together."
+                  rows={lbAvgElo}
+                  valueKey="average_elo"
+                  valueLabel="avg ELO"
+                  rewardTop1={lbRewardTop1}
+                  showTitle={false}
+                />
+              )}
+            </>
           )}
         </section>
       )}

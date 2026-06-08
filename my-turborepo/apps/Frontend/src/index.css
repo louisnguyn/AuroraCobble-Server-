@@ -4123,10 +4123,9 @@
   margin-bottom: 1.5rem;
 }
 
-.clan-lb-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1.25rem;
+.clan-lb-tabs {
+  max-width: 22rem;
+  margin-bottom: 1rem;
 }
 
 .clan-lb-panel {
