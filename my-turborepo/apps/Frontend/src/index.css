@@ -1954,6 +1954,175 @@
     margin: 0.2rem 0 0;
   }
 
+  .profile-clan-card {
+    background:
+      radial-gradient(ellipse 110% 75% at 0% 0%, rgba(234, 179, 8, 0.09), transparent 52%),
+      radial-gradient(ellipse 90% 70% at 100% 100%, rgba(34, 211, 238, 0.08), transparent 50%),
+      linear-gradient(165deg, rgba(22, 20, 36, 0.98) 0%, rgba(10, 9, 18, 0.94) 100%);
+    border-color: rgba(94, 80, 140, 0.45) !important;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      0 12px 40px rgba(0, 0, 0, 0.35);
+  }
+
+  .profile-clan-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.85rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.85rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  }
+
+  .profile-clan-icon-wrap {
+    flex-shrink: 0;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(145deg, rgba(234, 179, 8, 0.16), rgba(34, 211, 238, 0.12));
+    border: 1px solid rgba(234, 179, 8, 0.28);
+    color: #fcd34d;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  }
+
+  .profile-clan-title {
+    font-size: 1.125rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    margin: 0;
+    background: linear-gradient(92deg, #f8fafc 0%, #fde68a 40%, #7ee8fb 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .profile-clan-sub {
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: rgba(154, 163, 196, 0.85);
+    margin: 0.2rem 0 0;
+  }
+
+  .profile-clan-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    min-width: 0;
+  }
+
+  .profile-clan-identity {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    min-width: 0;
+  }
+
+  .profile-clan-lb-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .profile-clan-lb-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    min-height: 4.5rem;
+    padding: 0.55rem 0.35rem;
+    border-radius: 0.75rem;
+    background: rgba(0, 0, 0, 0.28);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+
+  .profile-clan-lb-tile-rank {
+    font-size: 1.375rem;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+    color: #e2e8f0;
+  }
+
+  .profile-clan-lb-tile-label {
+    margin-top: 0.35rem;
+    font-size: 0.5625rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    line-height: 1.25;
+    color: rgba(154, 163, 196, 0.92);
+  }
+
+  .profile-clan-lb-tile--top1 {
+    border-color: rgba(234, 179, 8, 0.35);
+    background: linear-gradient(165deg, rgba(234, 179, 8, 0.14), rgba(0, 0, 0, 0.28));
+  }
+
+  .profile-clan-lb-tile--top1 .profile-clan-lb-tile-rank {
+    color: #fcd34d;
+    text-shadow: 0 0 18px rgba(234, 179, 8, 0.35);
+  }
+
+  .profile-clan-lb-tile--top2 {
+    border-color: rgba(203, 213, 225, 0.28);
+    background: linear-gradient(165deg, rgba(148, 163, 184, 0.12), rgba(0, 0, 0, 0.28));
+  }
+
+  .profile-clan-lb-tile--top2 .profile-clan-lb-tile-rank {
+    color: #e2e8f0;
+  }
+
+  .profile-clan-avatar {
+    width: 3.25rem;
+    height: 3.25rem;
+    border-radius: 0.85rem;
+    object-fit: cover;
+    flex-shrink: 0;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  }
+
+  .profile-clan-name {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #f8fafc;
+    overflow-wrap: anywhere;
+  }
+
+  .profile-clan-stats {
+    font-size: 0.8125rem;
+    color: #9b96ba;
+    margin-top: 0.2rem !important;
+  }
+
+  .profile-clan-role {
+    display: inline-block;
+    margin-top: 0.45rem;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.5rem;
+    border-radius: 999px;
+    color: #b8b4c8;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .profile-clan-role--leader {
+    color: #fcd34d;
+    background: rgba(234, 179, 8, 0.12);
+    border-color: rgba(234, 179, 8, 0.35);
+  }
+
   .profile-rank-stat-row {
     display: flex;
     align-items: center;
@@ -4328,6 +4497,81 @@
   font-variant-numeric: tabular-nums;
 }
 
+.clan-treasury-history {
+  margin-top: 1.25rem;
+  padding: 1rem 1.125rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.clan-treasury-history-block + .clan-treasury-history-block {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.clan-treasury-history-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #c4c0d4;
+}
+
+.clan-treasury-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.clan-treasury-history-row {
+  display: grid;
+  grid-template-columns: minmax(7rem, 9rem) 1fr auto;
+  gap: 0.5rem 0.75rem;
+  align-items: baseline;
+  font-size: 0.8125rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.clan-treasury-history-row:last-child {
+  border-bottom: none;
+}
+
+.clan-treasury-history-when {
+  color: #7a758f;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+}
+
+.clan-treasury-history-who {
+  color: #b8b4c8;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.clan-treasury-history-who strong {
+  color: #f5efe6;
+  font-weight: 600;
+}
+
+.clan-treasury-history-amount {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.clan-treasury-history-amount--in {
+  color: #6ee7b7;
+}
+
+.clan-treasury-history-amount--out {
+  color: #fbbf24;
+}
+
 .clan-lb-rank {
   font-size: 0.8125rem;
   font-weight: 700;
@@ -5187,6 +5431,20 @@
 
   .clan-lb-rewards-history-row:last-child {
     border-bottom: none;
+  }
+
+  .clan-treasury-history {
+    padding: 0.875rem;
+  }
+
+  .clan-treasury-history-row {
+    grid-template-columns: 1fr;
+    gap: 0.15rem;
+    padding: 0.5rem 0;
+  }
+
+  .clan-treasury-history-amount {
+    justify-self: start;
   }
 
   .clan-member-row {

@@ -4,6 +4,8 @@ import {
   leaderboardPayloadHasSyncedData,
   livePvpSnapFromLeaderboardForWebsiteUser,
 } from "./leaderboardPvpDerived.js";
+import { fetchClanLeaderboardRanksById } from "./clanRoutes.js";
+import { clanLevelFromXp, clanMaxMembersFromTreasury } from "./clanLogic.js";
 import { fetchGrantedPublicAchievements } from "./profileAchievements.js";
 
 export type { PublicAchievement };
@@ -34,6 +36,21 @@ export function sanitizeAvatarUrl(raw: unknown): string | null {
   return isSafeHttpsAvatarUrl(t) ? t : null;
 }
 
+export type PublicProfileClan = {
+  id: number;
+  name: string;
+  avatarUrl: string;
+  level: number;
+  role: "leader" | "member";
+  memberCount: number;
+  maxMembers: number;
+  leaderboardRanks: {
+    top_treasury: number | null;
+    top_total_elo: number | null;
+    top_level: number | null;
+  };
+};
+
 export type PublicProfilePayload = {
   username: string;
   bio: string | null;
@@ -41,6 +58,7 @@ export type PublicProfilePayload = {
   minecraftRole: string;
   memberSince: string;
   achievements: PublicAchievement[];
+  clan: PublicProfileClan | null;
   pvp: {
     rank: number | null;
     /** Present when ELO is known (tier derived from ELO). */
@@ -132,6 +150,50 @@ export async function fetchPublicProfileByUsername(
 
   const achievements = await fetchGrantedPublicAchievements(supabase, uid);
 
+  let clan: PublicProfileClan | null = null;
+  const { data: memberRow } = await supabase
+    .from("clan_members")
+    .select("role, clan_id")
+    .eq("user_id", uid)
+    .maybeSingle();
+  if (memberRow) {
+    const m = memberRow as { role: string; clan_id: number };
+    const { data: clanRow } = await supabase
+      .from("clans")
+      .select("id, name, avatar_url, xp, bank_balance")
+      .eq("id", m.clan_id)
+      .maybeSingle();
+    if (clanRow) {
+      const c = clanRow as {
+        id: number;
+        name: string;
+        avatar_url: string;
+        xp: number;
+        bank_balance: number;
+      };
+      const [memberCountRes, leaderboardRanks] = await Promise.all([
+        supabase
+          .from("clan_members")
+          .select("user_id", { count: "exact", head: true })
+          .eq("clan_id", c.id),
+        fetchClanLeaderboardRanksById(
+          c.id,
+          liveLeaderboardPayload != null ? () => liveLeaderboardPayload : undefined
+        ),
+      ]);
+      clan = {
+        id: c.id,
+        name: c.name,
+        avatarUrl: c.avatar_url,
+        level: clanLevelFromXp(Math.max(0, c.xp ?? 0)),
+        role: m.role === "leader" ? "leader" : "member",
+        memberCount: memberCountRes.count ?? 0,
+        maxMembers: clanMaxMembersFromTreasury(c.bank_balance),
+        leaderboardRanks,
+      };
+    }
+  }
+
   const tier = elo != null && Number.isFinite(elo) ? pvpTierFromElo(elo) : null;
 
   return {
@@ -141,6 +203,7 @@ export async function fetchPublicProfileByUsername(
     minecraftRole: mcRole,
     memberSince: createdAt,
     achievements,
+    clan,
     pvp: {
       rank,
       tier,

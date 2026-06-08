@@ -7015,6 +7015,7 @@ registerClanRoutes(app, {
   ensureUserCobbledollarsRow,
   recordCobbledollarLedger,
   incrementUserCurrency,
+  ensureUserTicketsWalletRow,
   cobbledollarsCurrency: COBBLEDOLLARS_CURRENCY,
   ticketsCurrency: PVP_TICKETS_CURRENCY,
   getLiveLeaderboard: () => cobbleStore.leaderboard,
@@ -7043,7 +7044,9 @@ app.listen(port, () => {
     ensureUserCobbledollarsRow,
     recordCobbledollarLedger,
     incrementUserCurrency,
+    ensureUserTicketsWalletRow,
     cobbledollarsCurrency: COBBLEDOLLARS_CURRENCY,
     ticketsCurrency: PVP_TICKETS_CURRENCY,
+    getLiveLeaderboard: () => cobbleStore.leaderboard,
   });
 });

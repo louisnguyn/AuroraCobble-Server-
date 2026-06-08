@@ -16,6 +16,8 @@ import {
   rejectClanJoinRequest,
   transferClanLeadership,
   requestJoinClan,
+  type ClanDisbursementRow,
+  type ClanDonationRow,
   type ClanLeaderboardEntry,
   type ClanLeaderboardPayoutRow,
   type ClanPublic,
@@ -26,6 +28,14 @@ import { isAccountVerified } from './VerifiedAccountBadge.tsx'
 
 function fmt(n: number): string {
   return n.toLocaleString('en-US')
+}
+
+function fmtClanDt(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+  } catch {
+    return iso
+  }
 }
 
 function clanTotalEloHint(): string {
@@ -169,6 +179,63 @@ function clanLbDailyRewardAmount(rank: number | null, top1: number, top2: number
   if (rank === 1) return top1
   if (rank === 2) return top2
   return null
+}
+
+function ClanTreasuryActivity({
+  donations,
+  disbursements,
+}: {
+  donations: ClanDonationRow[]
+  disbursements: ClanDisbursementRow[]
+}) {
+  if (donations.length === 0 && disbursements.length === 0) return null
+
+  return (
+    <div className="clan-treasury-history">
+      <h3 className="clan-section-title">Treasury activity</h3>
+      <p className="clan-section-hint">
+        Recent donations into the treasury and leader payouts to members (last 20 each).
+      </p>
+
+      {donations.length > 0 ? (
+        <div className="clan-treasury-history-block">
+          <h4 className="clan-treasury-history-title">Donations</h4>
+          <ul className="clan-treasury-history-list">
+            {donations.map((d) => (
+              <li key={d.id} className="clan-treasury-history-row">
+                <span className="clan-treasury-history-when">{fmtClanDt(d.created_at)}</span>
+                <span className="clan-treasury-history-who">
+                  <strong>{d.username}</strong> donated
+                </span>
+                <span className="clan-treasury-history-amount clan-treasury-history-amount--in">
+                  +{fmt(d.amount)} CD
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {disbursements.length > 0 ? (
+        <div className="clan-treasury-history-block">
+          <h4 className="clan-treasury-history-title">Treasury distributions</h4>
+          <ul className="clan-treasury-history-list">
+            {disbursements.map((d) => (
+              <li key={d.id} className="clan-treasury-history-row">
+                <span className="clan-treasury-history-when">{fmtClanDt(d.created_at)}</span>
+                <span className="clan-treasury-history-who">
+                  <strong>{d.leader_username}</strong> → <strong>{d.recipient_username}</strong>
+                </span>
+                <span className="clan-treasury-history-amount clan-treasury-history-amount--out">
+                  {fmt(d.amount)} CD
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  )
 }
 
 function ClanLeaderboardRewardsPanel({
@@ -1698,6 +1765,11 @@ export function Clan() {
               </div>
             ) : null}
           </div>
+
+          <ClanTreasuryActivity
+            donations={myClan.recent_donations ?? []}
+            disbursements={myClan.recent_disbursements ?? []}
+          />
 
           {myClan && myClan.my_role === 'member' && (
             <div className="clan-leave-wrap">

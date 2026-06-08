@@ -859,6 +859,21 @@ export type PublicProfileAchievement = {
     | 'mythic'
 }
 
+export type PublicProfileClan = {
+  id: number
+  name: string
+  avatarUrl: string
+  level: number
+  role: 'leader' | 'member'
+  memberCount: number
+  maxMembers: number
+  leaderboardRanks: {
+    top_treasury: number | null
+    top_total_elo: number | null
+    top_level: number | null
+  }
+}
+
 export type PublicProfile = {
   username: string
   bio: string | null
@@ -866,6 +881,7 @@ export type PublicProfile = {
   minecraftRole: string
   memberSince: string
   achievements: PublicProfileAchievement[]
+  clan: PublicProfileClan | null
   pvp: {
     rank: number | null
     tier: string | null
@@ -1033,6 +1049,24 @@ export interface ClanLeaderboardPayoutRow {
   rank_position?: number
 }
 
+export interface ClanDonationRow {
+  id: number
+  user_id: number
+  username: string
+  amount: number
+  created_at: string
+}
+
+export interface ClanDisbursementRow {
+  id: number
+  leader_id: number
+  leader_username: string
+  recipient_id: number
+  recipient_username: string
+  amount: number
+  created_at: string
+}
+
 export interface MyClanResponse {
   clan: (ClanPublic & {
     my_role: string
@@ -1046,6 +1080,8 @@ export interface MyClanResponse {
     /** Extra daily treasury from leaderboard placement (#1 and #2 on each category). */
     leaderboard_daily_treasury_bonus: number
     recent_leaderboard_payouts: ClanLeaderboardPayoutRow[]
+    recent_donations: ClanDonationRow[]
+    recent_disbursements: ClanDisbursementRow[]
   }) | null
   pending_join_requests: ClanJoinRequestRow[]
   my_pending_join_requests: Array<{ id: number; clan_id: number; created_at: string }>

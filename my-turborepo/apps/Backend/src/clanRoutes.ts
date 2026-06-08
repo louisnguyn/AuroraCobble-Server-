@@ -53,6 +53,7 @@ type ClanDeps = {
     amount: number,
     ledger?: { kind: string; detail?: string | null }
   ) => Promise<number>;
+  ensureUserTicketsWalletRow: (userId: number) => Promise<void>;
   cobbledollarsCurrency: string;
   ticketsCurrency: string;
   /** In-memory CobbleRanked leaderboard for live singles/doubles ELO. */
@@ -629,7 +630,8 @@ function leaderboardRewardsMeta() {
     top2_per_category: CLAN_LEADERBOARD_DAILY_REWARD_TOP2,
     categories: CLAN_LEADERBOARD_REWARD_CATEGORIES,
     timezone: DAILY_RESET_TIMEZONE,
-    schedule: "Daily at 00:00 — credited to clan treasury",
+    schedule:
+      "Daily at 00:00 — member income & leaderboard bonuses to treasury; ticket milestones to members",
   };
 }
 
@@ -677,19 +679,25 @@ async function creditCobbledollars(
 export async function runClanDailyIncome(deps: ClanDeps): Promise<{ processed: number; date: string }> {
   if (!supabase) return { processed: 0, date: todayKeyInTimezone() };
   const today = todayKeyInTimezone();
-  const { data: clans, error } = await supabase
-    .from("clans")
-    .select("id, bank_balance, last_daily_income_date")
-    .or(`last_daily_income_date.is.null,last_daily_income_date.lt.${today}`);
-  if (error || !clans?.length) return { processed: 0, date: today };
+  const { data: clans, error } = await supabase.from("clans").select("id, bank_balance");
+  if (error) {
+    console.warn("[clan-daily] load clans:", error.message);
+    return { processed: 0, date: today };
+  }
+  if (!clans?.length) return { processed: 0, date: today };
 
   let processed = 0;
   for (const raw of clans) {
-    const clan = raw as {
-      id: number;
-      bank_balance: number;
-      last_daily_income_date: string | null;
-    };
+    const clan = raw as { id: number; bank_balance: number };
+
+    const { data: existingPayout } = await supabase
+      .from("clan_daily_member_income_payouts")
+      .select("id")
+      .eq("clan_id", clan.id)
+      .eq("payout_date", today)
+      .maybeSingle();
+    if (existingPayout) continue;
+
     const { count } = await supabase
       .from("clan_members")
       .select("user_id", { count: "exact", head: true })
@@ -698,9 +706,12 @@ export async function runClanDailyIncome(deps: ClanDeps): Promise<{ processed: n
     if (memberCount < 1) continue;
 
     const income = clanDailyBankIncome(memberCount, clan.bank_balance);
+    if (income < 1) continue;
+
     const newBank = clan.bank_balance + income;
     const now = new Date().toISOString();
-    const { data: updated } = await supabase
+
+    const { data: updated, error: updErr } = await supabase
       .from("clans")
       .update({
         bank_balance: newBank,
@@ -708,24 +719,74 @@ export async function runClanDailyIncome(deps: ClanDeps): Promise<{ processed: n
         updated_at: now,
       })
       .eq("id", clan.id)
-      .or(`last_daily_income_date.is.null,last_daily_income_date.lt.${today}`)
+      .eq("bank_balance", clan.bank_balance)
       .select("id");
-    if (!updated?.length) continue;
-    processed += 1;
+    if (updErr) {
+      console.warn(`[clan-daily] treasury update failed clan #${clan.id}:`, updErr.message);
+      continue;
+    }
+    if (!updated?.length) {
+      console.warn(`[clan-daily] treasury update skipped clan #${clan.id} (balance changed concurrently)`);
+      continue;
+    }
 
-    if (clanHasDailyTicketBonus(clan.bank_balance)) {
-      const ticketBonus = clanDailyTicketBonus(clan.bank_balance);
+    const { error: logErr } = await supabase.from("clan_daily_member_income_payouts").insert({
+      clan_id: clan.id,
+      payout_date: today,
+      member_count: memberCount,
+      income_amount: income,
+      paid_at: now,
+    });
+    if (logErr) {
+      console.warn(`[clan-daily] payout log failed clan #${clan.id}:`, logErr.message);
+      if (/clan_daily_member_income_payouts|relation|does not exist|schema cache/i.test(logErr.message)) {
+        console.warn("[clan-daily] Run supabase/clan_daily_member_income_payouts.sql in Supabase SQL Editor.");
+      }
+      await supabase
+        .from("clans")
+        .update({ bank_balance: clan.bank_balance, updated_at: now })
+        .eq("id", clan.id)
+        .eq("bank_balance", newBank);
+      continue;
+    }
+
+    processed += 1;
+    console.log(
+      `[clan-daily] clan #${clan.id} +${income} CD treasury (${clan.bank_balance} → ${newBank}) members=${memberCount}`
+    );
+
+    if (clanHasDailyTicketBonus(newBank)) {
+      const ticketBonus = clanDailyTicketBonus(newBank);
       const { data: members } = await supabase
         .from("clan_members")
         .select("user_id")
         .eq("clan_id", clan.id);
+      let ticketsGranted = 0;
       for (const m of members ?? []) {
         const uid = (m as { user_id: number }).user_id;
-        await deps.incrementUserCurrency(uid, deps.ticketsCurrency, ticketBonus, {
-          kind: "clan_daily_tickets",
-          detail: `clan #${clan.id}`,
-        });
+        try {
+          await deps.ensureUserTicketsWalletRow(uid);
+          const newTicketBalance = await deps.incrementUserCurrency(
+            uid,
+            deps.ticketsCurrency,
+            ticketBonus,
+            {
+              kind: "clan_daily_tickets",
+              detail: `clan #${clan.id} · ${today}`,
+            }
+          );
+          ticketsGranted += 1;
+          console.log(
+            `[clan-daily] clan #${clan.id} user #${uid} +${ticketBonus} ${deps.ticketsCurrency} (balance ${newTicketBalance})`
+          );
+        } catch (ticketErr) {
+          const msg = ticketErr instanceof Error ? ticketErr.message : String(ticketErr);
+          console.warn(`[clan-daily] ticket grant failed clan #${clan.id} user #${uid}:`, msg);
+        }
       }
+      console.log(
+        `[clan-daily] clan #${clan.id} tickets +${ticketBonus}/member granted=${ticketsGranted}/${members?.length ?? 0} treasury=${newBank}`
+      );
     }
   }
   return { processed, date: today };
@@ -827,8 +888,9 @@ export async function runClanLeaderboardDailyRewards(
   return { date: today, paid };
 }
 
-let clanDailyLastAttemptMinute = "";
+let clanDailyPayoutLastAttemptMinute = "";
 
+/** Member income + leaderboard rewards — both at 00:00 Asia/Ho_Chi_Minh (same tick as PvP daily payout). */
 export function startClanDailyIncomeScheduler(deps: ClanDeps): void {
   if (process.env.CLAN_DAILY_INCOME_DISABLE === "true") return;
   const tick = async () => {
@@ -847,19 +909,35 @@ export function startClanDailyIncomeScheduler(deps: ClanDeps): void {
     const hh = parts.find((p) => p.type === "hour")?.value ?? "00";
     const mm = parts.find((p) => p.type === "minute")?.value ?? "00";
     const key = `${y}-${m}-${d} ${hh}:${mm}`;
+
     if (hh !== "00" || mm !== "00") return;
-    if (clanDailyLastAttemptMinute === key) return;
-    clanDailyLastAttemptMinute = key;
+    if (clanDailyPayoutLastAttemptMinute === key) return;
+    clanDailyPayoutLastAttemptMinute = key;
+
+    let memberCredited = 0;
+    let payoutDate = todayKeyInTimezone();
     try {
       const result = await runClanDailyIncome(deps);
-      const lbResult = await runClanLeaderboardDailyRewards(deps.getLiveLeaderboard);
-      console.log(
-        `[clan-daily] date=${result.date} clans_credited=${result.processed} leaderboard_rewards=${lbResult.paid.length}`
-      );
+      memberCredited = result.processed;
+      payoutDate = result.date;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.warn(`[clan-daily] error: ${msg}`);
+      console.warn(`[clan-daily] member income error: ${msg}`);
     }
+
+    let leaderboardPaid = 0;
+    try {
+      const lbResult = await runClanLeaderboardDailyRewards(deps.getLiveLeaderboard);
+      leaderboardPaid = lbResult.paid.length;
+      payoutDate = lbResult.date;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[clan-daily] leaderboard rewards error: ${msg}`);
+    }
+
+    console.log(
+      `[clan-daily] date=${payoutDate} member_income_clans=${memberCredited} leaderboard_payouts=${leaderboardPaid}`
+    );
   };
   void tick();
   setInterval(() => void tick(), 60_000);
@@ -954,7 +1032,11 @@ export function registerClanRoutes(app: Express, deps: ClanDeps): void {
     const leader = members.find((m) => m.role === "leader");
     const { topTreasury, topTotalElo, topLevel } = await buildClanLeaderboards(getLiveLeaderboard, 50);
     const lbRanks = clanLeaderboardRanksForClan(membership.clan.id, topTreasury, topTotalElo, topLevel);
-    const recentLeaderboardPayouts = await loadRecentLeaderboardPayoutsForClan(membership.clan.id);
+    const [recentLeaderboardPayouts, recentDonations, recentDisbursements] = await Promise.all([
+      loadRecentLeaderboardPayoutsForClan(membership.clan.id),
+      loadRecentDonationsForClan(membership.clan.id, 20),
+      loadRecentDisbursementsForClan(membership.clan.id, 20),
+    ]);
     const payload = serializeClanPublic(
       membership.clan,
       members.length,
@@ -972,6 +1054,8 @@ export function registerClanRoutes(app: Express, deps: ClanDeps): void {
         leaderboard_ranks: lbRanks,
         leaderboard_daily_treasury_bonus: clanLeaderboardDailyTreasuryBonus(lbRanks),
         recent_leaderboard_payouts: recentLeaderboardPayouts,
+        recent_donations: recentDonations,
+        recent_disbursements: recentDisbursements,
       },
       pending_join_requests: pendingJoinRequests,
       my_pending_join_requests: [],
@@ -2014,4 +2098,16 @@ export function registerAdminClanRoutes(app: Express, deps: AdminClanDeps): void
     }
     res.json({ ok: true });
   });
+}
+
+export async function fetchClanLeaderboardRanksById(
+  clanId: number,
+  getLiveLeaderboard?: () => unknown
+): Promise<{
+  top_treasury: number | null;
+  top_total_elo: number | null;
+  top_level: number | null;
+}> {
+  const { topTreasury, topTotalElo, topLevel } = await buildClanLeaderboards(getLiveLeaderboard, 50);
+  return clanLeaderboardRanksForClan(clanId, topTreasury, topTotalElo, topLevel);
 }

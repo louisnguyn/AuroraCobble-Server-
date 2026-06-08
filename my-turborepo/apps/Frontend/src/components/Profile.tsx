@@ -48,6 +48,11 @@ type ProfileProps = {
   slugFromHashOrNav: string | null
 }
 
+function profileClanLbRankDisplay(rank: number | null): string {
+  if (rank == null) return '—'
+  return `#${rank}`
+}
+
 export function Profile({ slugFromHashOrNav }: ProfileProps) {
   const { user, isAuthenticated } = useAuth()
   const fromHash = slugFromHashOrNav?.trim() ?? ''
@@ -296,6 +301,69 @@ export function Profile({ slugFromHashOrNav }: ProfileProps) {
         </div>
 
         <div className="space-y-6 min-w-0">
+          {profile.clan ? (
+            <section className="profile-glass rounded-2xl border border-[#2d2a45]/85 p-6 sm:p-7 profile-clan-card">
+              <div className="profile-clan-head">
+                <div className="profile-clan-icon-wrap" aria-hidden>
+                  <svg
+                    className="w-[1.125rem] h-[1.125rem]"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M4 20V10l8-5 8 5v10H4Z" />
+                    <path d="M9 20v-6h6v6" />
+                  </svg>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h2 className="profile-clan-title">Clan</h2>
+                  <p className="profile-clan-sub">Website clan membership</p>
+                </div>
+              </div>
+              <div className="profile-clan-body">
+                <div className="profile-clan-identity">
+                  <img
+                    src={profile.clan.avatarUrl}
+                    alt=""
+                    className="profile-clan-avatar"
+                    loading="lazy"
+                  />
+                  <div className="profile-clan-meta min-w-0">
+                    <p className="profile-clan-name m-0">{profile.clan.name}</p>
+                    <p className="profile-clan-stats m-0">
+                      Level {profile.clan.level} · {profile.clan.memberCount}/{profile.clan.maxMembers} members
+                    </p>
+                    <span
+                      className={`profile-clan-role${profile.clan.role === 'leader' ? ' profile-clan-role--leader' : ''}`}
+                    >
+                      {profile.clan.role === 'leader' ? 'Clan leader' : 'Member'}
+                    </span>
+                  </div>
+                </div>
+                <div className="profile-clan-lb-grid" aria-label="Clan leaderboard ranks">
+                  {(
+                    [
+                      ['top_treasury', 'Treasury', profile.clan.leaderboardRanks?.top_treasury ?? null],
+                      ['top_total_elo', 'Total ELO', profile.clan.leaderboardRanks?.top_total_elo ?? null],
+                      ['top_level', 'Level', profile.clan.leaderboardRanks?.top_level ?? null],
+                    ] as const
+                  ).map(([key, label, rank]) => (
+                    <div
+                      key={key}
+                      className={`profile-clan-lb-tile${rank === 1 ? ' profile-clan-lb-tile--top1' : rank === 2 ? ' profile-clan-lb-tile--top2' : ''}`}
+                    >
+                      <span className="profile-clan-lb-tile-rank">{profileClanLbRankDisplay(rank)}</span>
+                      <span className="profile-clan-lb-tile-label">{label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          ) : null}
+
           {showPvPCard ? (
             <section className="profile-glass rounded-2xl border p-6 sm:p-7 profile-rank-strip">
               <div className="profile-rank-card-head">
