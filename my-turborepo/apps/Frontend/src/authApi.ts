@@ -946,16 +946,15 @@ export interface ClanPublic {
   member_count: number
   max_members: number
   bank_balance: number
-  total_donated: number
   average_elo: number | null
   daily_income_per_day: number
   daily_income_multiplier: number
   daily_income_per_member: number
   has_daily_ticket_bonus: boolean
   daily_ticket_bonus: number
-  next_member_unlock_donation: number | null
-  donate_milestone: number
-  donation_milestones: {
+  next_member_unlock_treasury: number | null
+  treasury_milestone: number
+  treasury_milestones: {
     key: string
     threshold: number
     label: string
@@ -983,7 +982,6 @@ export interface ClanLeaderboardEntry {
   avatar_url: string
   leader_username: string
   member_count: number
-  total_donated: number
   bank_balance: number
   average_elo: number | null
 }
@@ -997,14 +995,14 @@ export interface ClanJoinRequestRow {
 
 export interface ClanLeaderboardRewardsMeta {
   top1_per_category: number
-  categories: { key: 'top_donated' | 'top_average_elo'; label: string }[]
+  categories: { key: 'top_treasury' | 'top_average_elo'; label: string }[]
   timezone: string
   schedule: string
 }
 
 export interface ClanLeaderboardPayoutRow {
   payout_date: string
-  category: 'top_donated' | 'top_average_elo'
+  category: 'top_treasury' | 'top_average_elo'
   amount: number
   paid_at: string
 }
@@ -1015,7 +1013,7 @@ export interface MyClanResponse {
     my_donated_total: number
     members: ClanMemberRow[]
     leaderboard_ranks: {
-      top_donated: number | null
+      top_treasury: number | null
       top_average_elo: number | null
     }
     /** Extra daily treasury from holding #1 on leaderboard categories (0–2× top1 reward). */
@@ -1040,14 +1038,14 @@ export async function fetchClans(params?: { q?: string; limit?: number }): Promi
 }
 
 export async function fetchClanLeaderboards(params?: { limit?: number }): Promise<{
-  top_donated: ClanLeaderboardEntry[]
+  top_treasury: ClanLeaderboardEntry[]
   top_average_elo: ClanLeaderboardEntry[]
   rewards?: ClanLeaderboardRewardsMeta
 }> {
   const sp = new URLSearchParams()
   if (params?.limit) sp.set('limit', String(params.limit))
   const q = sp.toString()
-  return fetchApi<{ top_donated: ClanLeaderboardEntry[]; top_average_elo: ClanLeaderboardEntry[]; rewards?: ClanLeaderboardRewardsMeta }>(
+  return fetchApi<{ top_treasury: ClanLeaderboardEntry[]; top_average_elo: ClanLeaderboardEntry[]; rewards?: ClanLeaderboardRewardsMeta }>(
     `/clans/leaderboards${q ? `?${q}` : ''}`,
     { skipAuth: true }
   )

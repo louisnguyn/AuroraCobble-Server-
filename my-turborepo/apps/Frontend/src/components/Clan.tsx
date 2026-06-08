@@ -74,10 +74,11 @@ function ClanProgressBar({ value, complete }: { value: number; complete?: boolea
 }
 
 function ClanMilestones({ clan }: { clan: ClanPublic }) {
+  const treasury = clan.bank_balance
   const memberSlotPct =
     clan.max_members >= 5
       ? 100
-      : pct(clan.total_donated % clan.donate_milestone, clan.donate_milestone)
+      : pct(treasury % clan.treasury_milestone, clan.treasury_milestone)
 
   const milestones = [
     {
@@ -86,27 +87,27 @@ function ClanMilestones({ clan }: { clan: ClanPublic }) {
       detail:
         clan.max_members >= 5
           ? `Max ${clan.max_members} members unlocked`
-          : clan.next_member_unlock_donation != null
-            ? `${fmt(clan.next_member_unlock_donation)} CD to next slot (${clan.max_members}/${5})`
+          : clan.next_member_unlock_treasury != null
+            ? `${fmt(clan.next_member_unlock_treasury)} CD treasury to next slot (${clan.max_members}/${5})`
             : `${clan.max_members} / 5 slots`,
       pct: memberSlotPct,
       complete: clan.max_members >= 5,
     },
-    ...clan.donation_milestones.map((m) => ({
+    ...clan.treasury_milestones.map((m) => ({
       key: m.key,
       label: m.label,
-      detail: `${fmt(clan.total_donated)} / ${fmt(m.threshold)} CD donated`,
-      pct: pct(clan.total_donated, m.threshold),
-      complete: clan.total_donated >= m.threshold,
+      detail: `${fmt(treasury)} / ${fmt(m.threshold)} CD in treasury`,
+      pct: pct(treasury, m.threshold),
+      complete: treasury >= m.threshold,
     })),
   ]
 
   return (
     <div className="clan-milestones">
-      <h3 className="clan-section-title">Donation milestones</h3>
+      <h3 className="clan-section-title">Treasury milestones</h3>
       <p className="clan-section-hint">
-        Milestones track total donated — not the current treasury. Paying members from the treasury does not reduce this
-        progress. Every {fmt(clan.donate_milestone)} CD adds +1 member slot (up to 5).
+        Milestones use the current treasury balance — donations add to it; leader payouts reduce it. Every{' '}
+        {fmt(clan.treasury_milestone)} CD in treasury adds +1 member slot (up to 5).
       </p>
       <ul className="clan-milestone-list">
         {milestones.map((m) => (
@@ -128,8 +129,9 @@ function ClanMilestones({ clan }: { clan: ClanPublic }) {
   )
 }
 
-function clanLbCategoryLabel(category: 'top_donated' | 'top_average_elo'): string {
-  return category === 'top_donated' ? 'Top donations' : 'Average ELO'
+function clanLbCategoryLabel(category: 'top_treasury' | 'top_average_elo' | 'top_donated'): string {
+  if (category === 'top_treasury' || category === 'top_donated') return 'Top treasury'
+  return 'Average ELO'
 }
 
 function ClanLeaderboardRewardsPanel({
@@ -139,12 +141,12 @@ function ClanLeaderboardRewardsPanel({
   recentPayouts,
 }: {
   rewardTop1: number
-  ranks: { top_donated: number | null; top_average_elo: number | null }
+  ranks: { top_treasury: number | null; top_average_elo: number | null }
   dailyBonus: number
   recentPayouts: ClanLeaderboardPayoutRow[]
 }) {
   const holdingTop1 =
-    ranks.top_donated === 1 || ranks.top_average_elo === 1
+    ranks.top_treasury === 1 || ranks.top_average_elo === 1
 
   return (
     <div className={`clan-lb-rewards${holdingTop1 ? ' clan-lb-rewards--active' : ''}`}>
@@ -155,11 +157,11 @@ function ClanLeaderboardRewardsPanel({
       </p>
       <div className="clan-lb-rewards-grid">
         <div className="clan-lb-reward-slot">
-          <span className="clan-lb-reward-slot-label">Top donations</span>
+          <span className="clan-lb-reward-slot-label">Top treasury</span>
           <span className="clan-lb-reward-slot-rank">
-            {ranks.top_donated != null ? `#${ranks.top_donated}` : '—'}
+            {ranks.top_treasury != null ? `#${ranks.top_treasury}` : '—'}
           </span>
-          {ranks.top_donated === 1 ? (
+          {ranks.top_treasury === 1 ? (
             <span className="clan-lb-reward-slot-badge">+{fmt(rewardTop1)} CD/day</span>
           ) : (
             <span className="clan-lb-reward-slot-hint">Hold #1 for +{fmt(rewardTop1)} CD/day</span>
@@ -211,7 +213,7 @@ function ClanLeaderboardTable({
   title: string
   hint?: string
   rows: ClanLeaderboardEntry[]
-  valueKey: 'total_donated' | 'average_elo'
+  valueKey: 'bank_balance' | 'average_elo'
   valueLabel: string
   rewardTop1?: number
 }) {
@@ -252,7 +254,7 @@ function ClanLeaderboardTable({
                   ) : (
                     <>
                       <span className="clan-lb-metric-main">
-                        <span className="clan-lb-metric-num">{fmt(row.total_donated)}</span>
+                        <span className="clan-lb-metric-num">{fmt(row.bank_balance)}</span>
                         <span className="clan-lb-metric-suffix">CD</span>
                       </span>
                       <span className="clan-lb-metric-label">{valueLabel}</span>
@@ -291,8 +293,8 @@ function ClanCard({
   const isFull = clan.member_count >= clan.max_members
   const tier = clan.average_elo != null ? getPvpTierFromElo(clan.average_elo) : null
   const incomeBonus = incomeBonusLabel(clan.daily_income_multiplier)
-  const nextMilestone = (clan.donation_milestones ?? []).find((m) => clan.total_donated < m.threshold)
-  const nextMilestonePct = nextMilestone ? pct(clan.total_donated, nextMilestone.threshold) : 100
+  const nextMilestone = (clan.treasury_milestones ?? []).find((m) => clan.bank_balance < m.threshold)
+  const nextMilestonePct = nextMilestone ? pct(clan.bank_balance, nextMilestone.threshold) : 100
 
   return (
     <article className="clan-card">
@@ -337,10 +339,6 @@ function ClanCard({
             <span className="clan-card-stat-value">{fmt(clan.bank_balance)} CD</span>
           </div>
           <div className="clan-card-stat">
-            <span className="clan-card-stat-label">Total donated</span>
-            <span className="clan-card-stat-value">{fmt(clan.total_donated)} CD</span>
-          </div>
-          <div className="clan-card-stat">
             <span className="clan-card-stat-label">Daily income</span>
             <span className="clan-card-stat-value">+{fmt(clan.daily_income_per_day)} CD</span>
           </div>
@@ -381,7 +379,7 @@ function ClanCard({
             </div>
             <ClanProgressBar value={nextMilestonePct} complete={false} />
             <p className="clan-card-next-milestone-detail">
-              {fmt(clan.total_donated)} / {fmt(nextMilestone.threshold)} CD donated
+              {fmt(clan.bank_balance)} / {fmt(nextMilestone.threshold)} CD in treasury
             </p>
           </div>
         ) : null}
@@ -556,7 +554,7 @@ export function Clan() {
   const [joinBusyClanId, setJoinBusyClanId] = useState<number | null>(null)
   const [requestActionBusy, setRequestActionBusy] = useState<number | null>(null)
   const [actionMsg, setActionMsg] = useState<string | null>(null)
-  const [lbDonated, setLbDonated] = useState<ClanLeaderboardEntry[]>([])
+  const [lbTreasury, setLbTreasury] = useState<ClanLeaderboardEntry[]>([])
   const [lbAvgElo, setLbAvgElo] = useState<ClanLeaderboardEntry[]>([])
   const [lbRewardTop1, setLbRewardTop1] = useState(200_000)
   const [lbLoading, setLbLoading] = useState(true)
@@ -596,13 +594,13 @@ export function Clan() {
   const loadLeaderboards = useCallback(() => {
     setLbLoading(true)
     fetchClanLeaderboards({ limit: 10 })
-      .then(({ top_donated, top_average_elo, rewards }) => {
-        setLbDonated(top_donated ?? [])
+      .then(({ top_treasury, top_average_elo, rewards }) => {
+        setLbTreasury(top_treasury ?? [])
         setLbAvgElo(top_average_elo ?? [])
         if (rewards?.top1_per_category) setLbRewardTop1(rewards.top1_per_category)
       })
       .catch(() => {
-        setLbDonated([])
+        setLbTreasury([])
         setLbAvgElo([])
       })
       .finally(() => setLbLoading(false))
@@ -659,10 +657,7 @@ export function Clan() {
     [mine?.my_pending_join_requests]
   )
 
-  const disburseCandidates = useMemo(
-    () => (myClan?.members ?? []).filter((m) => m.user_id !== myClan?.leader_id),
-    [myClan]
-  )
+  const disburseCandidates = useMemo(() => myClan?.members ?? [], [myClan])
 
   const topDonorsInClan = useMemo(
     () => (myClan ? [...myClan.members].sort((a, b) => b.donated_total - a.donated_total).slice(0, 5) : []),
@@ -799,7 +794,7 @@ export function Clan() {
     try {
       await donateToClan(myClan.id, amount)
       setDonateAmount('')
-      setActionMsg('Donation recorded — treasury and milestone progress updated!')
+      setActionMsg('Donation added to clan treasury.')
       loadMine()
       loadList()
       loadLeaderboards()
@@ -888,7 +883,8 @@ export function Clan() {
       <header className="clan-page-header">
         <h1 className="clan-page-title">Clans</h1>
         <p className="clan-page-lead">
-          Shared treasury for spending, lifetime donations for milestones — plus average ranked ELO to show clan strength.
+          Pool Cobble$ in a shared treasury, unlock perks as the balance grows, and compete on treasury and average ELO
+          leaderboards.
         </p>
       </header>
 
@@ -918,8 +914,8 @@ export function Clan() {
           <section className="clan-panel clan-panel--how">
             <h2 className="clan-section-title">How clans work</h2>
             <p className="clan-how-lead">
-              Clans pool website Cobble$ (CD), grow through member donations, and unlock perks as lifetime contributions
-              increase. Leaders manage membership and treasury distributions.
+              Clans pool website Cobble$ (CD) in a shared treasury. Donations add to the balance; leader payouts reduce it.
+              Milestones and leaderboards use the current treasury — not a separate lifetime total.
             </p>
             <div className="clan-how-grid">
               <div className="clan-how-block">
@@ -936,11 +932,9 @@ export function Clan() {
               <div className="clan-how-block">
                 <h3 className="clan-how-block-title">Treasury &amp; donations</h3>
                 <ul className="clan-how-list">
-                  <li>Member donations increase both the <strong>treasury</strong> (spendable balance) and the clan&apos;s{' '}
-                    <strong>total donated</strong> (lifetime milestone progress).
-                  </li>
+                  <li>Member donations add CD to the clan <strong>treasury</strong>.</li>
                   <li>
-                    Total donated only ever goes up — leader payouts from the treasury do not reduce milestone progress.
+                    Leader payouts reduce the treasury — milestones and member-slot unlocks follow the current balance.
                   </li>
                 </ul>
               </div>
@@ -951,7 +945,7 @@ export function Clan() {
                     <strong>{fmt(50_000)} CD × members</strong> credited to treasury daily at 00:00 Asia/Ho_Chi_Minh.
                   </li>
                   <li>
-                    <strong>#{1} on each leaderboard</strong> (Top donations &amp; Average ELO) earns an additional{' '}
+                    <strong>#{1} on each leaderboard</strong> (Top treasury &amp; Average ELO) earns an additional{' '}
                     {fmt(lbRewardTop1)} CD/day per board, paid automatically into treasury.
                   </li>
                 </ul>
@@ -1007,7 +1001,7 @@ export function Clan() {
         <section className="clan-panel">
           <h2 className="clan-section-title">Clan leaderboards</h2>
           <p className="clan-section-hint">
-            Site-wide rankings by lifetime donations and average ELO. #1 on each board earns{' '}
+            Site-wide rankings by treasury balance and average ELO. #1 on each board earns{' '}
             <strong className="text-[#f0d48a]">{fmt(lbRewardTop1)} CD/day</strong> in clan treasury (00:00
             Asia/Ho_Chi_Minh).
           </p>
@@ -1016,11 +1010,11 @@ export function Clan() {
           ) : (
             <div className="clan-lb-grid">
               <ClanLeaderboardTable
-                title="Top donations"
-                hint="Total Cobble$ donated by members (milestone progress)."
-                rows={lbDonated}
-                valueKey="total_donated"
-                valueLabel="donated"
+                title="Top treasury"
+                hint="Highest current clan treasury balance."
+                rows={lbTreasury}
+                valueKey="bank_balance"
+                valueLabel="treasury"
                 rewardTop1={lbRewardTop1}
               />
             <ClanLeaderboardTable
@@ -1262,14 +1256,8 @@ export function Clan() {
               <span className="clan-stat-label">Treasury</span>
               <span className="clan-stat-value">{fmt(myClan.bank_balance)} CD</span>
               <span className="clan-stat-sub">
-                Spendable clan balance. Daily income lands here; leader payouts come from here only.
-              </span>
-            </div>
-            <div className="clan-stat-card">
-              <span className="clan-stat-label">Total donated</span>
-              <span className="clan-stat-value">{fmt(myClan.total_donated)} CD</span>
-              <span className="clan-stat-sub">
-                All-time member donations for milestones. Never goes down when the leader pays members out.
+                Shared clan balance. Donations and daily income add here; leader payouts reduce it. Milestones and
+                leaderboards use this amount.
               </span>
             </div>
             <div className="clan-stat-card">
@@ -1315,7 +1303,7 @@ export function Clan() {
 
           <ClanLeaderboardRewardsPanel
             rewardTop1={myClan.leaderboard_daily_reward_top1 ?? lbRewardTop1}
-            ranks={myClan.leaderboard_ranks ?? { top_donated: null, top_average_elo: null }}
+            ranks={myClan.leaderboard_ranks ?? { top_treasury: null, top_average_elo: null }}
             dailyBonus={myClan.leaderboard_daily_treasury_bonus ?? 0}
             recentPayouts={myClan.recent_leaderboard_payouts ?? []}
           />
@@ -1416,8 +1404,8 @@ export function Clan() {
             <div className="clan-funds-panel">
               <h3 className="clan-section-title">Donate</h3>
               <p className="clan-section-hint">
-                Pay from your wallet into the clan. This increases both the treasury balance and the clan&apos;s total
-                donated (milestone progress).
+                Pay from your wallet into the clan treasury. This increases the balance used for milestones and
+                leaderboards.
               </p>
               <form onSubmit={handleDonate} className="clan-treasury-form">
                 <div className="clan-treasury-field">
@@ -1443,8 +1431,8 @@ export function Clan() {
               <div className="clan-funds-panel">
                 <h3 className="clan-section-title">Treasury payouts</h3>
                 <p className="clan-section-hint">
-                  Send Cobble$ from the clan treasury to a member. This only lowers the treasury — total donated and
-                  milestone progress stay the same.
+                  Send Cobble$ from the clan treasury to any member — including yourself. This lowers the treasury and
+                  can reduce milestone progress.
                 </p>
                 <form onSubmit={handleDisburse} className="clan-treasury-form">
                   <div className="clan-treasury-field">
@@ -1461,6 +1449,7 @@ export function Clan() {
                       {disburseCandidates.map((m) => (
                         <option key={m.user_id} value={String(m.user_id)}>
                           {m.username}
+                          {m.role === 'leader' ? ' (leader)' : ''}
                         </option>
                       ))}
                     </select>

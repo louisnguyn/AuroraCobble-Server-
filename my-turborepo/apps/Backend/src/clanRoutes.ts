@@ -12,8 +12,8 @@ import {
   CLAN_BASE_MAX_MEMBERS,
   CLAN_CREATE_COST,
   CLAN_DAILY_PER_MEMBER,
-  CLAN_DONATE_MILESTONE,
-  CLAN_DONATION_MILESTONES,
+  CLAN_TREASURY_MILESTONE,
+  CLAN_TREASURY_MILESTONES,
   CLAN_LEADERBOARD_DAILY_REWARD_TOP1,
   CLAN_LEADERBOARD_REWARD_CATEGORIES,
   type ClanLeaderboardRewardCategory,
@@ -22,10 +22,10 @@ import {
   clanDailyTicketBonus,
   clanHasDailyTicketBonus,
   clanLeaderboardDailyTreasuryBonus,
-  clanMaxMembersFromTotalDonated,
+  clanMaxMembersFromTreasury,
   clanRejoinAvailableAt,
   isClanRejoinBlocked,
-  nextMemberUnlockDonation,
+  nextMemberUnlockTreasury,
 } from "./clanLogic.js";
 
 const DAILY_RESET_TIMEZONE = "Asia/Ho_Chi_Minh";
@@ -204,7 +204,7 @@ async function addMemberFromJoinRequest(
     .select("user_id", { count: "exact", head: true })
     .eq("clan_id", clanId);
   const memberCount = count ?? 0;
-  const maxMembers = clanMaxMembersFromTotalDonated((clan as ClanRow).total_donated);
+  const maxMembers = clanMaxMembersFromTreasury((clan as ClanRow).bank_balance);
   if (memberCount >= maxMembers) {
     return { ok: false, error: "Clan is full.", status: 400 };
   }
@@ -455,8 +455,9 @@ function serializeClanPublic(
   leaderUsername: string,
   averageElo: number | null = null
 ) {
-  const maxMembers = clanMaxMembersFromTotalDonated(clan.total_donated);
-  const mult = clanDailyIncomeMultiplier(clan.total_donated);
+  const treasury = clan.bank_balance;
+  const maxMembers = clanMaxMembersFromTreasury(treasury);
+  const mult = clanDailyIncomeMultiplier(treasury);
   return {
     id: clan.id,
     name: clan.name,
@@ -466,17 +467,16 @@ function serializeClanPublic(
     leader_username: leaderUsername,
     member_count: memberCount,
     max_members: maxMembers,
-    bank_balance: clan.bank_balance,
-    total_donated: clan.total_donated,
+    bank_balance: treasury,
     average_elo: averageElo,
-    daily_income_per_day: clanDailyBankIncome(memberCount, clan.total_donated),
+    daily_income_per_day: clanDailyBankIncome(memberCount, treasury),
     daily_income_multiplier: mult,
     daily_income_per_member: CLAN_DAILY_PER_MEMBER,
-    has_daily_ticket_bonus: clanHasDailyTicketBonus(clan.total_donated),
-    daily_ticket_bonus: clanDailyTicketBonus(clan.total_donated),
-    next_member_unlock_donation: nextMemberUnlockDonation(clan.total_donated, maxMembers),
-    donate_milestone: CLAN_DONATE_MILESTONE,
-    donation_milestones: CLAN_DONATION_MILESTONES.map((m) => ({
+    has_daily_ticket_bonus: clanHasDailyTicketBonus(treasury),
+    daily_ticket_bonus: clanDailyTicketBonus(treasury),
+    next_member_unlock_treasury: nextMemberUnlockTreasury(treasury, maxMembers),
+    treasury_milestone: CLAN_TREASURY_MILESTONE,
+    treasury_milestones: CLAN_TREASURY_MILESTONES.map((m) => ({
       key: m.key,
       threshold: m.threshold,
       label: m.label,
@@ -494,7 +494,6 @@ type ClanLeaderboardRow = {
   avatar_url: string;
   leader_username: string;
   member_count: number;
-  total_donated: number;
   bank_balance: number;
   average_elo: number | null;
 };
@@ -502,18 +501,15 @@ type ClanLeaderboardRow = {
 async function buildClanLeaderboards(
   getLiveLeaderboard: (() => unknown) | undefined,
   limit: number
-): Promise<{ topDonated: ClanLeaderboardRow[]; topAverageElo: ClanLeaderboardRow[] }> {
-  if (!supabase) return { topDonated: [], topAverageElo: [] };
+): Promise<{ topTreasury: ClanLeaderboardRow[]; topAverageElo: ClanLeaderboardRow[] }> {
+  if (!supabase) return { topTreasury: [], topAverageElo: [] };
   const { data: clans, error } = await supabase
     .from("clans")
-    .select("id, name, avatar_url, leader_id, bank_balance, total_donated")
+    .select("id, name, avatar_url, leader_id, bank_balance")
     .order("created_at", { ascending: false });
-  if (error || !clans?.length) return { topDonated: [], topAverageElo: [] };
+  if (error || !clans?.length) return { topTreasury: [], topAverageElo: [] };
 
-  const rows = clans as Pick<
-    ClanRow,
-    "id" | "name" | "avatar_url" | "leader_id" | "bank_balance" | "total_donated"
-  >[];
+  const rows = clans as Pick<ClanRow, "id" | "name" | "avatar_url" | "leader_id" | "bank_balance">[];
   const leaderIds = [...new Set(rows.map((c) => c.leader_id))];
   const { data: leaders } = await supabase.from("users").select("id, username").in("id", leaderIds);
   const leaderName = new Map(
@@ -535,12 +531,11 @@ async function buildClanLeaderboards(
     avatar_url: c.avatar_url,
     leader_username: leaderName.get(c.leader_id) ?? `#${c.leader_id}`,
     member_count: memberCounts.get(c.id) ?? 0,
-    total_donated: c.total_donated,
     bank_balance: c.bank_balance,
     average_elo: avgEloByClan.get(c.id) ?? null,
   }));
-  const topDonated = [...base]
-    .sort((a, b) => b.total_donated - a.total_donated || a.name.localeCompare(b.name))
+  const topTreasury = [...base]
+    .sort((a, b) => b.bank_balance - a.bank_balance || a.name.localeCompare(b.name))
     .slice(0, limit)
     .map((row, i) => ({ ...row, rank: i + 1 }));
   const topAverageElo = [...base]
@@ -548,16 +543,16 @@ async function buildClanLeaderboards(
     .sort((a, b) => (b.average_elo ?? 0) - (a.average_elo ?? 0) || a.name.localeCompare(b.name))
     .slice(0, limit)
     .map((row, i) => ({ ...row, rank: i + 1 }));
-  return { topDonated, topAverageElo };
+  return { topTreasury, topAverageElo };
 }
 
 function clanLeaderboardRanksForClan(
   clanId: number,
-  topDonated: ClanLeaderboardRow[],
+  topTreasury: ClanLeaderboardRow[],
   topAverageElo: ClanLeaderboardRow[]
-): { top_donated: number | null; top_average_elo: number | null } {
+): { top_treasury: number | null; top_average_elo: number | null } {
   return {
-    top_donated: topDonated.find((r) => r.id === clanId)?.rank ?? null,
+    top_treasury: topTreasury.find((r) => r.id === clanId)?.rank ?? null,
     top_average_elo: topAverageElo.find((r) => r.id === clanId)?.rank ?? null,
   };
 }
@@ -640,7 +635,7 @@ export async function runClanDailyIncome(deps: ClanDeps): Promise<{ processed: n
   const today = todayKeyInTimezone();
   const { data: clans, error } = await supabase
     .from("clans")
-    .select("id, total_donated, bank_balance, last_daily_income_date")
+    .select("id, bank_balance, last_daily_income_date")
     .or(`last_daily_income_date.is.null,last_daily_income_date.lt.${today}`);
   if (error || !clans?.length) return { processed: 0, date: today };
 
@@ -648,7 +643,6 @@ export async function runClanDailyIncome(deps: ClanDeps): Promise<{ processed: n
   for (const raw of clans) {
     const clan = raw as {
       id: number;
-      total_donated: number;
       bank_balance: number;
       last_daily_income_date: string | null;
     };
@@ -659,7 +653,7 @@ export async function runClanDailyIncome(deps: ClanDeps): Promise<{ processed: n
     const memberCount = count ?? 0;
     if (memberCount < 1) continue;
 
-    const income = clanDailyBankIncome(memberCount, clan.total_donated);
+    const income = clanDailyBankIncome(memberCount, clan.bank_balance);
     const newBank = clan.bank_balance + income;
     const now = new Date().toISOString();
     const { data: updated } = await supabase
@@ -675,8 +669,8 @@ export async function runClanDailyIncome(deps: ClanDeps): Promise<{ processed: n
     if (!updated?.length) continue;
     processed += 1;
 
-    if (clanHasDailyTicketBonus(clan.total_donated)) {
-      const ticketBonus = clanDailyTicketBonus(clan.total_donated);
+    if (clanHasDailyTicketBonus(clan.bank_balance)) {
+      const ticketBonus = clanDailyTicketBonus(clan.bank_balance);
       const { data: members } = await supabase
         .from("clan_members")
         .select("user_id")
@@ -700,10 +694,10 @@ export async function runClanLeaderboardDailyRewards(
   const today = todayKeyInTimezone();
   const paid: Array<{ category: ClanLeaderboardRewardCategory; clan_id: number; amount: number }> = [];
 
-  const { topDonated, topAverageElo } = await buildClanLeaderboards(getLiveLeaderboard, 1);
+  const { topTreasury, topAverageElo } = await buildClanLeaderboards(getLiveLeaderboard, 1);
   const winners: Array<{ category: ClanLeaderboardRewardCategory; clanId: number }> = [];
-  const topDonatedWinner = topDonated[0];
-  if (topDonatedWinner) winners.push({ category: "top_donated", clanId: topDonatedWinner.id });
+  const topTreasuryWinner = topTreasury[0];
+  if (topTreasuryWinner) winners.push({ category: "top_treasury", clanId: topTreasuryWinner.id });
   const topEloWinner = topAverageElo[0];
   if (topEloWinner) winners.push({ category: "top_average_elo", clanId: topEloWinner.id });
 
@@ -810,9 +804,9 @@ export function registerClanRoutes(app: Express, deps: ClanDeps): void {
   app.get("/clans/leaderboards", async (req, res) => {
     if (!requireSupabase(res)) return;
     const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 50);
-    const { topDonated, topAverageElo } = await buildClanLeaderboards(getLiveLeaderboard, limit);
+    const { topTreasury, topAverageElo } = await buildClanLeaderboards(getLiveLeaderboard, limit);
     res.json({
-      top_donated: topDonated,
+      top_treasury: topTreasury,
       top_average_elo: topAverageElo,
       rewards: leaderboardRewardsMeta(),
     });
@@ -825,7 +819,7 @@ export function registerClanRoutes(app: Express, deps: ClanDeps): void {
 
     const { data: clans, error } = await supabase!
       .from("clans")
-      .select("id, name, bio, avatar_url, leader_id, bank_balance, total_donated, created_at")
+      .select("id, name, bio, avatar_url, leader_id, bank_balance, created_at")
       .order("created_at", { ascending: false })
       .limit(limit);
     if (error) {
@@ -863,7 +857,7 @@ export function registerClanRoutes(app: Express, deps: ClanDeps): void {
       rules: {
         base_max_members: CLAN_BASE_MAX_MEMBERS,
         absolute_max: CLAN_ABSOLUTE_MAX_MEMBERS,
-        donate_milestone: CLAN_DONATE_MILESTONE,
+        treasury_milestone: CLAN_TREASURY_MILESTONE,
         leaderboard_rewards: leaderboardRewardsMeta(),
       },
     });
@@ -885,8 +879,8 @@ export function registerClanRoutes(app: Express, deps: ClanDeps): void {
     }
     const members = await loadClanMembers(membership.clan.id, getLiveLeaderboard);
     const leader = members.find((m) => m.role === "leader");
-    const { topDonated, topAverageElo } = await buildClanLeaderboards(getLiveLeaderboard, 50);
-    const lbRanks = clanLeaderboardRanksForClan(membership.clan.id, topDonated, topAverageElo);
+    const { topTreasury, topAverageElo } = await buildClanLeaderboards(getLiveLeaderboard, 50);
+    const lbRanks = clanLeaderboardRanksForClan(membership.clan.id, topTreasury, topAverageElo);
     const recentLeaderboardPayouts = await loadRecentLeaderboardPayoutsForClan(membership.clan.id);
     const payload = serializeClanPublic(
       membership.clan,
@@ -904,7 +898,7 @@ export function registerClanRoutes(app: Express, deps: ClanDeps): void {
         members,
         leaderboard_ranks: lbRanks,
         leaderboard_daily_treasury_bonus: clanLeaderboardDailyTreasuryBonus(
-          lbRanks.top_donated,
+          lbRanks.top_treasury,
           lbRanks.top_average_elo
         ),
         recent_leaderboard_payouts: recentLeaderboardPayouts,
@@ -1127,8 +1121,8 @@ export function registerClanRoutes(app: Express, deps: ClanDeps): void {
 
     const members = await loadClanMembers(clanId, getLiveLeaderboard);
     const leader = members.find((m) => m.role === "leader");
-    const { topDonated, topAverageElo } = await buildClanLeaderboards(getLiveLeaderboard, 50);
-    const lbRanks = clanLeaderboardRanksForClan(clanId, topDonated, topAverageElo);
+    const { topTreasury, topAverageElo } = await buildClanLeaderboards(getLiveLeaderboard, 50);
+    const lbRanks = clanLeaderboardRanksForClan(clanId, topTreasury, topAverageElo);
     const recentLeaderboardPayouts = await loadRecentLeaderboardPayoutsForClan(clanId);
     const payload = serializeClanPublic(
       clan as ClanRow,
@@ -1146,7 +1140,7 @@ export function registerClanRoutes(app: Express, deps: ClanDeps): void {
         members,
         leaderboard_ranks: lbRanks,
         leaderboard_daily_treasury_bonus: clanLeaderboardDailyTreasuryBonus(
-          lbRanks.top_donated,
+          lbRanks.top_treasury,
           lbRanks.top_average_elo
         ),
         recent_leaderboard_payouts: recentLeaderboardPayouts,
@@ -1179,7 +1173,6 @@ export function registerClanRoutes(app: Express, deps: ClanDeps): void {
     }
 
     const clan = membership.clan;
-    const newTotalDonated = clan.total_donated + amount;
     const newBank = clan.bank_balance + amount;
     const newMemberDonated = membership.donated_total + amount;
     const now = new Date().toISOString();
@@ -1187,12 +1180,10 @@ export function registerClanRoutes(app: Express, deps: ClanDeps): void {
     const { data: clanUpdated, error: clanErr } = await supabase!
       .from("clans")
       .update({
-        total_donated: newTotalDonated,
         bank_balance: newBank,
         updated_at: now,
       })
       .eq("id", clanId)
-      .eq("total_donated", clan.total_donated)
       .eq("bank_balance", clan.bank_balance)
       .select("id");
     if (clanErr || !clanUpdated?.length) {
@@ -1256,7 +1247,7 @@ export function registerClanRoutes(app: Express, deps: ClanDeps): void {
       .select("user_id", { count: "exact", head: true })
       .eq("clan_id", clanId);
     const memberCount = count ?? 0;
-    const maxMembers = clanMaxMembersFromTotalDonated((clan as ClanRow).total_donated);
+    const maxMembers = clanMaxMembersFromTreasury((clan as ClanRow).bank_balance);
     if (memberCount >= maxMembers) {
       res.status(400).json({ error: "This clan is full." });
       return;

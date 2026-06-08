@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS clans (
   avatar_url text NOT NULL,
   leader_id bigint NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   bank_balance bigint NOT NULL DEFAULT 0 CHECK (bank_balance >= 0),
-  total_donated bigint NOT NULL DEFAULT 0 CHECK (total_donated >= 0),
+  total_donated bigint NOT NULL DEFAULT 0 CHECK (total_donated >= 0), -- deprecated: milestones use bank_balance
   last_daily_income_date date,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
