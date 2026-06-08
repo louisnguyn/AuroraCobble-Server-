@@ -155,8 +155,31 @@ export function leaderboardPayloadHasSyncedData(payload: unknown): boolean {
   return Array.isArray(ent) && ent.length > 0;
 }
 
+/** Default ELO for website users not on the ranked ladder (clan averages, etc.). */
+export const UNRANKED_ELO_DEFAULT = 1000;
+
+/**
+ * Highest ELO across singles and doubles for a website IGN on the live ladder.
+ * Returns {@link UNRANKED_ELO_DEFAULT} when not ranked in either format.
+ */
+export function bestEloForWebsiteUserFromLeaderboard(payload: unknown, ign: string): number {
+  const want = normalizePvpIgName(ign);
+  if (!want) return UNRANKED_ELO_DEFAULT;
+  let best: number | null = null;
+  for (const pref of ["singles", "doubles"] as const) {
+    const rows = rankedPvpRowsForWebsiteRewards(payload, pref);
+    const mine = rows.find((r) => normalizePvpIgName(r.playerName) === want);
+    if (mine?.elo != null && Number.isFinite(mine.elo)) {
+      const e = Math.trunc(mine.elo);
+      best = best == null ? e : Math.max(best, e);
+    }
+  }
+  return best ?? UNRANKED_ELO_DEFAULT;
+}
+
 /**
  * Singles first (matches rewards + default leaderboard tab), then doubles — same row matching as site Leaderboard IGN.
+ * @deprecated Prefer {@link bestEloForWebsiteUserFromLeaderboard} when you need max(singles, doubles) ELO.
  */
 export function livePvpSnapFromLeaderboardForWebsiteUser(payload: unknown, ign: string): {
   rank: number;

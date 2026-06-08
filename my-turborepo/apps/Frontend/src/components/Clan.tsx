@@ -4,19 +4,273 @@ import { AuthModal } from './AuthModal'
 import {
   acceptClanJoinRequest,
   createClan,
+  updateClan,
   disburseClanFunds,
   donateToClan,
   fetchClans,
+  fetchClanLeaderboards,
   fetchMyClan,
+  disbandClan,
   leaveClan,
   rejectClanJoinRequest,
   requestJoinClan,
+  type ClanLeaderboardEntry,
+  type ClanLeaderboardPayoutRow,
   type ClanPublic,
   type MyClanResponse,
 } from '../authApi'
+import { getPvpTierFromElo, PvPTierBadge } from './PvPTierBadge.tsx'
 
 function fmt(n: number): string {
   return n.toLocaleString('en-US')
+}
+
+function clanAverageEloHint(): string {
+  return "Your clan's overall skill level — each member's best singles or doubles rating, averaged together. Not on the ladder yet? That counts as 1,000 ELO."
+}
+
+function pct(current: number, target: number): number {
+  if (target <= 0) return 100
+  return Math.min(100, Math.max(0, (current / target) * 100))
+}
+
+function ClanLeaderDisplay({ username, compact = false }: { username: string; compact?: boolean }) {
+  return (
+    <div className={`clan-leader-display${compact ? ' clan-leader-display--compact' : ''}`}>
+      <span className="clan-leader-badge">Leader</span>
+      <span className="clan-leader-name" title={username}>
+        {username}
+      </span>
+    </div>
+  )
+}
+
+function ClanRoleBadge({
+  role,
+  highlightYou = false,
+}: {
+  role: string
+  highlightYou?: boolean
+}) {
+  if (role === 'leader') {
+    return <span className="clan-role-badge clan-role-badge--leader">Clan leader</span>
+  }
+  return (
+    <span className={`clan-role-badge clan-role-badge--member${highlightYou ? ' clan-role-badge--you' : ''}`}>
+      {highlightYou ? 'You · Member' : 'Member'}
+    </span>
+  )
+}
+
+function ClanProgressBar({ value, complete }: { value: number; complete?: boolean }) {
+  return (
+    <span className="clan-progress" aria-hidden>
+      <span
+        className={`clan-progress-fill${complete ? ' clan-progress-fill--complete' : ''}`}
+        style={{ width: `${complete ? 100 : value}%` }}
+      />
+    </span>
+  )
+}
+
+function ClanMilestones({ clan }: { clan: ClanPublic }) {
+  const memberSlotPct =
+    clan.max_members >= 5
+      ? 100
+      : pct(clan.total_donated % clan.donate_milestone, clan.donate_milestone)
+
+  const milestones = [
+    {
+      key: 'members',
+      label: 'Member slots',
+      detail:
+        clan.max_members >= 5
+          ? `Max ${clan.max_members} members unlocked`
+          : clan.next_member_unlock_donation != null
+            ? `${fmt(clan.next_member_unlock_donation)} CD to next slot (${clan.max_members}/${5})`
+            : `${clan.max_members} / 5 slots`,
+      pct: memberSlotPct,
+      complete: clan.max_members >= 5,
+    },
+    ...clan.donation_milestones.map((m) => ({
+      key: m.key,
+      label: m.label,
+      detail: `${fmt(clan.total_donated)} / ${fmt(m.threshold)} CD donated`,
+      pct: pct(clan.total_donated, m.threshold),
+      complete: clan.total_donated >= m.threshold,
+    })),
+  ]
+
+  return (
+    <div className="clan-milestones">
+      <h3 className="clan-section-title">Donation milestones</h3>
+      <p className="clan-section-hint">
+        Milestones track total donated — not the current treasury. Paying members from the treasury does not reduce this
+        progress. Every {fmt(clan.donate_milestone)} CD adds +1 member slot (up to 5).
+      </p>
+      <ul className="clan-milestone-list">
+        {milestones.map((m) => (
+          <li key={m.key} className="clan-milestone-item">
+            <div className="clan-milestone-head">
+              <span className="clan-milestone-label">{m.label}</span>
+              {m.complete ? (
+                <span className="clan-milestone-badge">Unlocked</span>
+              ) : (
+                <span className="clan-milestone-pct">{Math.round(m.pct)}%</span>
+              )}
+            </div>
+            <ClanProgressBar value={m.pct} complete={m.complete} />
+            <p className="clan-milestone-detail">{m.detail}</p>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function clanLbCategoryLabel(category: 'top_donated' | 'top_average_elo'): string {
+  return category === 'top_donated' ? 'Top donations' : 'Average ELO'
+}
+
+function ClanLeaderboardRewardsPanel({
+  rewardTop1,
+  ranks,
+  dailyBonus,
+  recentPayouts,
+}: {
+  rewardTop1: number
+  ranks: { top_donated: number | null; top_average_elo: number | null }
+  dailyBonus: number
+  recentPayouts: ClanLeaderboardPayoutRow[]
+}) {
+  const holdingTop1 =
+    ranks.top_donated === 1 || ranks.top_average_elo === 1
+
+  return (
+    <div className={`clan-lb-rewards${holdingTop1 ? ' clan-lb-rewards--active' : ''}`}>
+      <h3 className="clan-section-title">Leaderboard daily rewards</h3>
+      <p className="clan-section-hint">
+        #1 on each clan leaderboard earns {fmt(rewardTop1)} CD in the treasury every day at 00:00 Asia/Ho_Chi_Minh — same
+        schedule as member daily income and PvP rank rewards.
+      </p>
+      <div className="clan-lb-rewards-grid">
+        <div className="clan-lb-reward-slot">
+          <span className="clan-lb-reward-slot-label">Top donations</span>
+          <span className="clan-lb-reward-slot-rank">
+            {ranks.top_donated != null ? `#${ranks.top_donated}` : '—'}
+          </span>
+          {ranks.top_donated === 1 ? (
+            <span className="clan-lb-reward-slot-badge">+{fmt(rewardTop1)} CD/day</span>
+          ) : (
+            <span className="clan-lb-reward-slot-hint">Hold #1 for +{fmt(rewardTop1)} CD/day</span>
+          )}
+        </div>
+        <div className="clan-lb-reward-slot">
+          <span className="clan-lb-reward-slot-label">Average ELO</span>
+          <span className="clan-lb-reward-slot-rank">
+            {ranks.top_average_elo != null ? `#${ranks.top_average_elo}` : '—'}
+          </span>
+          {ranks.top_average_elo === 1 ? (
+            <span className="clan-lb-reward-slot-badge">+{fmt(rewardTop1)} CD/day</span>
+          ) : (
+            <span className="clan-lb-reward-slot-hint">Hold #1 for +{fmt(rewardTop1)} CD/day</span>
+          )}
+        </div>
+      </div>
+      {dailyBonus > 0 ? (
+        <p className="clan-lb-rewards-total">
+          Your clan earns an extra <strong>+{fmt(dailyBonus)} CD/day</strong> in treasury from leaderboard placement.
+        </p>
+      ) : null}
+      {recentPayouts.length > 0 ? (
+        <div className="clan-lb-rewards-history">
+          <h4 className="clan-lb-rewards-history-title">Recent treasury credits</h4>
+          <ul className="clan-lb-rewards-history-list">
+            {recentPayouts.map((p) => (
+              <li key={`${p.payout_date}-${p.category}`} className="clan-lb-rewards-history-row">
+                <span className="clan-lb-rewards-history-date">{p.payout_date}</span>
+                <span className="clan-lb-rewards-history-cat">{clanLbCategoryLabel(p.category)}</span>
+                <span className="clan-lb-rewards-history-amount">+{fmt(p.amount)} CD</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function ClanLeaderboardTable({
+  title,
+  hint,
+  rows,
+  valueKey,
+  valueLabel,
+  rewardTop1,
+}: {
+  title: string
+  hint?: string
+  rows: ClanLeaderboardEntry[]
+  valueKey: 'total_donated' | 'average_elo'
+  valueLabel: string
+  rewardTop1?: number
+}) {
+  return (
+    <div className="clan-lb-panel">
+      <h3 className="clan-section-title">{title}</h3>
+      {hint ? <p className="clan-section-hint">{hint}</p> : null}
+      {rows.length === 0 ? (
+        <p className="clan-empty clan-empty--compact">No clans yet.</p>
+      ) : (
+        <ol className="clan-lb-list">
+          {rows.map((row) => {
+            const tier = row.average_elo != null ? getPvpTierFromElo(row.average_elo) : null
+            return (
+              <li key={`${valueKey}-${row.id}`} className={`clan-lb-row${row.rank === 1 ? ' clan-lb-row--top1' : ''}`}>
+                <span className="clan-lb-rank">#{row.rank}</span>
+                <img src={row.avatar_url} alt="" className="clan-lb-avatar" />
+                <span className="clan-lb-name">{row.name}</span>
+                {row.rank === 1 && rewardTop1 ? (
+                  <span className="clan-lb-reward-pill">+{fmt(rewardTop1)} CD/day</span>
+                ) : null}
+                <div className="clan-lb-metric">
+                  {valueKey === 'average_elo' && row.average_elo != null ? (
+                    <>
+                      <span className="clan-lb-metric-main clan-lb-metric-main--elo">
+                        <span className="clan-lb-metric-num">{fmt(row.average_elo)}</span>
+                        {tier ? (
+                          <PvPTierBadge
+                            slug={tier.slug}
+                            displayName={tier.displayName}
+                            imgHeightClass="h-3.5"
+                            className="!min-h-0 shrink-0"
+                          />
+                        ) : null}
+                      </span>
+                      <span className="clan-lb-metric-label">{valueLabel}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="clan-lb-metric-main">
+                        <span className="clan-lb-metric-num">{fmt(row.total_donated)}</span>
+                        <span className="clan-lb-metric-suffix">CD</span>
+                      </span>
+                      <span className="clan-lb-metric-label">{valueLabel}</span>
+                    </>
+                  )}
+                </div>
+              </li>
+            )
+          })}
+        </ol>
+      )}
+    </div>
+  )
+}
+
+function incomeBonusLabel(multiplier: number): string | null {
+  if (multiplier <= 1) return null
+  return `+${Math.round((multiplier - 1) * 100)}% daily income`
 }
 
 function ClanCard({
@@ -24,63 +278,259 @@ function ClanCard({
   canJoin,
   joinPending,
   joinBusy,
+  joinHint,
   onJoin,
 }: {
   clan: ClanPublic
   canJoin: boolean
   joinPending: boolean
   joinBusy: boolean
+  joinHint: string | null
   onJoin: () => void
 }) {
   const isFull = clan.member_count >= clan.max_members
+  const tier = clan.average_elo != null ? getPvpTierFromElo(clan.average_elo) : null
+  const incomeBonus = incomeBonusLabel(clan.daily_income_multiplier)
+  const nextMilestone = (clan.donation_milestones ?? []).find((m) => clan.total_donated < m.threshold)
+  const nextMilestonePct = nextMilestone ? pct(clan.total_donated, nextMilestone.threshold) : 100
 
   return (
-    <article className="pixel-panel-soft p-4 sm:p-5 flex gap-4 items-start">
-      <img
-        src={clan.avatar_url}
-        alt=""
-        className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-cover border border-border shrink-0 bg-[#0f0d0b]"
-      />
-      <div className="min-w-0 flex-1">
-        <h3 className="text-lg font-bold text-[#f5efe6] truncate">{clan.name}</h3>
-        <p className="text-sm text-muted mt-0.5">
-          Leader: <span className="text-[#ecebff]">{clan.leader_username}</span>
-        </p>
-        <p className="text-sm text-accent mt-1">
-          {clan.member_count} / {clan.max_members} members
-        </p>
-        {clan.bio && <p className="text-sm text-muted mt-2 line-clamp-2">{clan.bio}</p>}
-        <p className="text-xs text-muted/80 mt-2">
-          Fund: {fmt(clan.bank_balance)} CD · Daily +{fmt(clan.daily_income_per_day)} CD
-          {clan.daily_income_multiplier > 1 ? ` (×${clan.daily_income_multiplier})` : ''}
-        </p>
-        {canJoin && (
-          <div className="mt-3">
-            {joinPending ? (
-              <span className="text-sm text-muted">Join request pending</span>
-            ) : isFull ? (
-              <span className="text-sm text-muted">Clan full</span>
-            ) : (
-              <button
-                type="button"
-                disabled={joinBusy}
-                onClick={onJoin}
-                className="px-4 py-1.5 rounded-lg bg-accent text-[#1a1510] text-sm font-semibold disabled:opacity-60"
-              >
-                {joinBusy ? 'Sending…' : 'Join'}
-              </button>
-            )}
+    <article className="clan-card">
+      <img src={clan.avatar_url} alt="" className="clan-card-avatar" />
+      <div className="clan-card-body">
+        <div className="clan-card-header">
+          <div className="clan-card-title-block">
+            <h3 className="clan-card-name">{clan.name}</h3>
+            <ClanLeaderDisplay username={clan.leader_username} compact />
+          </div>
+          <div className="clan-card-aside">
+            <span className="clan-card-members">
+              {clan.member_count} / {clan.max_members}
+            </span>
+            <span className="clan-card-members-label">members</span>
+            {canJoin ? (
+              <div className="clan-card-actions">
+                {joinPending ? (
+                  <span className="clan-card-action-hint">Join request pending</span>
+                ) : isFull ? (
+                  <span className="clan-card-action-hint">Clan full</span>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={joinBusy}
+                    onClick={onJoin}
+                    className="clan-btn clan-btn-primary clan-btn-sm"
+                  >
+                    {joinBusy ? 'Sending…' : 'Request to join'}
+                  </button>
+                )}
+              </div>
+            ) : joinHint ? (
+              <span className="clan-card-action-hint">{joinHint}</span>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="clan-card-stat-grid">
+          <div className="clan-card-stat clan-card-stat--treasury">
+            <span className="clan-card-stat-label">Treasury</span>
+            <span className="clan-card-stat-value">{fmt(clan.bank_balance)} CD</span>
+          </div>
+          <div className="clan-card-stat">
+            <span className="clan-card-stat-label">Total donated</span>
+            <span className="clan-card-stat-value">{fmt(clan.total_donated)} CD</span>
+          </div>
+          <div className="clan-card-stat">
+            <span className="clan-card-stat-label">Daily income</span>
+            <span className="clan-card-stat-value">+{fmt(clan.daily_income_per_day)} CD</span>
+          </div>
+          {clan.average_elo != null ? (
+            <div className="clan-card-stat clan-card-stat--elo">
+              <span className="clan-card-stat-label">Avg ELO</span>
+              <span className="clan-card-stat-value clan-card-stat-value--elo">
+                <span className="clan-card-stat-elo-num">{fmt(clan.average_elo)}</span>
+                {tier ? (
+                  <PvPTierBadge
+                    slug={tier.slug}
+                    displayName={tier.displayName}
+                    imgHeightClass="h-3.5"
+                    className="!min-h-0 shrink-0"
+                  />
+                ) : null}
+              </span>
+            </div>
+          ) : null}
+        </div>
+
+        {(incomeBonus || clan.daily_ticket_bonus > 0) && (
+          <div className="clan-card-perks">
+            {incomeBonus ? <span className="clan-card-perk">{incomeBonus}</span> : null}
+            {clan.daily_ticket_bonus > 0 ? (
+              <span className="clan-card-perk">
+                +{clan.daily_ticket_bonus} ticket{clan.daily_ticket_bonus > 1 ? 's' : ''}/member/day
+              </span>
+            ) : null}
           </div>
         )}
+
+        {nextMilestone ? (
+          <div className="clan-card-next-milestone">
+            <div className="clan-card-next-milestone-head">
+              <span className="clan-card-next-milestone-label">Next: {nextMilestone.label}</span>
+              <span className="clan-card-next-milestone-pct">{Math.round(nextMilestonePct)}%</span>
+            </div>
+            <ClanProgressBar value={nextMilestonePct} complete={false} />
+            <p className="clan-card-next-milestone-detail">
+              {fmt(clan.total_donated)} / {fmt(nextMilestone.threshold)} CD donated
+            </p>
+          </div>
+        ) : null}
+
+        {clan.bio ? <p className="clan-card-bio">{clan.bio}</p> : null}
       </div>
     </article>
   )
 }
 
+function formatRejoinWait(iso: string): string {
+  const ms = new Date(iso).getTime() - Date.now()
+  if (ms <= 0) return 'soon'
+  const totalMinutes = Math.ceil(ms / 60_000)
+  if (totalMinutes < 60) return `${totalMinutes} min`
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  if (hours >= 24) {
+    const days = Math.floor(hours / 24)
+    const remHours = hours % 24
+    return remHours > 0 ? `${days}d ${remHours}h` : `${days}d`
+  }
+  return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`
+}
+
+function ClanLeaveConfirmModal({
+  clanName,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  clanName: string
+  busy: boolean
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  return (
+    <div
+      className="clan-modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="clan-leave-title"
+      onClick={onCancel}
+    >
+      <div className="clan-modal" onClick={(e) => e.stopPropagation()}>
+        <h3 id="clan-leave-title" className="clan-modal-title">
+          Leave {clanName}?
+        </h3>
+        <p className="clan-modal-body">
+          You will leave this clan immediately. You must wait <strong>24 hours</strong> before you can request to join
+          another clan.
+        </p>
+        <div className="clan-modal-actions">
+          <button type="button" className="clan-btn clan-btn-ghost" disabled={busy} onClick={onCancel}>
+            Stay in clan
+          </button>
+          <button type="button" className="clan-btn clan-btn-leave" disabled={busy} onClick={onConfirm}>
+            {busy ? 'Leaving…' : 'Leave clan'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ClanDisbandConfirmModal({
+  clanName,
+  memberCount,
+  treasuryBalance,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  clanName: string
+  memberCount: number
+  treasuryBalance: number
+  busy: boolean
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  return (
+    <div
+      className="clan-modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="clan-disband-title"
+      onClick={onCancel}
+    >
+      <div className="clan-modal clan-modal--danger" onClick={(e) => e.stopPropagation()}>
+        <h3 id="clan-disband-title" className="clan-modal-title">
+          Disband {clanName}?
+        </h3>
+        <p className="clan-modal-body">
+          This permanently deletes the clan. This cannot be undone.
+        </p>
+        <ul className="clan-modal-list">
+          <li>
+            <strong>{memberCount}</strong> member{memberCount === 1 ? '' : 's'} will be removed
+            {memberCount > 1 ? ' (other members get a 24-hour join cooldown)' : ''}
+          </li>
+          {treasuryBalance > 0 ? (
+            <li>
+              Treasury balance of <strong>{fmt(treasuryBalance)} CD</strong> will be lost
+            </li>
+          ) : null}
+          <li>Donation history and leaderboard placement for this clan are removed</li>
+        </ul>
+        <div className="clan-modal-actions">
+          <button type="button" className="clan-btn clan-btn-ghost" disabled={busy} onClick={onCancel}>
+            Keep clan
+          </button>
+          <button type="button" className="clan-btn clan-btn-disband" disabled={busy} onClick={onConfirm}>
+            {busy ? 'Disbanding…' : 'Disband clan'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ClanTabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={`clan-tab${active ? ' clan-tab--active' : ''}`}
+    >
+      {children}
+    </button>
+  )
+}
+
+type ClanPageTab = 'browse' | 'leaderboard' | 'mine'
+
 export function Clan() {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, user } = useAuth()
   const [showAuth, setShowAuth] = useState(false)
   const [list, setList] = useState<ClanPublic[]>([])
+  const [createCost, setCreateCost] = useState(750_000)
   const [listLoading, setListLoading] = useState(true)
   const [listError, setListError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
@@ -90,6 +540,7 @@ export function Clan() {
   const [createName, setCreateName] = useState('')
   const [createBio, setCreateBio] = useState('')
   const [createIcon, setCreateIcon] = useState<File | null>(null)
+  const [createIconPreview, setCreateIconPreview] = useState<string | null>(null)
   const [createBusy, setCreateBusy] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
 
@@ -97,7 +548,7 @@ export function Clan() {
   const [donateBusy, setDonateBusy] = useState(false)
   const [donateError, setDonateError] = useState<string | null>(null)
 
-  const [disburseUsername, setDisburseUsername] = useState('')
+  const [disburseUserId, setDisburseUserId] = useState('')
   const [disburseAmount, setDisburseAmount] = useState('')
   const [disburseBusy, setDisburseBusy] = useState(false)
   const [disburseError, setDisburseError] = useState<string | null>(null)
@@ -105,12 +556,66 @@ export function Clan() {
   const [joinBusyClanId, setJoinBusyClanId] = useState<number | null>(null)
   const [requestActionBusy, setRequestActionBusy] = useState<number | null>(null)
   const [actionMsg, setActionMsg] = useState<string | null>(null)
+  const [lbDonated, setLbDonated] = useState<ClanLeaderboardEntry[]>([])
+  const [lbAvgElo, setLbAvgElo] = useState<ClanLeaderboardEntry[]>([])
+  const [lbRewardTop1, setLbRewardTop1] = useState(200_000)
+  const [lbLoading, setLbLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState<ClanPageTab>('browse')
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
+  const [leaveBusy, setLeaveBusy] = useState(false)
+  const [showDisbandConfirm, setShowDisbandConfirm] = useState(false)
+  const [disbandBusy, setDisbandBusy] = useState(false)
+
+  const [editName, setEditName] = useState('')
+  const [editBio, setEditBio] = useState('')
+  const [editIcon, setEditIcon] = useState<File | null>(null)
+  const [editIconPreview, setEditIconPreview] = useState<string | null>(null)
+  const [editBusy, setEditBusy] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!createIcon) {
+      setCreateIconPreview(null)
+      return
+    }
+    const url = URL.createObjectURL(createIcon)
+    setCreateIconPreview(url)
+    return () => URL.revokeObjectURL(url)
+  }, [createIcon])
+
+  useEffect(() => {
+    if (!editIcon) {
+      setEditIconPreview(null)
+      return
+    }
+    const url = URL.createObjectURL(editIcon)
+    setEditIconPreview(url)
+    return () => URL.revokeObjectURL(url)
+  }, [editIcon])
+
+  const loadLeaderboards = useCallback(() => {
+    setLbLoading(true)
+    fetchClanLeaderboards({ limit: 10 })
+      .then(({ top_donated, top_average_elo, rewards }) => {
+        setLbDonated(top_donated ?? [])
+        setLbAvgElo(top_average_elo ?? [])
+        if (rewards?.top1_per_category) setLbRewardTop1(rewards.top1_per_category)
+      })
+      .catch(() => {
+        setLbDonated([])
+        setLbAvgElo([])
+      })
+      .finally(() => setLbLoading(false))
+  }, [])
 
   const loadList = useCallback(() => {
     setListLoading(true)
     setListError(null)
     fetchClans({ q: search.trim(), limit: 100 })
-      .then(({ rows }) => setList(rows))
+      .then(({ rows, create_cost }) => {
+        setList(rows)
+        if (create_cost) setCreateCost(create_cost)
+      })
       .catch((e) => setListError(e instanceof Error ? e.message : 'Failed to load clans'))
       .finally(() => setListLoading(false))
   }, [search])
@@ -128,6 +633,10 @@ export function Clan() {
   }, [isAuthenticated])
 
   useEffect(() => {
+    loadLeaderboards()
+  }, [loadLeaderboards])
+
+  useEffect(() => {
     loadList()
   }, [loadList])
 
@@ -137,25 +646,112 @@ export function Clan() {
 
   const myClan = mine?.clan ?? null
   const isLeader = myClan?.my_role === 'leader'
+
+  useEffect(() => {
+    if (!myClan || !isLeader) return
+    setEditName(myClan.name)
+    setEditBio(myClan.bio ?? '')
+    setEditIcon(null)
+    setEditError(null)
+  }, [myClan?.id, myClan?.name, myClan?.bio, isLeader])
   const pendingJoinClanIds = useMemo(
     () => new Set((mine?.my_pending_join_requests ?? []).map((r) => r.clan_id)),
     [mine?.my_pending_join_requests]
   )
 
-  const rulesSummary = useMemo(
-    () => (
-      <ul className="text-sm text-muted space-y-1 list-disc list-inside">
-        <li>Create clan: 1,000,000 website Cobble$</li>
-        <li>Players send a join request; the leader accepts or rejects</li>
-        <li>Starts at 2 members max — +1 slot every 250,000 CD donated (max 5)</li>
-        <li>Daily clan fund: 50,000 CD × members (resets 00:00 Asia/Ho_Chi_Minh)</li>
-        <li>Total donated ≥ 1,500,000 → +50% daily income</li>
-        <li>Total donated ≥ 2,000,000 → +100% daily income + 2 tickets/member/day</li>
-        <li>Leader sends funds from the clan bank to members</li>
-      </ul>
-    ),
-    []
+  const disburseCandidates = useMemo(
+    () => (myClan?.members ?? []).filter((m) => m.user_id !== myClan?.leader_id),
+    [myClan]
   )
+
+  const topDonorsInClan = useMemo(
+    () => (myClan ? [...myClan.members].sort((a, b) => b.donated_total - a.donated_total).slice(0, 5) : []),
+    [myClan]
+  )
+
+  const myClanAvgTier = myClan?.average_elo != null ? getPvpTierFromElo(myClan.average_elo) : null
+
+  const rejoinAvailableAt = mine?.rejoin_available_at ?? null
+  const inRejoinCooldown =
+    rejoinAvailableAt != null && new Date(rejoinAvailableAt).getTime() > Date.now()
+  const canRequestJoin = isAuthenticated && !myClan && !inRejoinCooldown
+
+  const getClanJoinHint = (clan: ClanPublic): string | null => {
+    if (!isAuthenticated) return null
+    if (myClan) return myClan.id === clan.id ? 'Your clan' : 'Already in a clan'
+    if (inRejoinCooldown && rejoinAvailableAt) {
+      return `Rejoin in ${formatRejoinWait(rejoinAvailableAt)}`
+    }
+    return null
+  }
+
+  const handleDisbandClan = async () => {
+    setDisbandBusy(true)
+    try {
+      await disbandClan()
+      setShowDisbandConfirm(false)
+      setMine(null)
+      setActionMsg('Clan disbanded.')
+      setActiveTab('mine')
+      loadList()
+      loadLeaderboards()
+    } catch (err) {
+      setActionMsg(err instanceof Error ? err.message : 'Disband failed')
+    } finally {
+      setDisbandBusy(false)
+    }
+  }
+
+  const handleLeaveClan = async () => {
+    setLeaveBusy(true)
+    try {
+      await leaveClan()
+      setShowLeaveConfirm(false)
+      setActionMsg('Left clan. You can join another clan in 24 hours.')
+      setActiveTab('mine')
+      loadMine()
+      loadList()
+      loadLeaderboards()
+    } catch (err) {
+      setActionMsg(err instanceof Error ? err.message : 'Leave failed')
+    } finally {
+      setLeaveBusy(false)
+    }
+  }
+
+  const handleUpdateClan = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!myClan || !isLeader) return
+    const name = editName.trim()
+    if (name.length < 2 || name.length > 32) {
+      setEditError('Clan name must be 2–32 characters.')
+      return
+    }
+    const nameUnchanged = name === myClan.name
+    const bioUnchanged = editBio.trim() === (myClan.bio ?? '').trim()
+    if (nameUnchanged && bioUnchanged && !editIcon) {
+      setEditError('Change the name, bio, or icon before saving.')
+      return
+    }
+    setEditBusy(true)
+    setEditError(null)
+    try {
+      const fd = new FormData()
+      fd.set('name', name)
+      fd.set('bio', editBio.trim())
+      if (editIcon) fd.set('avatar', editIcon)
+      const { clan } = await updateClan(myClan.id, fd)
+      setMine((prev) => (prev ? { ...prev, clan } : prev))
+      setEditIcon(null)
+      setActionMsg('Clan profile updated.')
+      loadList()
+      loadLeaderboards()
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : 'Update failed')
+    } finally {
+      setEditBusy(false)
+    }
+  }
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -179,8 +775,10 @@ export function Clan() {
       setCreateBio('')
       setCreateIcon(null)
       setActionMsg('Clan created!')
+      setActiveTab('mine')
       loadList()
       loadMine()
+      loadLeaderboards()
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : 'Create failed')
     } finally {
@@ -201,9 +799,10 @@ export function Clan() {
     try {
       await donateToClan(myClan.id, amount)
       setDonateAmount('')
-      setActionMsg('Donation sent to clan!')
+      setActionMsg('Donation recorded — treasury and milestone progress updated!')
       loadMine()
       loadList()
+      loadLeaderboards()
     } catch (err) {
       setDonateError(err instanceof Error ? err.message : 'Donate failed')
     } finally {
@@ -215,6 +814,11 @@ export function Clan() {
     e.preventDefault()
     if (!myClan || !isLeader) return
     const amount = parseInt(disburseAmount, 10)
+    const member = disburseCandidates.find((m) => String(m.user_id) === disburseUserId)
+    if (!member) {
+      setDisburseError('Choose a member.')
+      return
+    }
     if (!Number.isInteger(amount) || amount < 1) {
       setDisburseError('Enter a valid amount.')
       return
@@ -222,11 +826,12 @@ export function Clan() {
     setDisburseBusy(true)
     setDisburseError(null)
     try {
-      await disburseClanFunds(myClan.id, disburseUsername.trim(), amount)
+      await disburseClanFunds(myClan.id, member.username, amount)
       setDisburseAmount('')
-      setDisburseUsername('')
-      setActionMsg('Funds sent to member.')
+      setDisburseUserId('')
+      setActionMsg(`Sent ${fmt(amount)} CD to ${member.username}.`)
       loadMine()
+      loadLeaderboards()
     } catch (err) {
       setDisburseError(err instanceof Error ? err.message : 'Send failed')
     } finally {
@@ -243,6 +848,7 @@ export function Clan() {
     requestJoinClan(clanId)
       .then(() => {
         setActionMsg('Join request sent! Wait for the leader to accept.')
+        setActiveTab('mine')
         loadMine()
       })
       .catch((e) => setActionMsg(e instanceof Error ? e.message : 'Request failed'))
@@ -256,8 +862,13 @@ export function Clan() {
         setActionMsg('Player accepted into clan.')
         loadMine()
         loadList()
+        loadLeaderboards()
       })
-      .catch((e) => setActionMsg(e instanceof Error ? e.message : 'Accept failed'))
+      .catch((e) => {
+        const msg = e instanceof Error ? e.message : 'Accept failed'
+        setActionMsg(msg)
+        loadMine()
+      })
       .finally(() => setRequestActionBusy(null))
   }
 
@@ -273,163 +884,475 @@ export function Clan() {
   }
 
   return (
-    <div className="w-full max-w-5xl mx-auto py-8 px-2 sm:px-0">
-      <header className="mb-8">
-        <h1 className="text-2xl sm:text-3xl font-bold text-[#f5efe6]">Clans</h1>
-        <p className="text-muted mt-2 max-w-2xl">
-          Team up with friends, grow your clan fund, and unlock more member slots through donations.
+    <div className="clan-page">
+      <header className="clan-page-header">
+        <h1 className="clan-page-title">Clans</h1>
+        <p className="clan-page-lead">
+          Shared treasury for spending, lifetime donations for milestones — plus average ranked ELO to show clan strength.
         </p>
       </header>
 
       {actionMsg && (
-        <div className="mb-4 p-3 rounded-lg bg-accent/15 border border-accent/30 text-accent text-sm">
+        <div className="clan-flash" role="status">
           {actionMsg}
-          <button type="button" className="ml-3 underline" onClick={() => setActionMsg(null)}>
+          <button type="button" className="clan-flash-dismiss" onClick={() => setActionMsg(null)}>
             Dismiss
           </button>
         </div>
       )}
 
-      <section className="pixel-panel-soft p-5 mb-8">
-        <h2 className="text-lg font-semibold text-[#f5efe6] mb-3">Rules</h2>
-        {rulesSummary}
-      </section>
+      <div className="clan-tabs" role="tablist" aria-label="Clan sections">
+        <ClanTabButton active={activeTab === 'browse'} onClick={() => setActiveTab('browse')}>
+          Browse clans
+        </ClanTabButton>
+        <ClanTabButton active={activeTab === 'leaderboard'} onClick={() => setActiveTab('leaderboard')}>
+          Leaderboard
+        </ClanTabButton>
+        <ClanTabButton active={activeTab === 'mine'} onClick={() => setActiveTab('mine')}>
+          Your clan
+        </ClanTabButton>
+      </div>
 
-      {isAuthenticated && !mineLoading && !myClan && (
-        <section className="pixel-panel-soft p-5 mb-8">
-          <h2 className="text-lg font-semibold text-[#f5efe6] mb-4">Create a clan</h2>
-          <p className="text-sm text-muted mb-4">Cost: 1,000,000 website Cobble$</p>
-          <form onSubmit={handleCreate} className="space-y-4 max-w-md">
-            {createError && (
-              <div className="p-3 rounded-lg bg-error/15 border border-error/30 text-error text-sm">{createError}</div>
-            )}
-            <div>
-              <label className="block text-sm text-muted mb-1">Clan icon</label>
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp,image/gif"
-                onChange={(e) => setCreateIcon(e.target.files?.[0] ?? null)}
-                className="text-sm text-muted"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-muted mb-1">Clan name</label>
-              <input
-                value={createName}
-                onChange={(e) => setCreateName(e.target.value)}
-                maxLength={32}
-                className="w-full px-4 py-2.5 rounded-xl bg-[#0f0d0b]/80 border border-border text-[#f5efe6]"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-muted mb-1">Bio</label>
-              <textarea
-                value={createBio}
-                onChange={(e) => setCreateBio(e.target.value)}
-                maxLength={500}
-                rows={3}
-                className="w-full px-4 py-2.5 rounded-xl bg-[#0f0d0b]/80 border border-border text-[#f5efe6]"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={createBusy}
-              className="px-6 py-2.5 rounded-xl bg-accent text-[#1a1510] font-semibold disabled:opacity-60"
-            >
-              {createBusy ? 'Creating…' : 'Create clan'}
-            </button>
-          </form>
-        </section>
-      )}
-
-      {!isAuthenticated && (
-        <section className="pixel-panel-soft p-5 mb-8 text-center">
-          <p className="text-muted mb-3">Sign in to create or join a clan.</p>
-          <button
-            type="button"
-            onClick={() => setShowAuth(true)}
-            className="px-6 py-2.5 rounded-xl bg-accent text-[#1a1510] font-semibold"
-          >
-            Sign in
-          </button>
-        </section>
-      )}
-
-      {myClan && (
-        <section className="pixel-panel-soft p-5 mb-8">
-          <div className="flex flex-col sm:flex-row gap-4 sm:items-start mb-6">
-            <img
-              src={myClan.avatar_url}
-              alt=""
-              className="w-24 h-24 rounded-xl object-cover border border-border bg-[#0f0d0b]"
-            />
-            <div className="flex-1 min-w-0">
-              <h2 className="text-xl font-bold text-[#f5efe6]">{myClan.name}</h2>
-              <p className="text-sm text-muted mt-1">
-                Leader: {myClan.leader_username} · You: {myClan.my_role}
-              </p>
-              <p className="text-accent font-medium mt-1">
-                {myClan.member_count} / {myClan.max_members} members
-              </p>
-              {myClan.bio && <p className="text-sm text-muted mt-2">{myClan.bio}</p>}
-            </div>
-          </div>
-
-          <div className="grid sm:grid-cols-2 gap-3 mb-6 text-sm">
-            <div className="rounded-xl bg-[#0f0d0b]/50 border border-border p-3">
-              <div className="text-muted">Clan fund</div>
-              <div className="text-lg font-semibold text-[#f5efe6]">{fmt(myClan.bank_balance)} CD</div>
-            </div>
-            <div className="rounded-xl bg-[#0f0d0b]/50 border border-border p-3">
-              <div className="text-muted">Total donated</div>
-              <div className="text-lg font-semibold text-[#f5efe6]">{fmt(myClan.total_donated)} CD</div>
-            </div>
-            <div className="rounded-xl bg-[#0f0d0b]/50 border border-border p-3">
-              <div className="text-muted">Daily income</div>
-              <div className="text-lg font-semibold text-accent">
-                +{fmt(myClan.daily_income_per_day)} CD/day
-                {myClan.daily_income_multiplier > 1 ? ` (×${myClan.daily_income_multiplier})` : ''}
+      {activeTab === 'browse' && (
+        <>
+          <section className="clan-panel clan-panel--how">
+            <h2 className="clan-section-title">How clans work</h2>
+            <p className="clan-how-lead">
+              Clans pool website Cobble$ (CD), grow through member donations, and unlock perks as lifetime contributions
+              increase. Leaders manage membership and treasury distributions.
+            </p>
+            <div className="clan-how-grid">
+              <div className="clan-how-block">
+                <h3 className="clan-how-block-title">Getting started</h3>
+                <ul className="clan-how-list">
+                  <li>
+                    <strong>Create a clan</strong> — one-time fee of {fmt(createCost)} CD from your website balance.
+                  </li>
+                  <li>
+                    <strong>Join a clan</strong> — send a request; the leader approves new members.
+                  </li>
+                </ul>
+              </div>
+              <div className="clan-how-block">
+                <h3 className="clan-how-block-title">Treasury &amp; donations</h3>
+                <ul className="clan-how-list">
+                  <li>Member donations increase both the <strong>treasury</strong> (spendable balance) and the clan&apos;s{' '}
+                    <strong>total donated</strong> (lifetime milestone progress).
+                  </li>
+                  <li>
+                    Total donated only ever goes up — leader payouts from the treasury do not reduce milestone progress.
+                  </li>
+                </ul>
+              </div>
+              <div className="clan-how-block">
+                <h3 className="clan-how-block-title">Daily income &amp; rewards</h3>
+                <ul className="clan-how-list">
+                  <li>
+                    <strong>{fmt(50_000)} CD × members</strong> credited to treasury daily at 00:00 Asia/Ho_Chi_Minh.
+                  </li>
+                  <li>
+                    <strong>#{1} on each leaderboard</strong> (Top donations &amp; Average ELO) earns an additional{' '}
+                    {fmt(lbRewardTop1)} CD/day per board, paid automatically into treasury.
+                  </li>
+                </ul>
+              </div>
+              <div className="clan-how-block">
+                <h3 className="clan-how-block-title">Membership</h3>
+                <ul className="clan-how-list">
+                  <li>Leaders may distribute treasury funds to members at their discretion.</li>
+                  <li>After leaving a clan, a <strong>24-hour cooldown</strong> applies before you can join another.</li>
+                </ul>
+              </div>
+              <div className="clan-how-block clan-how-block--wide">
+                <h3 className="clan-how-block-title">Clan strength (Average ELO)</h3>
+                <p className="clan-how-text">
+                  Rankings use each member&apos;s best singles or doubles rating, averaged across the roster. Players
+                  without a ranked ladder entry count as 1,000 ELO.
+                </p>
               </div>
             </div>
-            <div className="rounded-xl bg-[#0f0d0b]/50 border border-border p-3">
-              <div className="text-muted">Your donations</div>
-              <div className="text-lg font-semibold text-[#f5efe6]">{fmt(myClan.my_donated_total)} CD</div>
+          </section>
+
+          <section className="clan-panel clan-panel--flush">
+            <div className="clan-list-head">
+              <h2 className="clan-section-title">Browse clans</h2>
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search by name…"
+                className="clan-search"
+              />
+            </div>
+            {listLoading && <p className="clan-empty">Loading clans…</p>}
+            {listError && <p className="clan-empty clan-empty--error">{listError}</p>}
+            {!listLoading && !listError && list.length === 0 && <p className="clan-empty">No clans yet.</p>}
+            <div className="clan-list">
+              {list.map((c) => (
+                <ClanCard
+                  key={c.id}
+                  clan={c}
+                  canJoin={canRequestJoin}
+                  joinHint={getClanJoinHint(c)}
+                  joinPending={pendingJoinClanIds.has(c.id)}
+                  joinBusy={joinBusyClanId === c.id}
+                  onJoin={() => handleJoinRequest(c.id)}
+                />
+              ))}
+            </div>
+          </section>
+        </>
+      )}
+
+      {activeTab === 'leaderboard' && (
+        <section className="clan-panel">
+          <h2 className="clan-section-title">Clan leaderboards</h2>
+          <p className="clan-section-hint">
+            Site-wide rankings by lifetime donations and average ELO. #1 on each board earns{' '}
+            <strong className="text-[#f0d48a]">{fmt(lbRewardTop1)} CD/day</strong> in clan treasury (00:00
+            Asia/Ho_Chi_Minh).
+          </p>
+          {lbLoading ? (
+            <p className="clan-empty clan-empty--compact">Loading leaderboards…</p>
+          ) : (
+            <div className="clan-lb-grid">
+              <ClanLeaderboardTable
+                title="Top donations"
+                hint="Total Cobble$ donated by members (milestone progress)."
+                rows={lbDonated}
+                valueKey="total_donated"
+                valueLabel="donated"
+                rewardTop1={lbRewardTop1}
+              />
+            <ClanLeaderboardTable
+              title="Average ELO"
+              hint="Highest clan average ELO"
+              rows={lbAvgElo}
+              valueKey="average_elo"
+              valueLabel="avg ELO"
+              rewardTop1={lbRewardTop1}
+            />
+            </div>
+          )}
+        </section>
+      )}
+
+      {activeTab === 'mine' && (
+        <>
+          {!isAuthenticated && (
+            <section className="clan-panel clan-panel--center">
+              <p className="text-muted mb-3">Sign in to create or manage your clan.</p>
+              <button type="button" onClick={() => setShowAuth(true)} className="clan-btn clan-btn-primary">
+                Sign in
+              </button>
+            </section>
+          )}
+
+          {isAuthenticated && mineLoading && <p className="clan-empty">Loading your clan…</p>}
+
+          {isAuthenticated && !mineLoading && !myClan && (
+            <>
+              {inRejoinCooldown && rejoinAvailableAt ? (
+                <section className="clan-panel clan-panel--cooldown">
+                  <h2 className="clan-section-title">Join cooldown</h2>
+                  <p className="clan-section-hint">
+                    You left a clan recently. You can request to join another clan in{' '}
+                    <strong>{formatRejoinWait(rejoinAvailableAt)}</strong> (after{' '}
+                    {new Date(rejoinAvailableAt).toLocaleString()}).
+                  </p>
+                </section>
+              ) : null}
+              <section className="clan-panel clan-panel--create">
+                <h2 className="clan-section-title">Create a clan</h2>
+                <p className="clan-section-hint clan-create-lead">
+                  Choose an icon, name your clan, and start building your treasury with members.
+                </p>
+
+                <div className="clan-create-cost-card">
+                  <div className="clan-create-cost-icon" aria-hidden="true">
+                    CD
+                  </div>
+                  <div className="clan-create-cost-body">
+                    <span className="clan-create-cost-label">Creation cost</span>
+                    <span className="clan-create-cost-value">{fmt(createCost)} CD</span>
+                    <span className="clan-create-cost-sub">
+                      One-time fee · deducted from your website Cobble$ balance
+                    </span>
+                  </div>
+                </div>
+
+                <p className="clan-create-alt">
+                  Prefer to join an existing clan?{' '}
+                  <button type="button" className="clan-create-browse-link" onClick={() => setActiveTab('browse')}>
+                    Browse clans
+                  </button>
+                </p>
+
+                <form onSubmit={handleCreate} className="clan-create-form">
+                  {createError && <div className="clan-error clan-create-error">{createError}</div>}
+                  <div className="clan-create-fields">
+                    <div className="clan-create-icon-row">
+                      <div className="clan-create-preview-col">
+                        {createIconPreview ? (
+                          <img src={createIconPreview} alt="Clan icon preview" className="clan-create-preview" />
+                        ) : (
+                          <div className="clan-create-preview clan-create-preview--empty">Preview</div>
+                        )}
+                      </div>
+                      <div className="clan-create-icon-field">
+                        <label className="clan-label" htmlFor="clan-icon">
+                          Clan icon
+                        </label>
+                        <input
+                          id="clan-icon"
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp,image/gif"
+                          onChange={(e) => setCreateIcon(e.target.files?.[0] ?? null)}
+                          className="clan-file-input"
+                          required
+                        />
+                        <p className="clan-field-hint">PNG, JPEG, WebP, or GIF · max 2 MB</p>
+                      </div>
+                    </div>
+                    <div className="clan-create-field">
+                      <label className="clan-label" htmlFor="clan-name">
+                        Clan name
+                      </label>
+                      <input
+                        id="clan-name"
+                        value={createName}
+                        onChange={(e) => setCreateName(e.target.value)}
+                        maxLength={32}
+                        className="clan-input"
+                        placeholder="2–32 characters"
+                        required
+                      />
+                    </div>
+                    <div className="clan-create-field">
+                      <label className="clan-label" htmlFor="clan-bio">
+                        Bio
+                      </label>
+                      <textarea
+                        id="clan-bio"
+                        value={createBio}
+                        onChange={(e) => setCreateBio(e.target.value)}
+                        maxLength={500}
+                        rows={3}
+                        className="clan-input clan-textarea"
+                        placeholder="Tell others what your clan is about (optional)"
+                      />
+                    </div>
+                  </div>
+                  <button type="submit" disabled={createBusy} className="clan-btn clan-btn-primary clan-create-submit">
+                    {createBusy ? 'Creating…' : 'Create clan'}
+                  </button>
+                </form>
+              </section>
+              {(mine?.my_pending_join_requests?.length ?? 0) > 0 && (
+                <section className="clan-panel">
+                  <h2 className="clan-section-title">Pending join requests</h2>
+                  <ul className="clan-rules-list">
+                    {mine!.my_pending_join_requests.map((r) => (
+                      <li key={r.id}>Request sent — waiting for the clan leader to accept.</li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+            </>
+          )}
+
+          {myClan && (
+            <section className="clan-panel clan-panel--mine">
+          <div className="clan-mine-header">
+            <img src={myClan.avatar_url} alt="" className="clan-mine-avatar" />
+            <div className="clan-mine-head-text">
+              <h2 className="clan-mine-name">{myClan.name}</h2>
+              <div className="clan-mine-head-meta">
+                <ClanLeaderDisplay username={myClan.leader_username} />
+                {myClan.my_role !== 'leader' ? (
+                  <ClanRoleBadge role="member" highlightYou />
+                ) : null}
+              </div>
+              <p className="clan-mine-members">
+                {myClan.member_count} / {myClan.max_members} members
+              </p>
+              {myClan.bio ? <p className="clan-mine-bio">{myClan.bio}</p> : null}
             </div>
           </div>
 
-          {myClan.next_member_unlock_donation != null && myClan.member_count >= myClan.max_members && (
-            <p className="text-sm text-muted mb-4">
-              Donate {fmt(myClan.next_member_unlock_donation)} more CD (clan total) to unlock +1 member slot.
-            </p>
-          )}
+          {isLeader ? (
+            <div className="clan-settings">
+              <h3 className="clan-section-title">Clan settings</h3>
+              <p className="clan-section-hint">Update your clan name, icon, and bio. Visible to all members and on browse.</p>
+              <form onSubmit={handleUpdateClan} className="clan-settings-form">
+                {editError ? <div className="clan-error clan-create-error">{editError}</div> : null}
+                <div className="clan-create-fields">
+                  <div className="clan-create-icon-row">
+                    <div className="clan-create-preview-col">
+                      {editIconPreview ? (
+                        <img src={editIconPreview} alt="New icon preview" className="clan-create-preview" />
+                      ) : (
+                        <img src={myClan.avatar_url} alt="" className="clan-create-preview" />
+                      )}
+                    </div>
+                    <div className="clan-create-icon-field">
+                      <label className="clan-label" htmlFor="clan-edit-icon">
+                        Clan icon
+                      </label>
+                      <input
+                        id="clan-edit-icon"
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/gif"
+                        onChange={(e) => setEditIcon(e.target.files?.[0] ?? null)}
+                        className="clan-file-input"
+                      />
+                      <p className="clan-field-hint">Leave empty to keep current icon · PNG, JPEG, WebP, or GIF · max 2 MB</p>
+                    </div>
+                  </div>
+                  <div className="clan-create-field">
+                    <label className="clan-label" htmlFor="clan-edit-name">
+                      Clan name
+                    </label>
+                    <input
+                      id="clan-edit-name"
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      maxLength={32}
+                      className="clan-input"
+                      placeholder="2–32 characters"
+                      required
+                    />
+                  </div>
+                  <div className="clan-create-field">
+                    <label className="clan-label" htmlFor="clan-edit-bio">
+                      Bio
+                    </label>
+                    <textarea
+                      id="clan-edit-bio"
+                      value={editBio}
+                      onChange={(e) => setEditBio(e.target.value)}
+                      maxLength={500}
+                      rows={3}
+                      className="clan-input clan-textarea"
+                      placeholder="Tell others what your clan is about (optional)"
+                    />
+                  </div>
+                </div>
+                <button type="submit" disabled={editBusy} className="clan-btn clan-btn-primary clan-create-submit">
+                  {editBusy ? 'Saving…' : 'Save changes'}
+                </button>
+              </form>
+              <div className="clan-danger-zone">
+                <h4 className="clan-danger-zone-title">Danger zone</h4>
+                <p className="clan-danger-zone-hint">
+                  Permanently delete this clan. All members are removed; treasury balance is forfeited.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowDisbandConfirm(true)}
+                  className="clan-btn clan-btn-disband"
+                >
+                  Disband clan
+                </button>
+              </div>
+            </div>
+          ) : null}
 
-          {myClan.has_daily_ticket_bonus && (
-            <p className="text-sm text-accent mb-4">
-              Max milestone reached — each member receives +{myClan.daily_ticket_bonus} tickets daily.
-            </p>
-          )}
+          <div className="clan-stat-grid">
+            <div className="clan-stat-card clan-stat-card--accent">
+              <span className="clan-stat-label">Treasury</span>
+              <span className="clan-stat-value">{fmt(myClan.bank_balance)} CD</span>
+              <span className="clan-stat-sub">
+                Spendable clan balance. Daily income lands here; leader payouts come from here only.
+              </span>
+            </div>
+            <div className="clan-stat-card">
+              <span className="clan-stat-label">Total donated</span>
+              <span className="clan-stat-value">{fmt(myClan.total_donated)} CD</span>
+              <span className="clan-stat-sub">
+                All-time member donations for milestones. Never goes down when the leader pays members out.
+              </span>
+            </div>
+            <div className="clan-stat-card">
+              <span className="clan-stat-label">Daily income</span>
+              <span className="clan-stat-value clan-stat-value--accent">
+                +{fmt(myClan.daily_income_per_day + (myClan.leaderboard_daily_treasury_bonus ?? 0))} CD
+                {myClan.daily_income_multiplier > 1 ? ` (×${myClan.daily_income_multiplier} members)` : ''}
+              </span>
+              <span className="clan-stat-sub">
+                {fmt(myClan.daily_income_per_day)} CD from members
+                {(myClan.leaderboard_daily_treasury_bonus ?? 0) > 0
+                  ? ` · +${fmt(myClan.leaderboard_daily_treasury_bonus)} CD leaderboard bonus`
+                  : ''}
+              </span>
+              {myClan.daily_ticket_bonus > 0 ? (
+                <span className="clan-stat-sub">+{myClan.daily_ticket_bonus} ticket(s)/member/day</span>
+              ) : null}
+            </div>
+            <div className="clan-stat-card">
+              <span className="clan-stat-label">Average ELO</span>
+              {myClan.average_elo != null ? (
+                <span className="clan-stat-value inline-flex items-center gap-2 flex-wrap">
+                  {fmt(myClan.average_elo)}
+                  {myClanAvgTier ? (
+                    <PvPTierBadge
+                      slug={myClanAvgTier.slug}
+                      displayName={myClanAvgTier.displayName}
+                      imgHeightClass="h-6"
+                    />
+                  ) : null}
+                </span>
+              ) : (
+                <span className="clan-stat-value text-muted">—</span>
+              )}
+              <span className="clan-stat-sub">{clanAverageEloHint()}</span>
+            </div>
+            <div className="clan-stat-card">
+              <span className="clan-stat-label">Your donations</span>
+              <span className="clan-stat-value">{fmt(myClan.my_donated_total)} CD</span>
+              <span className="clan-stat-sub">Lifetime Cobble$ you&apos;ve donated to this clan</span>
+            </div>
+          </div>
+
+          <ClanLeaderboardRewardsPanel
+            rewardTop1={myClan.leaderboard_daily_reward_top1 ?? lbRewardTop1}
+            ranks={myClan.leaderboard_ranks ?? { top_donated: null, top_average_elo: null }}
+            dailyBonus={myClan.leaderboard_daily_treasury_bonus ?? 0}
+            recentPayouts={myClan.recent_leaderboard_payouts ?? []}
+          />
+
+          <ClanMilestones clan={myClan} />
+
+          {topDonorsInClan.length > 0 ? (
+            <div className="clan-top-donors">
+              <h3 className="clan-section-title">Top donors in clan</h3>
+              <ol className="clan-top-donors-list">
+                {topDonorsInClan.map((m, i) => (
+                  <li key={m.user_id} className="clan-top-donors-row">
+                    <span className="clan-lb-rank">#{i + 1}</span>
+                    <span className="clan-top-donors-name">{m.username}</span>
+                    <span className="clan-top-donors-amount">{fmt(m.donated_total)} CD</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ) : null}
 
           {isLeader && (mine?.pending_join_requests?.length ?? 0) > 0 && (
-            <div className="mb-6 rounded-xl border border-accent/30 bg-accent/5 p-4">
-              <h3 className="font-semibold text-[#f5efe6] mb-3">Join requests</h3>
-              <ul className="space-y-2">
+            <div className="clan-join-requests">
+              <h3 className="clan-section-title">Join requests</h3>
+              <ul className="clan-join-list">
                 {mine!.pending_join_requests.map((req) => (
-                  <li
-                    key={req.id}
-                    className="flex flex-wrap items-center justify-between gap-2 py-2 border-b border-border/40 last:border-0"
-                  >
-                    <span className="text-sm">
-                      <span className="text-[#f5efe6] font-medium">{req.requester_username}</span>
+                  <li key={req.id} className="clan-join-item">
+                    <span>
+                      <span className="font-medium text-[#f5efe6]">{req.requester_username}</span>
                       <span className="text-muted"> wants to join</span>
                     </span>
-                    <span className="flex gap-2">
+                    <span className="clan-join-actions">
                       <button
                         type="button"
                         disabled={requestActionBusy === req.id}
                         onClick={() => handleAcceptRequest(req.id)}
-                        className="px-3 py-1 rounded-lg bg-accent text-[#1a1510] text-sm font-medium disabled:opacity-60"
+                        className="clan-btn clan-btn-primary clan-btn-sm"
                       >
                         Accept
                       </button>
@@ -437,7 +1360,7 @@ export function Clan() {
                         type="button"
                         disabled={requestActionBusy === req.id}
                         onClick={() => handleRejectRequest(req.id)}
-                        className="px-3 py-1 rounded-lg border border-border text-muted text-sm disabled:opacity-60"
+                        className="clan-btn clan-btn-ghost clan-btn-sm"
                       >
                         Reject
                       </button>
@@ -448,126 +1371,151 @@ export function Clan() {
             </div>
           )}
 
-          {isLeader && (mine?.pending_join_requests?.length ?? 0) === 0 && (
-            <p className="text-sm text-muted mb-4">No pending join requests.</p>
-          )}
+          <div className="clan-members-block">
+            <h3 className="clan-section-title">Members</h3>
+            <ul className="clan-member-list">
+              {[...myClan.members]
+                .sort((a, b) => {
+                  if (a.role === 'leader') return -1
+                  if (b.role === 'leader') return 1
+                  return b.elo - a.elo
+                })
+                .map((m) => {
+                  const tier = getPvpTierFromElo(m.elo)
+                  const isYou = user?.id === m.user_id
+                  return (
+                    <li
+                      key={m.user_id}
+                      className={`clan-member-row${m.role === 'leader' ? ' clan-member-row--leader' : ''}${isYou ? ' clan-member-row--you' : ''}`}
+                    >
+                      <div className="clan-member-main">
+                        <span className="clan-member-name">
+                          {m.username}
+                          {isYou ? <span className="clan-member-you-tag">You</span> : null}
+                        </span>
+                        {m.role === 'leader' ? (
+                          <ClanRoleBadge role="leader" />
+                        ) : (
+                          <span className="clan-member-role-label">Member</span>
+                        )}
+                      </div>
+                      <div className="clan-member-side">
+                        <span className="clan-member-elo inline-flex items-center gap-1.5">
+                          {fmt(m.elo)} ELO
+                          <PvPTierBadge slug={tier.slug} displayName={tier.displayName} imgHeightClass="h-5" />
+                        </span>
+                        <span className="clan-member-donated">{fmt(m.donated_total)} CD donated</span>
+                      </div>
+                    </li>
+                  )
+                })}
+            </ul>
+          </div>
 
-          <h3 className="font-semibold text-[#f5efe6] mb-2">Members</h3>
-          <ul className="space-y-2 mb-6">
-            {myClan.members.map((m) => (
-              <li
-                key={m.user_id}
-                className="flex justify-between items-center text-sm py-2 border-b border-border/50"
-              >
-                <span>
-                  {m.username}{' '}
-                  <span className="text-muted">({m.role})</span>
-                </span>
-                <span className="text-muted">{fmt(m.donated_total)} CD donated</span>
-              </li>
-            ))}
-          </ul>
-
-          <form onSubmit={handleDonate} className="flex flex-wrap gap-2 items-end mb-6 max-w-lg">
-            <div className="flex-1 min-w-[140px]">
-              <label className="block text-xs text-muted mb-1">Donate to clan (your CD)</label>
-              <input
-                value={donateAmount}
-                onChange={(e) => setDonateAmount(e.target.value.replace(/\D/g, ''))}
-                placeholder="Amount"
-                className="w-full px-3 py-2 rounded-lg bg-[#0f0d0b]/80 border border-border text-[#f5efe6]"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={donateBusy}
-              className="px-4 py-2 rounded-lg bg-accent/90 text-[#1a1510] font-semibold disabled:opacity-60"
-            >
-              Donate
-            </button>
-          </form>
-          {donateError && <p className="text-error text-sm mb-4">{donateError}</p>}
-
-          {isLeader && (
-            <>
-              <form onSubmit={handleDisburse} className="flex flex-wrap gap-2 items-end mb-4 max-w-lg">
-                <div className="min-w-[120px] flex-1">
-                  <label className="block text-xs text-muted mb-1">Send to member</label>
+          <div className="clan-funds-sections">
+            <div className="clan-funds-panel">
+              <h3 className="clan-section-title">Donate</h3>
+              <p className="clan-section-hint">
+                Pay from your wallet into the clan. This increases both the treasury balance and the clan&apos;s total
+                donated (milestone progress).
+              </p>
+              <form onSubmit={handleDonate} className="clan-treasury-form">
+                <div className="clan-treasury-field">
+                  <label className="clan-label" htmlFor="donate-amount">
+                    Donate Cobble$
+                  </label>
                   <input
-                    value={disburseUsername}
-                    onChange={(e) => setDisburseUsername(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-[#0f0d0b]/80 border border-border text-[#f5efe6]"
+                    id="donate-amount"
+                    value={donateAmount}
+                    onChange={(e) => setDonateAmount(e.target.value.replace(/\D/g, ''))}
+                    placeholder="Amount"
+                    className="clan-input"
                   />
                 </div>
-                <div className="w-28">
-                  <label className="block text-xs text-muted mb-1">Amount</label>
-                  <input
-                    value={disburseAmount}
-                    onChange={(e) => setDisburseAmount(e.target.value.replace(/\D/g, ''))}
-                    className="w-full px-3 py-2 rounded-lg bg-[#0f0d0b]/80 border border-border text-[#f5efe6]"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={disburseBusy}
-                  className="px-4 py-2 rounded-lg bg-accent/90 text-[#1a1510] font-semibold disabled:opacity-60"
-                >
-                  Send
+                <button type="submit" disabled={donateBusy} className="clan-btn clan-btn-primary">
+                  {donateBusy ? 'Donating…' : 'Donate'}
                 </button>
               </form>
-              {disburseError && <p className="text-error text-sm mb-4">{disburseError}</p>}
-            </>
-          )}
+              {donateError && <p className="clan-error-text">{donateError}</p>}
+            </div>
 
-          {myClan.my_role === 'member' && (
-            <button
-              type="button"
-              onClick={() => {
-                if (!window.confirm('Leave this clan?')) return
-                leaveClan()
-                  .then(() => {
-                    setActionMsg('Left clan.')
-                    loadMine()
-                    loadList()
-                  })
-                  .catch((e) => setActionMsg(e instanceof Error ? e.message : 'Leave failed'))
-              }}
-              className="text-sm text-error underline"
-            >
-              Leave clan
-            </button>
+            {isLeader ? (
+              <div className="clan-funds-panel">
+                <h3 className="clan-section-title">Treasury payouts</h3>
+                <p className="clan-section-hint">
+                  Send Cobble$ from the clan treasury to a member. This only lowers the treasury — total donated and
+                  milestone progress stay the same.
+                </p>
+                <form onSubmit={handleDisburse} className="clan-treasury-form">
+                  <div className="clan-treasury-field">
+                    <label className="clan-label" htmlFor="disburse-member">
+                      Send to member
+                    </label>
+                    <select
+                      id="disburse-member"
+                      value={disburseUserId}
+                      onChange={(e) => setDisburseUserId(e.target.value)}
+                      className="clan-input"
+                    >
+                      <option value="">Select member…</option>
+                      {disburseCandidates.map((m) => (
+                        <option key={m.user_id} value={String(m.user_id)}>
+                          {m.username}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="clan-treasury-field clan-treasury-field--amount">
+                    <label className="clan-label" htmlFor="disburse-amount">
+                      Amount
+                    </label>
+                    <input
+                      id="disburse-amount"
+                      value={disburseAmount}
+                      onChange={(e) => setDisburseAmount(e.target.value.replace(/\D/g, ''))}
+                      className="clan-input"
+                    />
+                  </div>
+                  <button type="submit" disabled={disburseBusy} className="clan-btn clan-btn-secondary">
+                    {disburseBusy ? 'Sending…' : 'Send from treasury'}
+                  </button>
+                </form>
+                {disburseError && <p className="clan-error-text">{disburseError}</p>}
+              </div>
+            ) : null}
+          </div>
+
+          {myClan && myClan.my_role === 'member' && (
+            <div className="clan-leave-wrap">
+              <button type="button" onClick={() => setShowLeaveConfirm(true)} className="clan-btn clan-btn-leave">
+                Leave clan
+              </button>
+            </div>
           )}
-        </section>
+            </section>
+          )}
+        </>
       )}
 
-      <section>
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
-          <h2 className="text-lg font-semibold text-[#f5efe6]">All clans</h2>
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name…"
-            className="sm:ml-auto px-4 py-2 rounded-xl bg-[#0f0d0b]/80 border border-border text-[#f5efe6] max-w-xs w-full"
-          />
-        </div>
-        {listLoading && <p className="text-muted py-8 text-center">Loading clans…</p>}
-        {listError && <p className="text-error py-8 text-center">{listError}</p>}
-        {!listLoading && !listError && list.length === 0 && (
-          <p className="text-muted py-8 text-center">No clans yet.</p>
-        )}
-        <div className="grid gap-4">
-          {list.map((c) => (
-            <ClanCard
-              key={c.id}
-              clan={c}
-              canJoin={isAuthenticated && !myClan}
-              joinPending={pendingJoinClanIds.has(c.id)}
-              joinBusy={joinBusyClanId === c.id}
-              onJoin={() => handleJoinRequest(c.id)}
-            />
-          ))}
-        </div>
-      </section>
+      {showLeaveConfirm && myClan ? (
+        <ClanLeaveConfirmModal
+          clanName={myClan.name}
+          busy={leaveBusy}
+          onCancel={() => setShowLeaveConfirm(false)}
+          onConfirm={() => void handleLeaveClan()}
+        />
+      ) : null}
+
+      {showDisbandConfirm && myClan ? (
+        <ClanDisbandConfirmModal
+          clanName={myClan.name}
+          memberCount={myClan.member_count}
+          treasuryBalance={myClan.bank_balance}
+          busy={disbandBusy}
+          onCancel={() => setShowDisbandConfirm(false)}
+          onConfirm={() => void handleDisbandClan()}
+        />
+      ) : null}
 
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
     </div>

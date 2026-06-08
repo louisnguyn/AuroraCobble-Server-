@@ -10,6 +10,7 @@ import type {
   LeaderboardResponse,
   LeaderboardFormat,
   LeaderboardPlayer,
+  PvpRankDailyRewardsMeta,
 } from '../types'
 import { CobbleDollars } from './CobbleDollars.tsx'
 import { getPvpTierFromElo, normalizePvpTierSlugForAssets, PvPTierBadge } from './PvPTierBadge.tsx'
@@ -70,6 +71,33 @@ function pvpRankPillClass(rank: number): string {
   if (rank === 2) return 'lb-rank-pill lb-rank-pill--silver'
   if (rank === 3) return 'lb-rank-pill lb-rank-pill--bronze'
   return 'lb-rank-pill lb-rank-pill--muted'
+}
+
+function fmtCd(n: number): string {
+  return n.toLocaleString('en-US')
+}
+
+function pvpRewardForRank(
+  rewards: PvpRankDailyRewardsMeta | undefined,
+  rank: number
+): { cobble: number; tickets: number } | null {
+  if (!rewards?.ranks?.length) return null
+  const row = rewards.ranks.find((r) => r.rank === rank)
+  if (!row || row.cobble <= 0) return null
+  return { cobble: row.cobble, tickets: row.tickets }
+}
+
+function ticketBonusLabel(count: number): string {
+  return `+${count} ticket${count === 1 ? '' : 's'}`
+}
+
+function PvpDailyRewardPill({ cobble, tickets }: { cobble: number; tickets: number }) {
+  return (
+    <span className="lb-reward-pill" title={tickets > 0 ? `${ticketBonusLabel(tickets)}/day` : undefined}>
+      +{fmtCd(cobble)} CD/day
+      {tickets > 0 ? <span className="lb-reward-pill-tickets">{ticketBonusLabel(tickets)}</span> : null}
+    </span>
+  )
 }
 
 /** Primary section tabs (Ranks / Economy / Battle Tower) */
@@ -247,6 +275,10 @@ export function Leaderboard() {
   const [displaySettings, setDisplaySettings] = useState<LeaderboardDisplaySettings>({
     hideZeroMatchPlayers: { singles: true, doubles: true },
   })
+  const pvpRankRewards = displaySettings.pvpRankDailyRewards
+  const topRewardRank = pvpRankRewards?.ranks?.length
+    ? Math.max(...pvpRankRewards.ranks.map((r) => r.rank))
+    : 3
 
   const [btData, setBtData] = useState<BattleTowerLeaderboardResponse | null>(null)
   const [btLoading, setBtLoading] = useState(false)
@@ -399,6 +431,21 @@ export function Leaderboard() {
                 <p className="text-xs text-muted m-0">Server: {lbData.serverId}</p>
               )}
 
+              {pvpRankRewards ? (
+                <p className="text-sm text-muted m-0 max-w-3xl leading-relaxed">
+                  Top {topRewardRank} on each ladder earn daily website Cobble$ at 00:00{' '}
+                  {pvpRankRewards.timezone}.{' '}
+                  {pvpRankRewards.ranks.map((r, i) => (
+                    <span key={r.rank}>
+                      {i > 0 ? ' · ' : ''}
+                      #{r.rank}{' '}
+                      <strong className="text-[#f0d48a] font-semibold">+{fmtCd(r.cobble)} CD</strong>
+                      {r.tickets > 0 ? ` (${ticketBonusLabel(r.tickets)})` : ''}
+                    </span>
+                  ))}
+                </p>
+              ) : null}
+
               {rankPlayers.length === 0 ? (
                 <div className={`${panelClass} text-muted`}>
                   {rankPlayersAll.length > 0 && hideZeroMatchPlayers
@@ -437,6 +484,11 @@ export function Leaderboard() {
                             />
                           </span>
                         ) : null}
+                        {(() => {
+                          const rk = yourRankInTable?.rank ?? yourRankPlayer.rank
+                          const rw = pvpRewardForRank(pvpRankRewards, rk)
+                          return rw ? <PvpDailyRewardPill cobble={rw.cobble} tickets={rw.tickets} /> : null
+                        })()}
                       </div>
                       <p className="text-xs text-muted m-0 mt-2">
                         {getFormatDisplayName(rankFormatId)}
@@ -452,7 +504,7 @@ export function Leaderboard() {
                     </p>
                   ) : null}
                 <div className="overflow-x-auto lb-esports-wrap p-4 sm:p-5">
-                  <table className="lb-esports-table min-w-[760px]" role="table" aria-label="PvP leaderboard">
+                  <table className="lb-esports-table min-w-[860px]" role="table" aria-label="PvP leaderboard">
                     <thead>
                       <tr>
                         <th scope="col" className="text-left w-[5.5rem]">
@@ -460,6 +512,9 @@ export function Leaderboard() {
                         </th>
                         <th scope="col" className="text-left min-w-[12rem]">
                           Player
+                        </th>
+                        <th scope="col" className="text-left w-[9.5rem]">
+                          Daily reward
                         </th>
                         <th scope="col" className="text-left w-[4.25rem]">
                           ELO
@@ -488,6 +543,7 @@ export function Leaderboard() {
                         const streak = p.currentStreak
                         const streakStr = streak > 0 ? `+${streak}` : String(streak)
                         const winPct = Math.min(100, Math.max(0, p.winRate))
+                        const dailyReward = pvpRewardForRank(pvpRankRewards, p.rank)
                         return (
                           <tr
                             key={p.uuid}
@@ -501,6 +557,13 @@ export function Leaderboard() {
                               <span className="lb-pvp-namebadge max-w-[14rem]" title={p.playerName}>
                                 {p.playerName}
                               </span>
+                            </td>
+                            <td>
+                              {dailyReward ? (
+                                <PvpDailyRewardPill cobble={dailyReward.cobble} tickets={dailyReward.tickets} />
+                              ) : (
+                                <span className="text-muted text-sm">—</span>
+                              )}
                             </td>
                             <td>
                               <span className="text-base font-bold tabular-nums text-[#f4f4ff]">{p.elo}</span>

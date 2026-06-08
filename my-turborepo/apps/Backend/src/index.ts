@@ -179,6 +179,22 @@ const PVP_DAILY_TICKETS_BY_RANK: Record<number, number> = {
   2: 1,
   3: 1,
 };
+
+function getPvpRankDailyRewardsMeta() {
+  const ranks = Object.keys(PVP_DAILY_REWARDS)
+    .map(Number)
+    .filter((n) => Number.isFinite(n))
+    .sort((a, b) => a - b);
+  return {
+    ranks: ranks.map((rank) => ({
+      rank,
+      cobble: PVP_DAILY_REWARDS[rank] ?? 0,
+      tickets: PVP_DAILY_TICKETS_BY_RANK[rank] ?? 0,
+    })),
+    timezone: "Asia/Ho_Chi_Minh",
+    schedule: "Daily at 00:00 — credited to your website wallet (each ladder: Singles & Doubles)",
+  };
+}
 const PVP_TICKETS_CURRENCY = "tickets";
 
 /** Ticket-family `user_currency` types staff may bulk-grant from admin (same strings as single-user grant). */
@@ -1068,7 +1084,10 @@ app.get("/minecraft/pco-leaderboard", async (_req, res) => {
 });
 
 const readLeaderboardDisplaySettings = (_req: express.Request, res: express.Response) => {
-  res.json(getLeaderboardDisplaySettings());
+  res.json({
+    ...getLeaderboardDisplaySettings(),
+    pvpRankDailyRewards: getPvpRankDailyRewardsMeta(),
+  });
 };
 
 const putLeaderboardDisplaySettings = async (req: express.Request, res: express.Response) => {
@@ -6994,6 +7013,7 @@ registerClanRoutes(app, {
   incrementUserCurrency,
   cobbledollarsCurrency: COBBLEDOLLARS_CURRENCY,
   ticketsCurrency: PVP_TICKETS_CURRENCY,
+  getLiveLeaderboard: () => cobbleStore.leaderboard,
 });
 
 app.listen(port, () => {

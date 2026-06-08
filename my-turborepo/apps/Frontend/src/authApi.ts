@@ -947,6 +947,7 @@ export interface ClanPublic {
   max_members: number
   bank_balance: number
   total_donated: number
+  average_elo: number | null
   daily_income_per_day: number
   daily_income_multiplier: number
   daily_income_per_member: number
@@ -954,8 +955,14 @@ export interface ClanPublic {
   daily_ticket_bonus: number
   next_member_unlock_donation: number | null
   donate_milestone: number
-  multiplier_threshold_50: number
-  multiplier_threshold_100: number
+  donation_milestones: {
+    key: string
+    threshold: number
+    label: string
+    kind: 'income' | 'tickets'
+  }[]
+  /** Treasury bonus for holding #1 on a leaderboard category (per category, daily). */
+  leaderboard_daily_reward_top1: number
   created_at: string
 }
 
@@ -965,6 +972,20 @@ export interface ClanMemberRow {
   role: string
   donated_total: number
   joined_at: string
+  /** Highest singles/doubles ELO from live ladder, or 1000 if unranked. */
+  elo: number
+}
+
+export interface ClanLeaderboardEntry {
+  rank: number
+  id: number
+  name: string
+  avatar_url: string
+  leader_username: string
+  member_count: number
+  total_donated: number
+  bank_balance: number
+  average_elo: number | null
 }
 
 export interface ClanJoinRequestRow {
@@ -974,14 +995,37 @@ export interface ClanJoinRequestRow {
   created_at: string
 }
 
+export interface ClanLeaderboardRewardsMeta {
+  top1_per_category: number
+  categories: { key: 'top_donated' | 'top_average_elo'; label: string }[]
+  timezone: string
+  schedule: string
+}
+
+export interface ClanLeaderboardPayoutRow {
+  payout_date: string
+  category: 'top_donated' | 'top_average_elo'
+  amount: number
+  paid_at: string
+}
+
 export interface MyClanResponse {
   clan: (ClanPublic & {
     my_role: string
     my_donated_total: number
     members: ClanMemberRow[]
+    leaderboard_ranks: {
+      top_donated: number | null
+      top_average_elo: number | null
+    }
+    /** Extra daily treasury from holding #1 on leaderboard categories (0–2× top1 reward). */
+    leaderboard_daily_treasury_bonus: number
+    recent_leaderboard_payouts: ClanLeaderboardPayoutRow[]
   }) | null
   pending_join_requests: ClanJoinRequestRow[]
   my_pending_join_requests: Array<{ id: number; clan_id: number; created_at: string }>
+  /** ISO timestamp when user can request to join another clan after leaving. */
+  rejoin_available_at: string | null
 }
 
 export async function fetchClans(params?: { q?: string; limit?: number }): Promise<{
@@ -993,6 +1037,20 @@ export async function fetchClans(params?: { q?: string; limit?: number }): Promi
   if (params?.limit) sp.set('limit', String(params.limit))
   const q = sp.toString()
   return fetchApi(`/clans${q ? `?${q}` : ''}`, { skipAuth: true })
+}
+
+export async function fetchClanLeaderboards(params?: { limit?: number }): Promise<{
+  top_donated: ClanLeaderboardEntry[]
+  top_average_elo: ClanLeaderboardEntry[]
+  rewards?: ClanLeaderboardRewardsMeta
+}> {
+  const sp = new URLSearchParams()
+  if (params?.limit) sp.set('limit', String(params.limit))
+  const q = sp.toString()
+  return fetchApi<{ top_donated: ClanLeaderboardEntry[]; top_average_elo: ClanLeaderboardEntry[]; rewards?: ClanLeaderboardRewardsMeta }>(
+    `/clans/leaderboards${q ? `?${q}` : ''}`,
+    { skipAuth: true }
+  )
 }
 
 export async function fetchMyClan(): Promise<MyClanResponse> {
@@ -1008,6 +1066,20 @@ export async function createClan(form: FormData): Promise<{ ok: boolean; new_bal
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error((data as { error?: string })?.error ?? `Request failed: ${res.status}`)
   return data as { ok: boolean; new_balance: number; clan: ClanPublic }
+}
+
+export async function updateClan(
+  clanId: number,
+  form: FormData
+): Promise<{ ok: boolean; clan: NonNullable<MyClanResponse['clan']> }> {
+  const base = API_BASE.replace(/\/$/, '')
+  const headers: HeadersInit = {}
+  const token = getStoredToken()
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  const res = await fetch(`${base}/clans/${clanId}`, { method: 'PATCH', headers, body: form })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error((data as { error?: string })?.error ?? `Request failed: ${res.status}`)
+  return data as { ok: boolean; clan: NonNullable<MyClanResponse['clan']> }
 }
 
 export async function donateToClan(
@@ -1046,6 +1118,10 @@ export async function disburseClanFunds(
   })
 }
 
-export async function leaveClan(): Promise<{ ok: boolean }> {
-  return fetchApi('/clans/leave', { method: 'POST', body: '{}' })
+export async function leaveClan(): Promise<{ ok: boolean; rejoin_available_at?: string }> {
+  return fetchApi<{ ok: boolean; rejoin_available_at?: string }>('/clans/leave', { method: 'POST', body: '{}' })
+}
+
+export async function disbandClan(): Promise<{ ok: boolean }> {
+  return fetchApi<{ ok: boolean }>('/clans/disband', { method: 'POST', body: '{}' })
 }

@@ -46,11 +46,18 @@ export interface LeaderboardResponse {
 }
 
 /** GET /leaderboard/display-settings — admin-controlled public PvP table filter per format. */
+export interface PvpRankDailyRewardsMeta {
+  ranks: { rank: number; cobble: number; tickets: number }[]
+  timezone: string
+  schedule: string
+}
+
 export interface LeaderboardDisplaySettings {
   hideZeroMatchPlayers: {
     singles: boolean
     doubles: boolean
   }
+  pvpRankDailyRewards?: PvpRankDailyRewardsMeta
 }
 
 export interface LeaderboardFormat {
