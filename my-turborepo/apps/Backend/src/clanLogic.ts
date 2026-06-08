@@ -1,6 +1,6 @@
 /** Website clan economy rules (Cobble$). */
 
-export const CLAN_CREATE_COST = 750_000;
+export const CLAN_CREATE_COST = 1_000_000;
 
 export const CLAN_BASE_MAX_MEMBERS = 2;
 

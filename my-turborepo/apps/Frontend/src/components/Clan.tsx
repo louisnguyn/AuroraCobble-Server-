@@ -723,7 +723,7 @@ export function Clan() {
   const { isAuthenticated, user } = useAuth()
   const [showAuth, setShowAuth] = useState(false)
   const [list, setList] = useState<ClanPublic[]>([])
-  const [createCost, setCreateCost] = useState(750_000)
+  const [createCost, setCreateCost] = useState(1_000_000)
   const [listLoading, setListLoading] = useState(true)
   const [listError, setListError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
