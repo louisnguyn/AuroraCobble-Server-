@@ -374,6 +374,62 @@ async function notifyDiscordPull(
   );
 }
 
+async function notifyDiscordTournamentPredictionStake(params: {
+  username: string;
+  tournamentTitle: string;
+  totalStake: number;
+  newBalance: number;
+  stakeChampion: number;
+  pickChampionLabel: string | null;
+  stakeRunnerUp: number;
+  pickRunnerUpLabel: string | null;
+}): Promise<void> {
+  if (!DISCORD_GACHA_WEBHOOK_URL) return;
+  const fields: DiscordEmbedField[] = [
+    { name: "Player", value: clampDiscordText(params.username, 128), inline: true },
+    { name: "Tournament", value: clampDiscordText(params.tournamentTitle, 256), inline: true },
+    {
+      name: "Total staked",
+      value: `${params.totalStake.toLocaleString()} Cobble$`,
+      inline: true,
+    },
+    {
+      name: "Balance",
+      value: `${params.newBalance.toLocaleString()} Cobble$`,
+      inline: true,
+    },
+  ];
+  if (params.stakeChampion > 0) {
+    fields.push({
+      name: "Champion pick",
+      value: clampDiscordText(
+        `${params.pickChampionLabel ?? "—"} · ${params.stakeChampion.toLocaleString()} CD`,
+        1024
+      ),
+      inline: false,
+    });
+  }
+  if (params.stakeRunnerUp > 0) {
+    fields.push({
+      name: "Runner-up pick",
+      value: clampDiscordText(
+        `${params.pickRunnerUpLabel ?? "—"} · ${params.stakeRunnerUp.toLocaleString()} CD`,
+        1024
+      ),
+      inline: false,
+    });
+  }
+  await notifyDiscordEmbed(
+    {
+      title: "Tournament prediction",
+      color: 0x3b82f6,
+      fields,
+      timestamp: new Date().toISOString(),
+    },
+    DISCORD_GACHA_WEBHOOK_URL
+  );
+}
+
 type DiscordEmbedField = {
   name: string;
   value: string;
@@ -7008,6 +7064,7 @@ registerTournamentPredictionRoutes(app, {
   requireAdmin,
   ensureUserCobbledollarsRow,
   recordCobbledollarLedger,
+  notifyDiscordTournamentPredictionStake,
 });
 
 registerClanRoutes(app, {

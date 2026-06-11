@@ -37,6 +37,265 @@ function PredictionEventBanner({
   )
 }
 
+function parseStakeInput(raw: string): number | null {
+  const n = parseInt(raw.replace(/,/g, ''), 10)
+  return Number.isFinite(n) && Number.isInteger(n) && n > 0 ? n : null
+}
+
+function PredictionRulesOverview({
+  champMult,
+  ruMult,
+  minStake,
+  maxStake,
+  lockedAt,
+}: {
+  champMult: number
+  ruMult: number
+  minStake: number
+  maxStake: number
+  lockedAt: string | null
+}) {
+  const fmt = (n: number) => n.toLocaleString()
+  return (
+    <div className="rounded-xl border border-violet-500/35 bg-gradient-to-br from-violet-950/45 via-[#120a22]/85 to-[#0f0a1a]/90 p-4 sm:p-5 space-y-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <p className="text-[10px] uppercase tracking-widest text-violet-300/90 font-semibold m-0 mb-1">
+            How it works
+          </p>
+          <p className="text-sm text-[#e2e8f0] m-0 leading-snug">
+            Pick champion and runner-up separately — stake each line on its own.
+          </p>
+        </div>
+        {lockedAt ? (
+          <p className="text-xs text-amber-200/95 m-0 rounded-lg border border-amber-500/35 bg-amber-950/30 px-2.5 py-1.5 shrink-0">
+            Locks {lockedAt}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="rounded-xl border border-amber-500/45 bg-gradient-to-b from-amber-950/50 to-[#0f0a1a]/60 px-3 py-4 text-center">
+          <p className="text-[10px] uppercase tracking-wider text-amber-300/85 font-semibold m-0 mb-2">
+            Champion
+          </p>
+          <p className="text-3xl sm:text-4xl font-bold tabular-nums text-amber-200 m-0 leading-none">
+            ×{champMult}
+          </p>
+          <p className="text-[11px] text-muted mt-2 m-0">Win payout on stake</p>
+        </div>
+
+        <div className="rounded-xl border border-sky-500/40 bg-gradient-to-b from-sky-950/45 to-[#0f0a1a]/60 px-3 py-4 text-center">
+          <p className="text-[10px] uppercase tracking-wider text-sky-300/85 font-semibold m-0 mb-2">
+            Runner-up
+          </p>
+          <p className="text-3xl sm:text-4xl font-bold tabular-nums text-sky-200 m-0 leading-none">
+            ×{ruMult}
+          </p>
+          <p className="text-[11px] text-muted mt-2 m-0">Win payout on stake</p>
+        </div>
+
+        <div className="rounded-xl border border-emerald-500/35 bg-gradient-to-b from-emerald-950/35 to-[#0f0a1a]/60 px-3 py-4 text-center">
+          <p className="text-[10px] uppercase tracking-wider text-emerald-300/85 font-semibold m-0 mb-2">
+            Min stake
+          </p>
+          <p className="text-lg sm:text-xl font-bold tabular-nums text-[#fbbf24] m-0 leading-tight">
+            {fmt(minStake)}
+          </p>
+          <p className="text-[11px] text-muted mt-2 m-0">Cobble$ per line</p>
+        </div>
+
+        <div className="rounded-xl border border-rose-500/30 bg-gradient-to-b from-rose-950/30 to-[#0f0a1a]/60 px-3 py-4 text-center">
+          <p className="text-[10px] uppercase tracking-wider text-rose-300/85 font-semibold m-0 mb-2">
+            Max stake
+          </p>
+          <p className="text-lg sm:text-xl font-bold tabular-nums text-[#fbbf24] m-0 leading-tight">
+            {fmt(maxStake)}
+          </p>
+          <p className="text-[11px] text-muted mt-2 m-0">Cobble$ per line</p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2 text-[11px] text-muted">
+        <span className="rounded-md border border-border/60 bg-[#0f0a1a]/50 px-2 py-1">
+          Stake <span className="text-[#e2e8f0]">0</span> on a line to skip it
+        </span>
+        <span className="rounded-md border border-border/60 bg-[#0f0a1a]/50 px-2 py-1">
+          Picks must be <span className="text-[#e2e8f0]">different players</span>
+        </span>
+        <span className="rounded-md border border-border/60 bg-[#0f0a1a]/50 px-2 py-1">
+          Settles when the <span className="text-[#e2e8f0]">final winner</span> is set
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function StakePayoutHint({
+  stakeRaw,
+  multiplier,
+  minStake,
+  maxStake,
+}: {
+  stakeRaw: string
+  multiplier: number
+  minStake: number
+  maxStake: number
+}) {
+  const stake = parseStakeInput(stakeRaw)
+  if (stake == null) {
+    return (
+      <p className="text-[11px] text-muted m-0 mt-1.5">
+        Enter {minStake.toLocaleString()}–{maxStake.toLocaleString()} or 0 to skip
+      </p>
+    )
+  }
+  if (stake < minStake || stake > maxStake) {
+    return (
+      <p className="text-[11px] text-rose-300/90 m-0 mt-1.5">
+        Stake must be {minStake.toLocaleString()}–{maxStake.toLocaleString()} Cobble$
+      </p>
+    )
+  }
+  return (
+    <div className="mt-2 rounded-lg border border-emerald-500/30 bg-emerald-950/25 px-2.5 py-2">
+      <p className="text-[11px] text-emerald-300/90 m-0">
+        Potential win{' '}
+        <span className="font-bold tabular-nums text-emerald-200 text-sm">
+          +{(stake * multiplier).toLocaleString()}
+        </span>{' '}
+        <span className="text-muted">CD</span>
+      </p>
+    </div>
+  )
+}
+
+function StakeQuickButtons({
+  minStake,
+  maxStake,
+  disabled,
+  onPick,
+}: {
+  minStake: number
+  maxStake: number
+  disabled?: boolean
+  onPick: (value: string) => void
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5 mt-1.5">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => onPick('0')}
+        className="rounded-md border border-border/70 bg-[#0f0a1a]/60 px-2 py-0.5 text-[10px] font-medium text-muted hover:text-[#e2e8f0] hover:border-border disabled:opacity-40"
+      >
+        Skip
+      </button>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => onPick(String(minStake))}
+        className="rounded-md border border-emerald-500/30 bg-emerald-950/25 px-2 py-0.5 text-[10px] font-medium text-emerald-200/90 hover:bg-emerald-950/40 disabled:opacity-40"
+      >
+        Min
+      </button>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => onPick(String(maxStake))}
+        className="rounded-md border border-amber-500/30 bg-amber-950/25 px-2 py-0.5 text-[10px] font-medium text-amber-200/90 hover:bg-amber-950/40 disabled:opacity-40"
+      >
+        Max
+      </button>
+    </div>
+  )
+}
+
+function PredictionWalletBar({
+  balance,
+  windowOpen,
+  resultsReady,
+}: {
+  balance: number
+  windowOpen: boolean
+  resultsReady: boolean
+}) {
+  let statusLabel = 'Open'
+  let statusClass = 'border-emerald-500/40 bg-emerald-950/35 text-emerald-200'
+  if (resultsReady) {
+    statusLabel = 'Settled'
+    statusClass = 'border-violet-500/40 bg-violet-950/35 text-violet-200'
+  } else if (!windowOpen) {
+    statusLabel = 'Closed'
+    statusClass = 'border-amber-500/40 bg-amber-950/35 text-amber-200'
+  }
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 bg-gradient-to-r from-[#0f0a1a]/90 to-[#120a22]/70 px-4 py-3">
+      <div>
+        <p className="text-[10px] uppercase tracking-wider text-muted font-semibold m-0 mb-0.5">Your wallet</p>
+        <p className="text-xl sm:text-2xl font-bold tabular-nums text-[#fbbf24] m-0 leading-none">
+          {balance.toLocaleString()}
+          <span className="text-sm font-medium text-muted ml-1.5">Cobble$</span>
+        </p>
+      </div>
+      <span className={`rounded-lg border px-3 py-1.5 text-xs font-semibold uppercase tracking-wide ${statusClass}`}>
+        {statusLabel}
+      </span>
+    </div>
+  )
+}
+
+function LockedBetLine({
+  tone,
+  multiplier,
+  pickLabel,
+  stake,
+  result,
+  payout,
+}: {
+  tone: 'champion' | 'runnerUp'
+  multiplier: number
+  pickLabel: string
+  stake: number
+  result: string
+  payout: number | null
+}) {
+  const isChamp = tone === 'champion'
+  const border = isChamp ? 'border-amber-500/35' : 'border-sky-500/35'
+  const bg = isChamp
+    ? 'bg-gradient-to-br from-amber-950/35 to-[#0f0a1a]/50'
+    : 'bg-gradient-to-br from-sky-950/30 to-[#0f0a1a]/50'
+  const accent = isChamp ? 'text-amber-200' : 'text-sky-200'
+  const { label, className } = formatBetResult(result, payout)
+  return (
+    <div className={`rounded-xl border ${border} ${bg} p-4 space-y-2`}>
+      <div className="flex items-center justify-between gap-2">
+        <p className={`text-xs font-semibold uppercase tracking-wide ${accent} m-0`}>
+          {isChamp ? 'Champion' : 'Runner-up'}
+        </p>
+        <span className={`rounded-md border ${border} px-2 py-0.5 text-[10px] font-bold tabular-nums ${accent}`}>
+          ×{multiplier}
+        </span>
+      </div>
+      <p className="text-base font-medium text-[#f5efe6] m-0 leading-snug">{pickLabel}</p>
+      <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-white/5">
+        <span className="text-sm tabular-nums text-[#fbbf24] font-medium">{stake.toLocaleString()} CD staked</span>
+        <span className={`text-sm font-semibold ${className}`}>{label}</span>
+      </div>
+    </div>
+  )
+}
+
+function PredictionLoadingSkeleton() {
+  return (
+    <div className="space-y-6 animate-pulse">
+      <div className="h-20 rounded-xl bg-[#0f0a1a]/60 border border-border/40" />
+      <div className="h-44 rounded-xl bg-[#0f0a1a]/60 border border-border/40" />
+      <div className="h-64 rounded-xl bg-[#0f0a1a]/60 border border-border/40" />
+    </div>
+  )
+}
+
 function formatBetResult(
   result: string,
   payout: number | null
@@ -130,7 +389,7 @@ export function TournamentPredictionPanel({
   }, [load])
 
   if (loading && ledgerLoading) {
-    return <p className="text-sm text-muted m-0">Loading tournament predictions…</p>
+    return <PredictionLoadingSkeleton />
   }
 
   const eventOpen = Boolean(status?.active)
@@ -174,10 +433,16 @@ export function TournamentPredictionPanel({
   const predictionTournamentSubtitle = status?.tournament?.subtitle ?? null
   const showEventBanner = Boolean(predictionTournamentTitle && (eventOpen || ledgerActive))
 
+  const totalStakePreview =
+    (parseStakeInput(stakeChampion) ?? 0) + (parseStakeInput(stakeRunnerUp) ?? 0)
+
   return (
     <div className="space-y-6">
       {!embedded ? (
-        <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-2">Tournament predictions</h2>
+        <div className="space-y-1">
+          <h2 className="text-xl font-semibold text-[#f5efe6] m-0">Tournament predictions</h2>
+          <p className="text-sm text-muted m-0">Stake Cobble$ on champion and runner-up before the bracket locks.</p>
+        </div>
       ) : null}
       {showEventBanner && predictionTournamentTitle ? (
         <PredictionEventBanner
@@ -186,104 +451,114 @@ export function TournamentPredictionPanel({
         />
       ) : null}
       {viewingMismatch ? (
-        <p className="text-xs text-amber-200/90 m-0">
+        <div className="rounded-xl border border-amber-500/35 bg-amber-950/25 px-4 py-3 text-sm text-amber-100/95">
           You are viewing a different bracket — open{' '}
-          <span className="text-[#f5efe6] font-medium">{status?.tournament?.title}</span> in the tournament list to
-          follow the same event.
-        </p>
+          <span className="text-[#f5efe6] font-semibold">{status?.tournament?.title}</span> in the tournament list
+          to follow the same event.
+        </div>
       ) : null}
       {canBet && eventOpen ? (
-        <p className="text-sm text-muted m-0">
-          Pick champion and runner-up separately. Champion pays ×{champMult}; runner-up pays ×{ruMult}. Stake{' '}
-          {minStake.toLocaleString()}–{maxStake.toLocaleString()} Cobble$ per line (0 = skip). Results settle when
-          the final winner is set in the bracket.
-          {lockedAt ? (
-            <span className="block mt-2 text-amber-200/90">Predictions lock: {lockedAt}</span>
-          ) : null}
-        </p>
+        <PredictionRulesOverview
+          champMult={champMult}
+          ruMult={ruMult}
+          minStake={minStake}
+          maxStake={maxStake}
+          lockedAt={lockedAt}
+        />
       ) : ledgerActive ? (
-        <p className="text-sm text-muted m-0">View all bets below. Log in to place your own.</p>
+        <div className="rounded-xl border border-dashed border-violet-500/30 bg-violet-950/15 px-4 py-3 text-sm text-muted">
+          View community bets below. Log in to place your own predictions.
+        </div>
       ) : (
-        <p className="text-sm text-muted m-0">
-          No prediction window is open at this time.
-        </p>
+        <div className="rounded-xl border border-dashed border-border/60 bg-[#0f0a1a]/30 px-4 py-8 text-center">
+          <p className="text-sm text-muted m-0">No prediction window is open at this time.</p>
+        </div>
       )}
 
       {canBet ? (
-      <div className="pixel-well p-4 space-y-4">
-        {!status?.active ? (
-          <p className="text-xs text-muted m-0">You cannot place new bets until the next event opens.</p>
-        ) : null}
-        {status?.active ? (
-          <>
-        <p className="text-xs text-muted m-0">
-          Wallet: <span className="tabular-nums text-[#fbbf24]">{cobbleBalance.toLocaleString()}</span> Cobble$
-          {!status?.windowOpen && (
-            <span className="block mt-2 text-amber-300">Prediction window is closed.</span>
-          )}
-          {status?.resultsReady && (
-            <span className="block mt-2 text-emerald-300/90">
-              Tournament finished — check your lines below. Winnings are in your site Cobble$ balance.
-            </span>
-          )}
-        </p>
+        <div className="rounded-xl border border-violet-500/25 bg-gradient-to-b from-[#120a22]/80 to-[#0f0a1a]/90 p-4 sm:p-5 space-y-5 shadow-[0_8px_32px_rgba(0,0,0,0.25)]">
+          {!status?.active ? (
+            <p className="text-sm text-muted m-0 text-center py-4">
+              You cannot place new bets until the next event opens.
+            </p>
+          ) : null}
+          {status?.active ? (
+            <>
+              <PredictionWalletBar
+                balance={cobbleBalance}
+                windowOpen={Boolean(status?.windowOpen)}
+                resultsReady={Boolean(status?.resultsReady)}
+              />
 
-        {status?.resultsReady && (actualChampion || actualRunnerUp) ? (
-          <div className="rounded-lg border border-emerald-500/35 bg-emerald-950/25 p-3 space-y-1 text-sm">
-            <p className="text-xs font-medium text-emerald-200/95 m-0">Official result</p>
-            {actualChampion ? <p className="m-0 text-[#e2e8f0]">Champion: {actualChampion}</p> : null}
-            {actualRunnerUp ? <p className="m-0 text-[#e2e8f0]">Runner-up: {actualRunnerUp}</p> : null}
-          </div>
-        ) : null}
+              {!status?.windowOpen && !status?.resultsReady ? (
+                <p className="text-sm text-amber-200/95 m-0 rounded-lg border border-amber-500/30 bg-amber-950/25 px-3 py-2">
+                  Prediction window is closed — no new entries.
+                </p>
+              ) : null}
+              {status?.resultsReady ? (
+                <p className="text-sm text-emerald-200/95 m-0 rounded-lg border border-emerald-500/30 bg-emerald-950/25 px-3 py-2">
+                  Tournament finished — winnings are in your site Cobble$ balance.
+                </p>
+              ) : null}
 
-        {entry ? (
-          <div className="text-sm text-[#e2e8f0] space-y-3">
-            <p className="m-0 font-medium">Your entry (locked)</p>
-            {!status?.resultsReady ? (
-              <p className="text-xs text-muted m-0">
-                After the final is played, each line shows Won or Lost and payouts go to your wallet
-                automatically.
-              </p>
-            ) : null}
-            {entry.stake_champion > 0 && (
-              <div className="rounded-lg border border-border/60 p-3 space-y-1">
-                <p className="text-xs text-muted m-0">Champion (×{champMult})</p>
-                <p className="m-0">
-                  Your pick:{' '}
-                  {participantLabel(entry.pick_champion_participant_id ?? 0, participants)}
-                </p>
-                <p className="m-0 tabular-nums text-[#fbbf24]">
-                  Stake {entry.stake_champion.toLocaleString()} Cobble$
-                </p>
-                <p
-                  className={`m-0 font-medium ${formatBetResult(entry.result_champion, entry.payout_champion).className}`}
-                >
-                  {formatBetResult(entry.result_champion, entry.payout_champion).label}
-                </p>
-              </div>
-            )}
-            {entry.stake_runner_up > 0 && (
-              <div className="rounded-lg border border-border/60 p-3 space-y-1">
-                <p className="text-xs text-muted m-0">Runner-up (×{ruMult})</p>
-                <p className="m-0">
-                  Your pick:{' '}
-                  {participantLabel(entry.pick_runner_up_participant_id ?? 0, participants)}
-                </p>
-                <p className="m-0 tabular-nums text-[#fbbf24]">
-                  Stake {entry.stake_runner_up.toLocaleString()} Cobble$
-                </p>
-                <p
-                  className={`m-0 font-medium ${formatBetResult(entry.result_runner_up, entry.payout_runner_up).className}`}
-                >
-                  {formatBetResult(entry.result_runner_up, entry.payout_runner_up).label}
-                </p>
-              </div>
-            )}
-          </div>
-        ) : status?.windowOpen && participants.length >= 2 ? (
-          <form
-            className="space-y-4"
-            onSubmit={async (e) => {
+              {status?.resultsReady && (actualChampion || actualRunnerUp) ? (
+                <div className="rounded-xl border border-emerald-500/40 bg-gradient-to-br from-emerald-950/40 to-[#0f0a1a]/60 p-4 space-y-2">
+                  <p className="text-[10px] uppercase tracking-widest font-semibold text-emerald-300/90 m-0 mb-2">
+                    Official result
+                  </p>
+                  {actualChampion ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-amber-300/90 w-20 shrink-0">Champion</span>
+                      <span className="text-[#f5efe6] font-medium">{actualChampion}</span>
+                    </div>
+                  ) : null}
+                  {actualRunnerUp ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-sky-300/90 w-20 shrink-0">Runner-up</span>
+                      <span className="text-[#f5efe6] font-medium">{actualRunnerUp}</span>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {entry ? (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-block w-2 h-2 rounded-full bg-violet-400" aria-hidden />
+                    <p className="text-sm font-semibold text-[#f5efe6] m-0">Your predictions are locked</p>
+                  </div>
+                  {!status?.resultsReady ? (
+                    <p className="text-xs text-muted m-0">
+                      Payouts settle automatically when the final winner is set in the bracket.
+                    </p>
+                  ) : null}
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {entry.stake_champion > 0 ? (
+                      <LockedBetLine
+                        tone="champion"
+                        multiplier={champMult}
+                        pickLabel={participantLabel(entry.pick_champion_participant_id ?? 0, participants)}
+                        stake={entry.stake_champion}
+                        result={entry.result_champion}
+                        payout={entry.payout_champion}
+                      />
+                    ) : null}
+                    {entry.stake_runner_up > 0 ? (
+                      <LockedBetLine
+                        tone="runnerUp"
+                        multiplier={ruMult}
+                        pickLabel={participantLabel(entry.pick_runner_up_participant_id ?? 0, participants)}
+                        stake={entry.stake_runner_up}
+                        result={entry.result_runner_up}
+                        payout={entry.payout_runner_up}
+                      />
+                    ) : null}
+                  </div>
+                </div>
+              ) : status?.windowOpen && participants.length >= 2 ? (
+                <form
+                  className="space-y-5"
+                  onSubmit={async (e) => {
               e.preventDefault()
               setError(null)
               setSuccess(null)
@@ -348,79 +623,157 @@ export function TournamentPredictionPanel({
               }
             }}
           >
-            <div className="space-y-3 rounded-lg border border-violet-500/25 bg-violet-950/20 p-3">
-              <p className="text-xs font-medium text-violet-200 m-0">Champion — ×{champMult}</p>
-              <label className="block">
-                <span className="block text-xs text-muted mb-1">Player</span>
-                <CustomSelect
-                  value={pickChampion}
-                  onChange={setPickChampion}
-                  disabled={busy}
-                  options={playerOptions}
-                  buttonClassName="w-full rounded-lg border border-border bg-[#0f0a1a]/80 px-3 py-2 text-sm text-[#e2e8f0]"
-                />
-              </label>
-              <label className="block">
-                <span className="block text-xs text-muted mb-1">Stake (0 = skip)</span>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={stakeChampion}
-                  onChange={(e) => setStakeChampion(e.target.value)}
-                  placeholder="0"
-                  className="w-full rounded-lg border border-border bg-[#0f0a1a]/80 px-3 py-2 text-sm tabular-nums text-[#e2e8f0]"
-                  disabled={busy}
-                />
-              </label>
+            <p className="text-xs text-muted m-0">Choose your picks — you can stake one line or both.</p>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="space-y-3 rounded-xl border border-amber-500/35 bg-gradient-to-br from-amber-950/30 to-[#0f0a1a]/55 p-4 shadow-[inset_0_1px_0_rgba(251,191,36,0.08)]">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-amber-500/40 bg-amber-950/50 text-xs font-bold text-amber-200">
+                      1
+                    </span>
+                    <p className="text-sm font-semibold text-amber-100 m-0">Champion</p>
+                  </div>
+                  <span className="rounded-md border border-amber-500/45 bg-amber-950/50 px-2.5 py-1 text-xs font-bold tabular-nums text-amber-200">
+                    ×{champMult}
+                  </span>
+                </div>
+                <label className="block">
+                  <span className="block text-[11px] uppercase tracking-wide text-muted mb-1.5">Player</span>
+                  <CustomSelect
+                    value={pickChampion}
+                    onChange={setPickChampion}
+                    disabled={busy}
+                    options={playerOptions}
+                    buttonClassName="w-full rounded-lg border border-amber-500/20 bg-[#0f0a1a]/85 px-3 py-2.5 text-sm text-[#e2e8f0]"
+                  />
+                </label>
+                <label className="block">
+                  <span className="block text-[11px] uppercase tracking-wide text-muted mb-1.5">Stake</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={stakeChampion}
+                    onChange={(e) => setStakeChampion(e.target.value)}
+                    placeholder="0 to skip"
+                    className="w-full rounded-lg border border-amber-500/20 bg-[#0f0a1a]/85 px-3 py-2.5 text-base tabular-nums text-[#fbbf24] font-medium"
+                    disabled={busy}
+                  />
+                  <StakeQuickButtons
+                    minStake={minStake}
+                    maxStake={maxStake}
+                    disabled={busy}
+                    onPick={setStakeChampion}
+                  />
+                  <StakePayoutHint
+                    stakeRaw={stakeChampion}
+                    multiplier={champMult}
+                    minStake={minStake}
+                    maxStake={maxStake}
+                  />
+                </label>
+              </div>
+
+              <div className="space-y-3 rounded-xl border border-sky-500/35 bg-gradient-to-br from-sky-950/25 to-[#0f0a1a]/55 p-4 shadow-[inset_0_1px_0_rgba(56,189,248,0.06)]">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-sky-500/40 bg-sky-950/50 text-xs font-bold text-sky-200">
+                      2
+                    </span>
+                    <p className="text-sm font-semibold text-sky-100 m-0">Runner-up</p>
+                  </div>
+                  <span className="rounded-md border border-sky-500/45 bg-sky-950/50 px-2.5 py-1 text-xs font-bold tabular-nums text-sky-200">
+                    ×{ruMult}
+                  </span>
+                </div>
+                <label className="block">
+                  <span className="block text-[11px] uppercase tracking-wide text-muted mb-1.5">Player</span>
+                  <CustomSelect
+                    value={pickRunnerUp}
+                    onChange={setPickRunnerUp}
+                    disabled={busy}
+                    options={playerOptions}
+                    buttonClassName="w-full rounded-lg border border-sky-500/20 bg-[#0f0a1a]/85 px-3 py-2.5 text-sm text-[#e2e8f0]"
+                  />
+                </label>
+                <label className="block">
+                  <span className="block text-[11px] uppercase tracking-wide text-muted mb-1.5">Stake</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={stakeRunnerUp}
+                    onChange={(e) => setStakeRunnerUp(e.target.value)}
+                    placeholder="0 to skip"
+                    className="w-full rounded-lg border border-sky-500/20 bg-[#0f0a1a]/85 px-3 py-2.5 text-base tabular-nums text-[#fbbf24] font-medium"
+                    disabled={busy}
+                  />
+                  <StakeQuickButtons
+                    minStake={minStake}
+                    maxStake={maxStake}
+                    disabled={busy}
+                    onPick={setStakeRunnerUp}
+                  />
+                  <StakePayoutHint
+                    stakeRaw={stakeRunnerUp}
+                    multiplier={ruMult}
+                    minStake={minStake}
+                    maxStake={maxStake}
+                  />
+                </label>
+              </div>
             </div>
-            <div className="space-y-3 rounded-lg border border-border/70 bg-[#0f0a1a]/40 p-3">
-              <p className="text-xs font-medium text-[#e2e8f0] m-0">Runner-up — ×{ruMult}</p>
-              <label className="block">
-                <span className="block text-xs text-muted mb-1">Player</span>
-                <CustomSelect
-                  value={pickRunnerUp}
-                  onChange={setPickRunnerUp}
-                  disabled={busy}
-                  options={playerOptions}
-                  buttonClassName="w-full rounded-lg border border-border bg-[#0f0a1a]/80 px-3 py-2 text-sm text-[#e2e8f0]"
-                />
-              </label>
-              <label className="block">
-                <span className="block text-xs text-muted mb-1">Stake (0 = skip)</span>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={stakeRunnerUp}
-                  onChange={(e) => setStakeRunnerUp(e.target.value)}
-                  placeholder="0"
-                  className="w-full rounded-lg border border-border bg-[#0f0a1a]/80 px-3 py-2 text-sm tabular-nums text-[#e2e8f0]"
-                  disabled={busy}
-                />
-              </label>
+
+            {totalStakePreview > 0 ? (
+              <div className="rounded-xl border border-violet-500/30 bg-violet-950/25 px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+                <span className="text-sm text-muted">Total to lock</span>
+                <span className="text-lg font-bold tabular-nums text-[#fbbf24]">
+                  {totalStakePreview.toLocaleString()} Cobble$
+                </span>
+              </div>
+            ) : null}
+
+            <div className="space-y-2">
+              <button
+                type="submit"
+                disabled={busy}
+                className="w-full py-3 px-4 pixel-btn-primary disabled:opacity-50 text-sm font-semibold tracking-wide"
+              >
+                {busy ? 'Locking predictions…' : 'Lock predictions'}
+              </button>
+              {success ? (
+                <p className="text-sm text-emerald-300 m-0 text-center rounded-lg border border-emerald-500/30 bg-emerald-950/25 py-2">
+                  {success}
+                </p>
+              ) : null}
+              {error ? (
+                <p className="text-sm text-error m-0 text-center rounded-lg border border-rose-500/30 bg-rose-950/25 py-2">
+                  {error}
+                </p>
+              ) : null}
             </div>
-            <button type="submit" disabled={busy} className="py-2 px-4 pixel-btn-primary disabled:opacity-50">
-              {busy ? 'Submitting…' : 'Lock predictions'}
-            </button>
-            {success && <p className="text-sm text-emerald-300 m-0">{success}</p>}
-            {error && <p className="text-sm text-error m-0">{error}</p>}
           </form>
         ) : (
-          <p className="text-sm text-muted m-0">
-            {participants.length < 2
-              ? 'Need at least two participants in the tournament bracket.'
-              : 'No entry — window closed.'}
-          </p>
+          <div className="rounded-xl border border-dashed border-border/60 bg-[#0f0a1a]/30 px-4 py-6 text-center">
+            <p className="text-sm text-muted m-0">
+              {participants.length < 2
+                ? 'Need at least two participants in the tournament bracket.'
+                : 'No entry — window closed.'}
+            </p>
+          </div>
         )}
-          </>
-        ) : null}
-      </div>
+            </>
+          ) : null}
+        </div>
       ) : null}
 
-      <div className="pixel-well p-4 space-y-3">
-        <h3 className="text-sm font-semibold text-[#e2e8f0] m-0">Bet ledger</h3>
-        <p className="text-xs text-muted m-0">
-          Everyone&apos;s stakes for the current prediction event — who picked whom and how much.
-        </p>
+      <div className="rounded-xl border border-border/60 bg-gradient-to-b from-[#120a22]/60 to-[#0f0a1a]/90 p-4 sm:p-5 space-y-4">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h3 className="text-base font-semibold text-[#f5efe6] m-0">Community bets</h3>
+            <p className="text-xs text-muted m-0 mt-1">
+              Who picked whom and how much is on the line.
+            </p>
+          </div>
+        </div>
         {ledgerActive || ledgerLoading ? (
           <TournamentPredictionBetLedger
             tournamentTitle={ledgerTournamentTitle || status?.tournament?.title || 'Tournament'}

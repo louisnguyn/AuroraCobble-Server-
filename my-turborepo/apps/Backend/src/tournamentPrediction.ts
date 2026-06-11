@@ -371,11 +371,42 @@ type RouteDeps = {
     kind: string,
     detail: string | null
   ) => Promise<void>;
+  notifyDiscordTournamentPredictionStake?: (params: {
+    username: string;
+    tournamentTitle: string;
+    totalStake: number;
+    newBalance: number;
+    stakeChampion: number;
+    pickChampionLabel: string | null;
+    stakeRunnerUp: number;
+    pickRunnerUpLabel: string | null;
+  }) => Promise<void>;
 };
 
+async function labelTournamentParticipants(partIds: number[]): Promise<Map<number, string>> {
+  const map = new Map<number, string>();
+  if (!supabase || partIds.length === 0) return map;
+  const { data: parts } = await supabase
+    .from("tournament_participants")
+    .select("id, seed_rank, display_name")
+    .in("id", partIds);
+  for (const p of parts ?? []) {
+    const id = p.id as number;
+    const seed = Number(p.seed_rank);
+    const name = String(p.display_name ?? "");
+    map.set(id, `#${seed} ${name}`);
+  }
+  return map;
+}
+
 export function registerTournamentPredictionRoutes(app: Express, deps: RouteDeps): void {
-  const { requireAuth, requireAdmin, ensureUserCobbledollarsRow, recordCobbledollarLedger } =
-    deps;
+  const {
+    requireAuth,
+    requireAdmin,
+    ensureUserCobbledollarsRow,
+    recordCobbledollarLedger,
+    notifyDiscordTournamentPredictionStake,
+  } = deps;
 
   app.get("/admin/tournament-prediction/settings", requireAuth, requireAdmin, async (_req, res) => {
     if (!supabase) {
@@ -827,6 +858,28 @@ export function registerTournamentPredictionRoutes(app: Express, deps: RouteDeps
       "tournament_prediction_stake",
       `Tournament predict · #${tournamentId} · staked ${totalStake}`
     );
+
+    const partIdsToLabel = [
+      ...(stakeChampion > 0 ? [pickChampionId] : []),
+      ...(stakeRunnerUp > 0 ? [pickRunnerUpId] : []),
+    ];
+    const partLabels = await labelTournamentParticipants(partIdsToLabel);
+    const { data: tournamentRow } = await supabase
+      .from("tournaments")
+      .select("title")
+      .eq("id", tournamentId)
+      .maybeSingle();
+    void notifyDiscordTournamentPredictionStake?.({
+      username: user.username?.trim() || `user#${user.userId}`,
+      tournamentTitle: String(tournamentRow?.title ?? `#${tournamentId}`),
+      totalStake,
+      newBalance,
+      stakeChampion,
+      pickChampionLabel: stakeChampion > 0 ? (partLabels.get(pickChampionId) ?? null) : null,
+      stakeRunnerUp,
+      pickRunnerUpLabel: stakeRunnerUp > 0 ? (partLabels.get(pickRunnerUpId) ?? null) : null,
+    }).catch(() => {});
+
     res.json({ ok: true, newBalance, tournamentId });
   });
 }
