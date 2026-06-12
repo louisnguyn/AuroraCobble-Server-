@@ -9,6 +9,7 @@ import {
 } from '../authApi'
 import { PokemonSprite } from './PokemonSprite.tsx'
 import { CustomSelect } from './CustomSelect'
+import { PageHeader, PageShell } from './PageLayout.tsx'
 import { formatBracketMatchKeyLabel } from '../bracketLabels.ts'
 import { TournamentOverview } from './TournamentOverview.tsx'
 import { TournamentPlacementsBanner } from './TournamentPlacements.tsx'
@@ -448,21 +449,23 @@ export function Tournament({
   }
 
   return (
-    <div className="w-full max-w-7xl mx-auto space-y-6 pb-12">
-      <header className="space-y-2">
-        <h1 className="text-2xl font-semibold text-[#f5efe6] m-0">Tournament</h1>
-        {bracketSummary && data?.tournament ? (
-          <TournamentOverview summary={bracketSummary} />
-        ) : (
-          <p className="text-sm text-muted m-0">
-            {catalog.length > 0
-              ? `Choose a tournament below — ${catalog.length} bracket${catalog.length === 1 ? '' : 's'} available with live results, team sheets, and head-to-head compare.`
-              : 'Choose a tournament to view the bracket, team sheets, and match results.'}
-          </p>
-        )}
+    <PageShell max="7xl">
+      <PageHeader
+        accent="violet"
+        eyebrow="Events"
+        title="Tournament"
+        description={
+          bracketSummary && data?.tournament ? undefined : catalog.length > 0
+            ? `Choose a tournament below — ${catalog.length} bracket${catalog.length === 1 ? '' : 's'} available with live results, team sheets, and head-to-head compare.`
+            : 'Choose a tournament to view the bracket, team sheets, and match results.'
+        }
+        footer={
+          bracketSummary && data?.tournament ? <TournamentOverview summary={bracketSummary} /> : undefined
+        }
+      >
         {comparePickFirst != null ? (
           <div
-            className="flex flex-wrap items-center justify-between gap-3 p-3 pixel-panel-soft border-l-4 border-accent"
+            className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl border border-accent/40 bg-accent/5 border-l-4 border-l-accent"
             role="status"
           >
             <p className="text-sm text-[#f5efe6] m-0">
@@ -535,7 +538,7 @@ export function Tournament({
         {catalog.length === 0 && !catalogErr ? (
           <p className="text-xs text-muted m-0">No tournaments are available at this time.</p>
         ) : null}
-      </header>
+      </PageHeader>
 
       {!slugInput.trim() ? (
         <p className="text-muted text-sm">Select a tournament to view the bracket.</p>
@@ -684,6 +687,6 @@ export function Tournament({
           </div>
         </div>
       ) : null}
-    </div>
+    </PageShell>
   )
 }

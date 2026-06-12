@@ -37,6 +37,10 @@ function requireSupabase(res: Response): boolean {
   return true;
 }
 
+function normalizeTournamentSlug(raw: string): string {
+  return raw.trim().toLowerCase().replace(/[^a-z0-9-]/g, "-");
+}
+
 function contestantIds(m: BuiltMatch): [number, number] | null {
   if (m.left.kind !== "participant" || m.right.kind !== "participant") return null;
   return [m.left.id, m.right.id];
@@ -78,7 +82,7 @@ export function registerTournamentRoutes(
   app.post("/admin/tournaments", requireAuth, requireAdmin, async (req, res) => {
     if (!requireSupabase(res)) return;
     const body = req.body ?? {};
-    const slug = typeof body.slug === "string" ? body.slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, "-") : "";
+    const slug = typeof body.slug === "string" ? normalizeTournamentSlug(body.slug) : "";
     const title = typeof body.title === "string" ? body.title.trim() : "";
     if (!slug || !title) {
       res.status(400).json({ error: "slug and title required" });
@@ -130,7 +134,32 @@ export function registerTournamentRoutes(
     }
     const body = req.body ?? {};
     const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
-    if (typeof body.title === "string") patch.title = body.title.trim();
+    if (typeof body.title === "string") {
+      const title = body.title.trim();
+      if (!title) {
+        res.status(400).json({ error: "title cannot be empty" });
+        return;
+      }
+      patch.title = title;
+    }
+    if (typeof body.slug === "string") {
+      const slug = normalizeTournamentSlug(body.slug);
+      if (!slug) {
+        res.status(400).json({ error: "slug cannot be empty" });
+        return;
+      }
+      const { data: existing } = await supabase!
+        .from("tournaments")
+        .select("id")
+        .eq("slug", slug)
+        .neq("id", id)
+        .maybeSingle();
+      if (existing) {
+        res.status(400).json({ error: "Slug already exists" });
+        return;
+      }
+      patch.slug = slug;
+    }
     if (typeof body.subtitle === "string") patch.subtitle = body.subtitle.trim();
     if (Array.isArray(body.prizes)) patch.prizes = body.prizes;
     if (typeof body.is_published === "boolean") patch.is_published = body.is_published;
@@ -145,8 +174,16 @@ export function registerTournamentRoutes(
       }
       patch.qf_qual_feed = qfNorm;
     }
+    if (Object.keys(patch).length <= 1) {
+      res.status(400).json({ error: "No valid fields to update" });
+      return;
+    }
     const { data, error } = await supabase!.from("tournaments").update(patch).eq("id", id).select().single();
     if (error) {
+      if (/duplicate key/i.test(error.message)) {
+        res.status(400).json({ error: "Slug already exists" });
+        return;
+      }
       res.status(500).json({ error: error.message });
       return;
     }

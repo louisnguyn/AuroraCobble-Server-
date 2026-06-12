@@ -18,6 +18,7 @@ import {
 } from '../authApi'
 import { AuthModal } from './AuthModal'
 import { isAccountVerified, VerifiedAccountBadge } from './VerifiedAccountBadge.tsx'
+import { PageHeader, PageShell } from './PageLayout.tsx'
 import {
   fetchPokemonInfo,
   showdownHomeShinySpriteUrl,
@@ -420,17 +421,14 @@ export function Gacha() {
   if (!isAuthenticated) {
     return (
       <>
-        <div className="w-full max-w-2xl mx-auto py-8 sm:py-12 px-4">
+        <PageShell max="2xl" className="py-4">
+          <PageHeader
+            accent="gold"
+            eyebrow="Rewards"
+            title="Gacha"
+            description="Sign in to open loot pools, exchange tickets, and claim rewards."
+          />
           <div className="pixel-panel-soft p-8 sm:p-10 text-center text-base">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-accent/20 flex items-center justify-center">
-              <svg className="w-8 h-8 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
-            </div>
-            <h2 className="text-xl font-bold text-[#f5efe6] mb-2">Log in to use Gacha</h2>
-            <p className="text-muted mb-6 max-w-sm mx-auto">
-              Sign in or create an account to open loot and collect rewards.
-            </p>
             <button
               type="button"
               onClick={() => setShowAuth(true)}
@@ -439,15 +437,20 @@ export function Gacha() {
               Log in / Sign up
             </button>
           </div>
-        </div>
+        </PageShell>
         {showAuth && <AuthModal onClose={() => setShowAuth(false)} defaultMode="login" />}
       </>
     )
   }
 
   return (
-    <div className="w-full max-w-2xl mx-auto py-6 sm:py-10 px-4">
-      <h1 className="text-2xl font-bold text-[#f5efe6] mb-6">Gacha</h1>
+    <PageShell max="2xl" className="space-y-4">
+      <PageHeader
+        accent="gold"
+        eyebrow="Rewards"
+        title="Gacha"
+        description="Open loot pools, exchange tickets, and claim rewards in-game."
+      />
       {!canUseGacha ? (
         <div
           className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100"
@@ -898,6 +901,6 @@ export function Gacha() {
           </div>
         </div>
       )}
-    </div>
+    </PageShell>
   )
 }

@@ -1,3 +1,5 @@
+import { PageLinkCard, PageShell } from './PageLayout.tsx'
+
 type Page =
   | 'main'
   | 'leaderboard'
@@ -51,7 +53,6 @@ interface HomeProps {
 export function Home({ onNavigate }: HomeProps) {
   return (
     <div className="w-full py-8 sm:py-12">
-      {/* Hero */}
       <section className="hero-wide-shell relative text-center mb-12 sm:mb-16 -mx-4 sm:-mx-6 px-4 sm:px-6 py-10 sm:py-14">
         <div className="absolute inset-0 -z-10 overflow-hidden pointer-events-none">
           <div className="hero-glow-orb absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(120%,640px)] h-[min(120%,420px)] rounded-full blur-3xl bg-gradient-to-br from-violet-600/18 via-cyan-500/12 to-transparent" />
@@ -89,28 +90,18 @@ export function Home({ onNavigate }: HomeProps) {
         </div>
       </section>
 
-      {/* Quick links */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-5xl mx-auto px-1">
-        {QUICK_LINKS.map(({ id, label, description }) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => onNavigate?.(id)}
-            className="group pixel-panel-soft text-left w-full p-5 sm:p-6 transition-[filter] duration-150 hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/65 focus-visible:ring-offset-2 focus-visible:ring-offset-[#141210]"
-          >
-            <span className="block text-lg font-bold text-[#f5efe6] group-hover:text-accent transition-colors">
-              {label}
-            </span>
-            <span className="block text-base text-muted mt-1.5">{description}</span>
-            <span className="inline-flex items-center gap-1 text-sm text-accent mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
-              Open
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </span>
-          </button>
-        ))}
-      </section>
+      <PageShell max="5xl" className="space-y-4 pb-0">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 px-1">
+          {QUICK_LINKS.map(({ id, label, description }) => (
+            <PageLinkCard
+              key={id}
+              label={label}
+              description={description}
+              onClick={() => onNavigate?.(id)}
+            />
+          ))}
+        </div>
+      </PageShell>
 
       {!onNavigate && (
         <p className="text-center text-base text-muted/80 mt-8 max-w-3xl mx-auto">

@@ -15,6 +15,7 @@ import type {
 import { CobbleDollars } from './CobbleDollars.tsx'
 import { getPvpTierFromElo, normalizePvpTierSlugForAssets, PvPTierBadge } from './PvPTierBadge.tsx'
 import { RankedApiFeed } from './RankedApiFeed.tsx'
+import { PageHeader, PageNotice, PageShell, PageTabBar } from './PageLayout.tsx'
 
 type MainSection = 'ranks' | 'economy' | 'battle' | 'ranked'
 type RankFormatId = 'singles' | 'doubles'
@@ -97,31 +98,6 @@ function PvpDailyRewardPill({ cobble, tickets }: { cobble: number; tickets: numb
       +{fmtCd(cobble)} CD/day
       {tickets > 0 ? <span className="lb-reward-pill-tickets">{ticketBonusLabel(tickets)}</span> : null}
     </span>
-  )
-}
-
-/** Primary section tabs (Ranks / Economy / Battle Tower) */
-function MainTab({
-  active,
-  children,
-  onClick,
-}: {
-  active: boolean
-  children: ReactNode
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={active}
-      onClick={onClick}
-      className={`py-3 px-5 text-base font-bold transition-[filter] duration-150 ${
-        active ? 'pixel-pill pixel-pill-active-gold' : 'pixel-pill'
-      }`}
-    >
-      {children}
-    </button>
   )
 }
 
@@ -366,37 +342,35 @@ export function Leaderboard() {
   const mainDescription = MAIN_SECTIONS.find((s) => s.id === mainSection)?.description ?? ''
 
   return (
-    <div className="w-full max-w-6xl mx-auto space-y-8 pb-10">
-      <header className="space-y-2 border-b border-border/50 pb-6">
-        <h1 className="text-2xl font-semibold m-0 text-[#e2e8f0] tracking-tight">Leaderboard</h1>
-        <p className="text-sm text-muted m-0 max-w-2xl leading-relaxed">
-          PvP ranks, in-game Cobble$ or PCO top 10, Battle Tower, and CobbleRanked match summaries. When you are
-          signed in, your row is highlighted if your site username matches your in-game name.
-        </p>
-        {!isAuthenticated ? (
-          <p className="text-sm text-muted/90 m-0 pixel-panel-soft px-3 py-2 max-w-xl">
-            <span className="text-[#e2e8f0]/90">Tip:</span> Sign in via Account to jump to your place on each list
-            automatically.
-          </p>
-        ) : null}
-        {lbData?.timestamp && mainSection === 'ranks' && (
-          <p className="text-xs text-muted/80 m-0">
-            Rank data updated: {new Date(lbData.timestamp).toLocaleString()}
-          </p>
-        )}
-      </header>
+    <PageShell max="6xl" className="space-y-6">
+      <PageHeader
+        accent="cyan"
+        eyebrow="Competitive"
+        title="Leaderboard"
+        description="PvP ranks, in-game Cobble$ or PCO top 10, Battle Tower, and CobbleRanked match summaries. When you are signed in, your row is highlighted if your site username matches your in-game name."
+        footer={
+          <>
+            {!isAuthenticated ? (
+              <PageNotice>
+                <span className="text-[#e2e8f0]/90">Tip:</span> Sign in via Account to jump to your place on each
+                list automatically.
+              </PageNotice>
+            ) : null}
+            {lbData?.timestamp && mainSection === 'ranks' ? (
+              <p className="text-xs text-muted/80 m-0 mt-2">
+                Rank data updated: {new Date(lbData.timestamp).toLocaleString()}
+              </p>
+            ) : null}
+          </>
+        }
+      />
 
-      <div
-        className="flex flex-wrap gap-2"
-        role="tablist"
-        aria-label="Leaderboard category"
-      >
-        {MAIN_SECTIONS.map(({ id, label }) => (
-          <MainTab key={id} active={mainSection === id} onClick={() => setMainSection(id)}>
-            {label}
-          </MainTab>
-        ))}
-      </div>
+      <PageTabBar
+        ariaLabel="Leaderboard category"
+        tabs={MAIN_SECTIONS.map(({ id, label }) => ({ id, label }))}
+        active={mainSection}
+        onChange={setMainSection}
+      />
 
       <p className="text-xs text-muted m-0 -mt-4">{mainDescription}</p>
 
@@ -787,6 +761,6 @@ export function Leaderboard() {
       )}
 
       {mainSection === 'ranked' && <RankedApiFeed />}
-    </div>
+    </PageShell>
   )
 }

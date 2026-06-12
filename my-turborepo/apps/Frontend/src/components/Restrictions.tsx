@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { fetchBattleRestrictions, type BattleRestrictionsDocument } from '../authApi'
 import { fetchPokemonInfo, fetchItemImage, fetchMoveType } from '../pokemonApi'
+import { PageEmptyState, PageHeader, PageShell } from './PageLayout.tsx'
 
 const TYPE_COLORS: Record<string, string> = {
   normal: 'bg-[#a8a878]',
@@ -201,21 +202,29 @@ export function Restrictions() {
     isEmptyHtml(data.item_notes_html)
 
   return (
-    <div className="w-full max-w-[60rem] mx-auto space-y-6">
-      <header>
-        <h1 className="text-3xl sm:text-4xl font-bold m-0">Restrictions</h1>
-        {data?.format_label?.trim() ? (
-          <p className="text-lg sm:text-xl font-semibold text-[#e2e8f0] m-0 mt-2">{data.format_label.trim()}</p>
-        ) : null}
-        <p className="text-base text-muted m-0 mt-2">
-          Battle format limits and player rules for competitive play.
-        </p>
-        {data?.updated_at ? (
-          <p className="text-xs text-muted/80 m-0 mt-2">
-            Last updated {new Date(data.updated_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
-          </p>
-        ) : null}
-      </header>
+    <PageShell max="6xl">
+      <PageHeader
+        accent="rose"
+        eyebrow="Competitive rules"
+        title="Restrictions"
+        description="Battle format limits and player rules for competitive play."
+        footer={
+          <>
+            {data?.format_label?.trim() ? (
+              <p className="text-lg font-semibold text-[#f5efe6] m-0">{data.format_label.trim()}</p>
+            ) : null}
+            {data?.updated_at ? (
+              <p className="text-xs text-muted/80 m-0 mt-2">
+                Last updated{' '}
+                {new Date(data.updated_at).toLocaleString(undefined, {
+                  dateStyle: 'medium',
+                  timeStyle: 'short',
+                })}
+              </p>
+            ) : null}
+          </>
+        }
+      />
 
       {loading ? <p className="text-muted">Loading…</p> : null}
       {error ? (
@@ -228,9 +237,7 @@ export function Restrictions() {
       ) : null}
 
       {!loading && !error && emptyConfigured ? (
-        <div className="pixel-panel p-8 text-center text-base text-muted">
-          Competitive restrictions have not been published yet.
-        </div>
+        <PageEmptyState>Competitive restrictions have not been published yet.</PageEmptyState>
       ) : null}
 
       {!loading && !error && data && !emptyConfigured ? (
@@ -293,6 +300,6 @@ export function Restrictions() {
           />
         </div>
       ) : null}
-    </div>
+    </PageShell>
   )
 }

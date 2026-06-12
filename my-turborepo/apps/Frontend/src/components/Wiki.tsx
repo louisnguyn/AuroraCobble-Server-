@@ -9,6 +9,7 @@ import {
   type PokemonDetail,
   type MoveSummary,
 } from '../pokemonApi'
+import { PageEmptyState, PageHeader, PageShell } from './PageLayout.tsx'
 
 const TYPE_COLORS: Record<string, string> = {
   normal: 'bg-[#a8a878]',
@@ -162,11 +163,11 @@ export function Wiki() {
 
   if (selectedId != null) {
     return (
-      <div className="w-full max-w-[60rem] mx-auto space-y-4">
+      <PageShell max="6xl" className="space-y-4">
         <button
           type="button"
           onClick={() => setSelectedId(null)}
-          className="flex items-center gap-2 text-muted hover:text-accent transition-colors"
+          className="pixel-btn text-sm py-2 px-4"
         >
           ← Back to Pokédex
         </button>
@@ -402,18 +403,18 @@ export function Wiki() {
             </div>
           </div>
         )}
-      </div>
+      </PageShell>
     )
   }
 
   return (
-    <div className="w-full max-w-[60rem] mx-auto space-y-4">
-      <header>
-        <h1 className="text-2xl sm:text-3xl font-semibold m-0">Pokémon Database</h1>
-        <p className="text-sm text-muted m-0 mt-1">
-          Browse and search Pokémon. Data from PokéAPI.
-        </p>
-      </header>
+    <PageShell max="6xl" className="space-y-4">
+      <PageHeader
+        accent="violet"
+        eyebrow="Reference"
+        title="Pokémon Database"
+        description="Browse and search Pokémon. Data from PokéAPI."
+      />
 
       <input
         type="search"
@@ -462,10 +463,8 @@ export function Wiki() {
       )}
 
       {!loading && filtered.length === 0 && (
-        <div className="pixel-panel p-6 text-center text-muted">
-          No Pokémon found. Try a different search.
-        </div>
+        <PageEmptyState>No Pokémon found. Try a different search.</PageEmptyState>
       )}
-    </div>
+    </PageShell>
   )
 }

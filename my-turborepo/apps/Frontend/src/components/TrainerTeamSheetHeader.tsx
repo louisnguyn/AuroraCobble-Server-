@@ -26,8 +26,7 @@ function pvpRankPillClass(rank: number): string {
 }
 
 function TrainerLadderStats({ participant }: { participant: TournamentParticipantHeader }) {
-  if (participant.pvpRank == null || !Number.isFinite(participant.pvpRank)) return null
-
+  const hasRank = participant.pvpRank != null && Number.isFinite(participant.pvpRank)
   const elo =
     participant.pvpElo != null && Number.isFinite(participant.pvpElo)
       ? Math.round(participant.pvpElo)
@@ -38,25 +37,35 @@ function TrainerLadderStats({ participant }: { participant: TournamentParticipan
     <div className="team-sheet-trainer-stats" aria-label="Leaderboard stats">
       <div className="team-sheet-trainer-stat">
         <span className="team-sheet-trainer-stat-label">Rank</span>
-        <span className={pvpRankPillClass(participant.pvpRank)}>#{participant.pvpRank}</span>
+        {hasRank ? (
+          <span className={pvpRankPillClass(participant.pvpRank!)}>#{participant.pvpRank}</span>
+        ) : (
+          <span className="team-sheet-rank-pill team-sheet-rank-pill--muted team-sheet-rank-pill--unranked">
+            Unranked
+          </span>
+        )}
       </div>
-      {elo != null ? (
-        <div className="team-sheet-trainer-stat">
-          <span className="team-sheet-trainer-stat-label">ELO</span>
+      <div className="team-sheet-trainer-stat">
+        <span className="team-sheet-trainer-stat-label">ELO</span>
+        {elo != null ? (
           <span className="team-sheet-trainer-elo">{elo}</span>
-        </div>
-      ) : null}
-      {tier ? (
-        <div className="team-sheet-trainer-stat team-sheet-trainer-stat--tier">
-          <span className="team-sheet-trainer-stat-label">Tier</span>
+        ) : (
+          <span className="team-sheet-trainer-elo team-sheet-trainer-elo--muted">—</span>
+        )}
+      </div>
+      <div className="team-sheet-trainer-stat team-sheet-trainer-stat--tier">
+        <span className="team-sheet-trainer-stat-label">Tier</span>
+        {tier ? (
           <PvPTierBadge
             slug={normalizePvpTierSlugForAssets(tier.slug)}
             displayName={tier.displayName}
             imgHeightClass="h-8"
             className="team-sheet-trainer-tier-badge"
           />
-        </div>
-      ) : null}
+        ) : (
+          <span className="team-sheet-trainer-unranked-tier">Unranked</span>
+        )}
+      </div>
       <span className="team-sheet-trainer-format">{formatPvpFormatLabel(participant.pvpFormat)}</span>
     </div>
   )
@@ -71,8 +80,6 @@ export function TrainerTeamSheetPanel({
   accent?: 'violet' | 'cyan'
   children: ReactNode
 }) {
-  const hasLadder = participant.pvpRank != null && Number.isFinite(participant.pvpRank)
-
   return (
     <TeamSheetPanel
       accent={accent}
@@ -81,7 +88,7 @@ export function TrainerTeamSheetPanel({
           <span className="team-sheet-trainer-label">Trainer:</span> {participant.displayName}
         </>
       }
-      subtitle={hasLadder ? <TrainerLadderStats participant={participant} /> : undefined}
+      subtitle={<TrainerLadderStats participant={participant} />}
     >
       {children}
     </TeamSheetPanel>

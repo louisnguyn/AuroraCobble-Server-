@@ -24,6 +24,7 @@ import {
   type MyClanResponse,
 } from '../authApi'
 import { getPvpTierFromElo, PvPTierBadge } from './PvPTierBadge.tsx'
+import { PageHeader, PageShell, PageTabBar } from './PageLayout.tsx'
 import { isAccountVerified } from './VerifiedAccountBadge.tsx'
 
 function fmt(n: number): string {
@@ -1122,35 +1123,36 @@ export function Clan() {
   }
 
   return (
-    <div className="clan-page">
-      <header className="clan-page-header">
-        <h1 className="clan-page-title">Clans</h1>
-        <p className="clan-page-lead">
-          Pool Cobble$ in a shared treasury, unlock perks as the balance grows, and compete on treasury and total ELO
-          leaderboards.
-        </p>
-      </header>
+    <PageShell max="6xl" className="clan-page !pb-12">
+      <PageHeader
+        accent="violet"
+        eyebrow="Community"
+        title="Clans"
+        description="Pool Cobble$ in a shared treasury, unlock perks as the balance grows, and compete on treasury and total ELO leaderboards."
+      />
 
-      {actionMsg && (
-        <div className="clan-flash" role="status">
-          {actionMsg}
-          <button type="button" className="clan-flash-dismiss" onClick={() => setActionMsg(null)}>
+      {actionMsg ? (
+        <div
+          role="status"
+          className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-500/35 bg-emerald-950/25 px-3 py-2.5 text-sm text-emerald-100/95"
+        >
+          <span>{actionMsg}</span>
+          <button type="button" className="pixel-btn text-xs py-1 px-2 shrink-0" onClick={() => setActionMsg(null)}>
             Dismiss
           </button>
         </div>
-      )}
+      ) : null}
 
-      <div className="clan-tabs" role="tablist" aria-label="Clan sections">
-        <ClanTabButton active={activeTab === 'browse'} onClick={() => setActiveTab('browse')}>
-          Browse clans
-        </ClanTabButton>
-        <ClanTabButton active={activeTab === 'leaderboard'} onClick={() => setActiveTab('leaderboard')}>
-          Leaderboard
-        </ClanTabButton>
-        <ClanTabButton active={activeTab === 'mine'} onClick={() => setActiveTab('mine')}>
-          Your clan
-        </ClanTabButton>
-      </div>
+      <PageTabBar
+        ariaLabel="Clan sections"
+        tabs={[
+          { id: 'browse' as const, label: 'Browse clans' },
+          { id: 'leaderboard' as const, label: 'Leaderboard' },
+          { id: 'mine' as const, label: 'Your clan' },
+        ]}
+        active={activeTab}
+        onChange={setActiveTab}
+      />
 
       {activeTab === 'browse' && (
         <>
@@ -1823,6 +1825,6 @@ export function Clan() {
       ) : null}
 
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
-    </div>
+    </PageShell>
   )
 }

@@ -37,6 +37,7 @@ import { isAccountVerified, VerifiedAccountBadge } from './VerifiedAccountBadge.
 import { RoleBadge } from './RoleBadge.tsx'
 import { AccountRankHistory } from './AccountRankHistory.tsx'
 import { normalizePvpTierSlugForAssets, pvpTierHumanName, PvPTierBadge } from './PvPTierBadge.tsx'
+import { PageHeader, PageShell, PageSection, PageTabBar } from './PageLayout.tsx'
 
 function formatPokemonShopCategory(category: string): string {
   const labels: Record<string, string> = {
@@ -427,18 +428,24 @@ export function Account() {
 
   if (!isAuthenticated) {
     return (
-      <div className="max-w-lg mx-auto pixel-panel-soft p-8 text-center">
-        <h1 className="text-3xl font-bold text-[#e2e8f0] m-0 mb-2">Account</h1>
-        <p className="text-muted text-base mb-6">Sign in to manage your profile, wallet, and settings.</p>
-        <button
-          type="button"
-          onClick={() => setShowAuth(true)}
-          className="py-2.5 px-6 pixel-btn-primary"
-        >
-          Log in
-        </button>
+      <PageShell max="2xl" className="py-4">
+        <PageHeader
+          accent="cyan"
+          eyebrow="Your profile"
+          title="Account"
+          description="Sign in to manage your profile, wallet, and settings."
+        />
+        <div className="pixel-panel-soft p-8 text-center">
+          <button
+            type="button"
+            onClick={() => setShowAuth(true)}
+            className="py-2.5 px-6 pixel-btn-primary"
+          >
+            Log in
+          </button>
+        </div>
         {showAuth && <AuthModal onClose={() => setShowAuth(false)} defaultMode="login" />}
-      </div>
+      </PageShell>
     )
   }
 
@@ -638,24 +645,31 @@ export function Account() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-lg md:max-w-3xl pixel-panel-soft p-6 sm:p-8">
-      <h1 className="text-3xl font-bold text-[#e2e8f0] m-0 mb-1">Account</h1>
-      <p className="text-muted text-base mb-6">
-        Signed in as{' '}
-        <span className="inline-flex items-center gap-1.5 flex-wrap align-middle">
-          <RoleBadge roleKey={user?.minecraft_role ?? 'member'} />
-          <span className="text-[#e2e8f0]">{user?.username}</span>
-          {user && isAccountVerified(user) ? <VerifiedAccountBadge className="w-5 h-5" /> : null}
-        </span>
-        {user?.email && (
-          <span className="block mt-1 truncate" title={user.email}>
-            {user.email}
-          </span>
-        )}
-      </p>
+    <PageShell max="3xl">
+      <PageHeader
+        accent="cyan"
+        eyebrow="Your profile"
+        title="Account"
+        description={
+          <>
+            Signed in as{' '}
+            <span className="inline-flex items-center gap-1.5 flex-wrap align-middle">
+              <RoleBadge roleKey={user?.minecraft_role ?? 'member'} />
+              <span className="text-[#e2e8f0]">{user?.username}</span>
+              {user && isAccountVerified(user) ? <VerifiedAccountBadge className="w-5 h-5" /> : null}
+            </span>
+            {user?.email ? (
+              <span className="block mt-1 truncate text-muted" title={user.email}>
+                {user.email}
+              </span>
+            ) : null}
+          </>
+        }
+      />
 
-      <div className="mb-6 grid grid-cols-2 sm:grid-cols-3 gap-2">
-        {(
+      <PageTabBar
+        ariaLabel="Account sections"
+        tabs={(
           [
             ['daily', 'Daily'],
             ['history', 'Rank history'],
@@ -665,20 +679,12 @@ export function Account() {
             ['cobble', 'Wallet'],
             ['account', 'Account'],
           ] as const satisfies readonly [AccountTab, string][]
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setActiveTab(id)}
-            className={`px-3 py-2 text-base font-bold ${
-              activeTab === id ? 'pixel-pill pixel-pill-active-accent' : 'pixel-pill'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+        ).map(([id, label]) => ({ id, label }))}
+        active={activeTab}
+        onChange={setActiveTab}
+      />
 
+      <PageSection className="space-y-6">
       {activeTab === 'cobble' && <CobbleWebsiteWallet onBalanceUpdated={refreshWebsiteCobbleBalance} />}
 
       {activeTab === 'history' &&
@@ -1451,6 +1457,7 @@ export function Account() {
           </form>
         </>
       )}
-    </div>
+      </PageSection>
+    </PageShell>
   )
 }

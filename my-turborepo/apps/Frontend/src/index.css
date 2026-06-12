@@ -2361,6 +2361,13 @@
     border: 1px solid rgba(120, 113, 154, 0.28);
   }
 
+  .team-sheet-rank-pill--unranked {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
   .team-sheet-trainer-elo {
     font-size: 1rem;
     font-weight: 800;
@@ -2373,6 +2380,25 @@
     color: transparent;
     text-shadow: none;
     filter: drop-shadow(0 0 10px rgba(34, 211, 238, 0.25));
+  }
+
+  .team-sheet-trainer-elo--muted {
+    background: none;
+    color: #9b96ba;
+    filter: none;
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
+  .team-sheet-trainer-unranked-tier {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2rem;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #9b96ba;
   }
 
   .team-sheet-trainer-format {

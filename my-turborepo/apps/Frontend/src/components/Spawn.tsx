@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { fetchSpawnBoss, fetchSpawnPokemon } from '../api'
 import type { SpawnBossResponse, SpawnPokemonResponse } from '../types'
 import { CustomSelect } from './CustomSelect'
+import { PageHeader, PageShell, PageTabBar } from './PageLayout.tsx'
 
 type SpawnSection = 'pokemon' | 'boss'
 
@@ -121,30 +122,23 @@ export function Spawn() {
   )
 
   return (
-    <div className="w-full max-w-6xl mx-auto space-y-6">
-      <div className="pixel-panel-soft p-4 sm:p-6">
-        <h1 className="text-3xl font-bold m-0 mb-4 text-[#e2e8f0]">Spawn</h1>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setSection('pokemon')}
-            className={`py-2.5 px-5 text-base font-bold transition-[filter] duration-150 ${
-              section === 'pokemon' ? 'pixel-pill pixel-pill-active-gold' : 'pixel-pill'
-            }`}
-          >
-            Pokemon
-          </button>
-          <button
-            type="button"
-            onClick={() => setSection('boss')}
-            className={`py-2.5 px-5 text-base font-bold transition-[filter] duration-150 ${
-              section === 'boss' ? 'pixel-pill pixel-pill-active-gold' : 'pixel-pill'
-            }`}
-          >
-            Boss
-          </button>
-        </div>
-      </div>
+    <PageShell max="6xl">
+      <PageHeader
+        accent="emerald"
+        eyebrow="World data"
+        title="Spawn"
+        description="Pokémon and boss spawn locations from the server."
+      />
+
+      <PageTabBar
+        ariaLabel="Spawn section"
+        tabs={[
+          { id: 'pokemon' as const, label: 'Pokémon' },
+          { id: 'boss' as const, label: 'Boss' },
+        ]}
+        active={section}
+        onChange={setSection}
+      />
 
       {section === 'boss' && (
         <div className="pixel-panel-soft p-4 sm:p-6">
@@ -298,6 +292,6 @@ export function Spawn() {
           )}
         </div>
       )}
-    </div>
+    </PageShell>
   )
 }

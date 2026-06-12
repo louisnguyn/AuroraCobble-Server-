@@ -29,6 +29,9 @@ export const CLAN_XP_STREAK_BONUS_PER_DAY = 10;
 /** Total XP required per clan level (level 1 starts at 0 XP). */
 export const CLAN_XP_PER_LEVEL = 500;
 
+/** Max XP a staff member can grant in one admin action. */
+export const CLAN_ADMIN_XP_GRANT_MAX = 500_000;
+
 export function clanXpFromDailyLoginStreak(streakDay: number): number {
   const day = Math.max(1, Math.min(7, Math.floor(streakDay)));
   return CLAN_XP_BASE_PER_DAILY_CLAIM + (day - 1) * CLAN_XP_STREAK_BONUS_PER_DAY;

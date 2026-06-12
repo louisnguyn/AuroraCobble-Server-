@@ -6,6 +6,7 @@ import { RoleBadge } from './RoleBadge.tsx'
 import { normalizePvpTierSlugForAssets, pvpTierHumanName, PvPTierBadge } from './PvPTierBadge.tsx'
 import { isAccountVerified, VerifiedAccountBadge } from './VerifiedAccountBadge.tsx'
 import { buildProfileShareUrl } from '../profileShare.ts'
+import { PageHeader, PageShell } from './PageLayout.tsx'
 
 export {
   buildProfileShareUrl,
@@ -177,34 +178,33 @@ export function Profile({ slugFromHashOrNav }: ProfileProps) {
 
   if (!targetUsername) {
     return (
-      <div className="profile-page max-w-3xl mx-auto">
-        <div className="profile-glass rounded-3xl border border-[#2d2a45]/80 p-10 text-center profile-ambient">
-          <p className="text-lg text-muted m-0 mb-4">
-            Sign in to open your public profile card — then share your link with friends.
-          </p>
-          <p className="text-sm text-[#cbd5e1] m-0">
-            Profiles show your role badge, Cobble-ranked snapshot, badges for milestones (verification, podium, streaks).
-          </p>
-        </div>
-      </div>
+      <PageShell max="3xl" className="py-8">
+        <PageHeader
+          accent="cyan"
+          eyebrow="Public card"
+          title="Profile"
+          description="Sign in to open your public profile card — then share your link with friends. Profiles show your role badge, Cobble-ranked snapshot, and milestone badges."
+        />
+      </PageShell>
     )
   }
 
   if (loading) {
     return (
-      <div className="profile-page max-w-3xl mx-auto flex justify-center py-24">
-        <p className="text-muted animate-pulse">Opening trainer card…</p>
-      </div>
+      <PageShell max="3xl" className="flex justify-center py-24">
+        <p className="text-muted animate-pulse m-0">Opening trainer card…</p>
+      </PageShell>
     )
   }
 
   if (loadErr || !profile) {
     return (
-      <div className="profile-page max-w-3xl mx-auto">
-        <div className="profile-glass rounded-3xl border border-[color-mix(in_srgb,var(--color-error)_55%,transparent)] p-8 text-center">
+      <PageShell max="3xl" className="py-8">
+        <PageHeader accent="cyan" eyebrow="Public card" title="Profile" />
+        <div className="rounded-xl border border-error/45 bg-[#1a0f16]/80 p-8 text-center">
           <p className="text-error m-0">{loadErr ?? 'Profile unavailable'}</p>
         </div>
-      </div>
+      </PageShell>
     )
   }
 

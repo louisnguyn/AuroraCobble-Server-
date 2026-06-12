@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { fetchTournamentParticipantTeam } from '../authApi'
+import { PageHeader, PageShell } from './PageLayout.tsx'
 import { TrainerTeamSheetPanel } from './TrainerTeamSheetHeader.tsx'
 import { type ParsedMon, TeamSheetGrid, TournamentMonCard } from './TournamentMonCard.tsx'
 
@@ -27,22 +28,28 @@ export function TournamentTeamDetail({
   const team = (data?.participant.team as ParsedMon[]) ?? []
 
   return (
-    <div className="w-full max-w-5xl mx-auto space-y-6 pb-12 px-2 sm:px-4">
+    <PageShell max="5xl" className="!pb-12 px-2 sm:px-0">
       <div className="flex flex-wrap items-center justify-start gap-3">
-        <button type="button" onClick={onBack} className="text-sm px-3 py-1.5 pixel-btn">
+        <button type="button" onClick={onBack} className="pixel-btn text-sm py-2 px-4">
           ← Back to bracket
         </button>
         {onCompareWithOther ? (
-          <button
-            type="button"
-            onClick={onCompareWithOther}
-            className="text-sm px-3 py-1.5 pixel-btn-primary"
-          >
+          <button type="button" onClick={onCompareWithOther} className="pixel-btn-primary text-sm py-2 px-4">
             Compare with another team
           </button>
         ) : null}
       </div>
-      {err ? <p className="text-error">{err}</p> : null}
+
+      {data ? (
+        <PageHeader
+          accent="violet"
+          eyebrow="Team sheet"
+          title={data.participant.displayName}
+          description="Submitted team for this tournament bracket."
+        />
+      ) : null}
+
+      {err ? <p className="text-error m-0">{err}</p> : null}
       {data ? (
         <TrainerTeamSheetPanel participant={data.participant}>
           <TeamSheetGrid>
@@ -52,8 +59,8 @@ export function TournamentTeamDetail({
           </TeamSheetGrid>
         </TrainerTeamSheetPanel>
       ) : !err ? (
-        <p className="text-muted">Loading…</p>
+        <p className="text-muted m-0">Loading…</p>
       ) : null}
-    </div>
+    </PageShell>
   )
 }

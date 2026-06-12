@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   adminDisbandClan,
+  adminGrantClanXp,
   fetchAdminClanDetail,
   fetchAdminClans,
   type AdminClanDetail,
@@ -59,6 +60,10 @@ export function ClansAdmin() {
   const [detailTab, setDetailTab] = useState<DetailTab>('overview')
   const [disbandOpen, setDisbandOpen] = useState(false)
   const [disbandBusy, setDisbandBusy] = useState(false)
+  const [grantXpAmount, setGrantXpAmount] = useState('')
+  const [grantXpNote, setGrantXpNote] = useState('')
+  const [grantXpBusy, setGrantXpBusy] = useState(false)
+  const [grantXpOk, setGrantXpOk] = useState<string | null>(null)
   const detailPanelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -126,6 +131,9 @@ export function ClansAdmin() {
     setSelectedId(clan.id)
     setDetailTab('overview')
     setDisbandOpen(false)
+    setGrantXpAmount('')
+    setGrantXpNote('')
+    setGrantXpOk(null)
     void loadDetail(clan.id)
     if (typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches) {
       requestAnimationFrame(() => {
@@ -152,6 +160,30 @@ export function ClansAdmin() {
       setError(e instanceof Error ? e.message : 'Disband failed')
     } finally {
       setDisbandBusy(false)
+    }
+  }
+
+  const submitGrantXp = async () => {
+    if (!selectedId) return
+    const amount = parseInt(grantXpAmount.replace(/,/g, ''), 10)
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setError('Enter a positive XP amount')
+      return
+    }
+    setGrantXpBusy(true)
+    setError(null)
+    setGrantXpOk(null)
+    try {
+      const res = await adminGrantClanXp(selectedId, amount, grantXpNote.trim() || undefined)
+      setGrantXpOk(`Granted +${formatCd(res.granted)} XP · now level ${res.level} (${formatCd(res.xp)} total)`)
+      setGrantXpAmount('')
+      setGrantXpNote('')
+      await loadDetail(selectedId)
+      await loadList()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Grant XP failed')
+    } finally {
+      setGrantXpBusy(false)
     }
   }
 
@@ -400,6 +432,55 @@ export function ClansAdmin() {
                         max={detail.clan.xp_per_level}
                         tone="accent"
                       />
+                      <section className="rounded-lg border border-violet-500/30 bg-violet-950/15 p-3 space-y-3">
+                        <p className="text-xs font-semibold text-violet-200/95 m-0 uppercase tracking-wide">
+                          Grant clan XP
+                        </p>
+                        <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
+                          <div className="flex-1 min-w-0">
+                            <label htmlFor="admin-grant-xp-amount" className="text-[11px] text-muted block mb-1">
+                              XP amount
+                            </label>
+                            <input
+                              id="admin-grant-xp-amount"
+                              type="number"
+                              min={1}
+                              max={500000}
+                              value={grantXpAmount}
+                              onChange={(e) => setGrantXpAmount(e.target.value)}
+                              placeholder="e.g. 500"
+                              className="w-full px-3 py-2 rounded-lg border border-border bg-[#0f0a1a]/80 text-sm text-[#f5efe6]"
+                            />
+                          </div>
+                          <div className="flex-1 min-w-0 sm:max-w-xs">
+                            <label htmlFor="admin-grant-xp-note" className="text-[11px] text-muted block mb-1">
+                              Note (optional)
+                            </label>
+                            <input
+                              id="admin-grant-xp-note"
+                              type="text"
+                              value={grantXpNote}
+                              onChange={(e) => setGrantXpNote(e.target.value)}
+                              placeholder="Event reward, correction…"
+                              maxLength={500}
+                              className="w-full px-3 py-2 rounded-lg border border-border bg-[#0f0a1a]/80 text-sm text-[#f5efe6]"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            disabled={grantXpBusy || !grantXpAmount.trim()}
+                            onClick={() => void submitGrantXp()}
+                            className="px-4 py-2 rounded-lg text-sm font-semibold bg-violet-600/90 text-white hover:bg-violet-500 disabled:opacity-50 shrink-0"
+                          >
+                            {grantXpBusy ? 'Granting…' : 'Grant XP'}
+                          </button>
+                        </div>
+                        {grantXpOk ? (
+                          <p className="text-xs text-emerald-300 m-0">{grantXpOk}</p>
+                        ) : (
+                          <p className="text-[11px] text-muted m-0">Max 500,000 XP per grant. Logged with your admin account.</p>
+                        )}
+                      </section>
                       {detail.clan.next_member_unlock_treasury != null &&
                       detail.clan.member_count < detail.clan.max_members ? (
                         <ProgressBar
@@ -664,6 +745,15 @@ export function ClansAdmin() {
                             key: `x-${g.user_id}-${g.claim_date}-${i}`,
                             primary: `${g.username} · streak day ${g.streak_day} · +${g.xp_amount} XP`,
                             secondary: g.claim_date,
+                          }))}
+                        />
+                        <ActivitySection
+                          title="XP grants (admin)"
+                          empty="No admin XP grants yet."
+                          items={(detail.recent_admin_xp_grants ?? []).map((g) => ({
+                            key: `ax-${g.id}`,
+                            primary: `${g.admin_username} · +${formatCd(g.xp_amount)} XP${g.note ? ` · ${g.note}` : ''}`,
+                            secondary: formatDt(g.created_at),
                           }))}
                         />
                       </div>

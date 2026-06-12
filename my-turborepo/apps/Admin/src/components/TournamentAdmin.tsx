@@ -22,6 +22,7 @@ type TRow = {
   id: number
   slug: string
   title: string
+  subtitle?: string | null
   is_published?: boolean
   bracket_size?: number
 }
@@ -182,6 +183,10 @@ export function TournamentAdmin() {
   const [qfQualDraft, setQfQualDraft] = useState<[number, number, number, number]>([...DEFAULT_QF_FEED])
   const [prizesDraft, setPrizesDraft] = useState('')
 
+  const [editSlug, setEditSlug] = useState('')
+  const [editTitle, setEditTitle] = useState('')
+  const [editSubtitle, setEditSubtitle] = useState('')
+
   const [predTournamentId, setPredTournamentId] = useState<string>('')
   const [predLockedAt, setPredLockedAt] = useState('')
   const [predMaxStake, setPredMaxStake] = useState('20000')
@@ -218,7 +223,17 @@ export function TournamentAdmin() {
     adminFetchBracket(id)
       .then((r) => {
         setBracket(r.bracket)
-        const t = r.tournament as { qf_qual_feed?: unknown; prizes?: unknown; bracket_size?: unknown } | undefined
+        const t = r.tournament as {
+          slug?: string
+          title?: string
+          subtitle?: string | null
+          qf_qual_feed?: unknown
+          prizes?: unknown
+          bracket_size?: unknown
+        } | undefined
+        if (t?.slug) setEditSlug(t.slug)
+        if (typeof t?.title === 'string') setEditTitle(t.title)
+        setEditSubtitle(typeof t?.subtitle === 'string' ? t.subtitle : '')
         const bs = bracketSizeFromUnknown(t?.bracket_size)
         setLoadedBracketSize(bs)
         setSeedRank((prev) => Math.min(prev, bs))
@@ -264,6 +279,21 @@ export function TournamentAdmin() {
     refreshList()
     loadPredictionSettings()
   }, [refreshList, loadPredictionSettings])
+
+  useEffect(() => {
+    if (selectedId == null) {
+      setEditSlug('')
+      setEditTitle('')
+      setEditSubtitle('')
+      return
+    }
+    const t = tournaments.find((row) => row.id === selectedId)
+    if (t) {
+      setEditSlug(t.slug)
+      setEditTitle(t.title)
+      setEditSubtitle(typeof t.subtitle === 'string' ? t.subtitle : '')
+    }
+  }, [selectedId, tournaments])
 
   useEffect(() => {
     if (selectedId != null) loadBracket(selectedId)
@@ -377,6 +407,31 @@ export function TournamentAdmin() {
       loadBracket(selectedId)
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Save pairings failed')
+    }
+  }
+
+  const handleSaveDetails = async () => {
+    if (selectedId == null) return
+    const slug = editSlug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-')
+    const title = editTitle.trim()
+    if (!slug || !title) {
+      setErr('Title and slug are required')
+      return
+    }
+    setErr(null)
+    try {
+      await adminPatchTournament(selectedId, {
+        slug,
+        title,
+        subtitle: editSubtitle.trim(),
+      })
+      setEditSlug(slug)
+      setEditTitle(title)
+      setMsg('Tournament name and slug saved')
+      refreshList()
+      loadBracket(selectedId)
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Save details failed')
     }
   }
 
@@ -902,6 +957,45 @@ export function TournamentAdmin() {
       {adminTab === 'bracket' && selectedId != null ? (
         <div className="grid gap-5 xl:grid-cols-[minmax(300px,380px)_1fr] xl:items-start">
           <div className="space-y-4">
+          <section className={panelClass}>
+            <h3 className="text-sm font-semibold text-cyan-200 m-0 tracking-wide uppercase">Tournament details</h3>
+            <p className="text-xs text-muted m-0 leading-relaxed">
+              Edit the public title, URL slug, and format line shown on the main site.
+            </p>
+            <div className="space-y-3">
+              <label className="block space-y-1">
+                <span className="text-[11px] font-medium text-slate-400">Title</span>
+                <input
+                  className={fieldClass}
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  placeholder="AuroraCobble Championship Season 1"
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-[11px] font-medium text-slate-400">URL slug</span>
+                <input
+                  className={fieldClass}
+                  value={editSlug}
+                  onChange={(e) => setEditSlug(e.target.value)}
+                  placeholder="spring-2026"
+                />
+                <span className="text-[10px] text-muted">Used in /tournament/{editSlug.trim() || 'your-slug'}</span>
+              </label>
+              <label className="block space-y-1">
+                <span className="text-[11px] font-medium text-slate-400">Subtitle / format</span>
+                <input
+                  className={fieldClass}
+                  value={editSubtitle}
+                  onChange={(e) => setEditSubtitle(e.target.value)}
+                  placeholder="National Dex OU Singles — Bo3"
+                />
+              </label>
+              <button type="button" onClick={() => void handleSaveDetails()} className={btnPrimary}>
+                Save name &amp; slug
+              </button>
+            </div>
+          </section>
           <section className={panelClass}>
             <h3 className="text-sm font-semibold text-cyan-200 m-0 tracking-wide uppercase">Bracket format</h3>
             <p className="text-xs text-muted m-0 leading-relaxed">

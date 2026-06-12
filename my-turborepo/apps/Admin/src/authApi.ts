@@ -489,6 +489,7 @@ export async function adminPatchTournament(
   id: number,
   body: {
     title?: string
+    slug?: string
     subtitle?: string
     prizes?: unknown[]
     is_published?: boolean
@@ -989,6 +990,15 @@ export interface AdminClanXpGrant {
   created_at: string
 }
 
+export interface AdminClanAdminXpGrant {
+  id: number
+  admin_user_id: number
+  admin_username: string
+  xp_amount: number
+  note: string | null
+  created_at: string
+}
+
 export interface AdminClanDonation {
   id: number
   user_id: number
@@ -1033,6 +1043,7 @@ export interface AdminClanDetail {
   pending_join_requests: AdminClanJoinRequest[]
   recent_leaderboard_payouts: AdminClanLeaderboardPayout[]
   recent_xp_grants: AdminClanXpGrant[]
+  recent_admin_xp_grants: AdminClanAdminXpGrant[]
   recent_donations: AdminClanDonation[]
   recent_disbursements: AdminClanDisbursement[]
   stats: AdminClanDetailStats
@@ -1063,4 +1074,22 @@ export async function fetchAdminClanDetail(clanId: number): Promise<AdminClanDet
 
 export async function adminDisbandClan(clanId: number): Promise<{ ok: true }> {
   return fetchJson<{ ok: true }>(`/admin/clans/${clanId}/disband`, { method: 'POST', body: '{}' })
+}
+
+export async function adminGrantClanXp(
+  clanId: number,
+  amount: number,
+  note?: string
+): Promise<{
+  ok: true
+  granted: number
+  xp: number
+  level: number
+  xp_in_level: number
+  xp_per_level: number
+}> {
+  return fetchJson(`/admin/clans/${clanId}/grant-xp`, {
+    method: 'POST',
+    body: JSON.stringify({ amount, note: note?.trim() || undefined }),
+  })
 }

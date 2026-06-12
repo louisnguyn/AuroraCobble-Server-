@@ -9,6 +9,7 @@ import {
 } from '../pokemonApi'
 import type { UsageStatsResponse, FormatUsage, SpeciesUsage } from '../types'
 import { sortTierEntries } from '../usageStatsNormalize'
+import { PageEmptyState, PageHeader, PageSection, PageShell, PageTabBar } from './PageLayout.tsx'
 
 const FORMAT_ORDER = ['singles', 'doubles', 'triples'] as const
 
@@ -346,12 +347,28 @@ export function UsageStats() {
       .finally(() => setLoading(false))
   }, [])
 
-  const panelClass = 'p-8 text-center pixel-panel'
-
-  if (loading) return <div className={panelClass}>Loading usage stats…</div>
-  if (error) return <div className={`${panelClass} text-error`}>Error: {error}</div>
+  if (loading) {
+    return (
+      <PageShell max="6xl">
+        <PageHeader accent="sky" eyebrow="Meta analysis" title="Usage Stats" description="Loading competitive usage data…" />
+      </PageShell>
+    )
+  }
+  if (error) {
+    return (
+      <PageShell max="6xl">
+        <PageHeader accent="sky" eyebrow="Meta analysis" title="Usage Stats" />
+        <PageEmptyState className="text-error border-error/40">{error}</PageEmptyState>
+      </PageShell>
+    )
+  }
   if (!data || Object.keys(data).length === 0) {
-    return <div className={`${panelClass} text-muted`}>No usage stats yet. Sync from the server to see data.</div>
+    return (
+      <PageShell max="6xl">
+        <PageHeader accent="sky" eyebrow="Meta analysis" title="Usage Stats" />
+        <PageEmptyState>No usage stats yet. Sync from the server to see data.</PageEmptyState>
+      </PageShell>
+    )
   }
 
   const formats = data.formats ?? {}
@@ -363,46 +380,47 @@ export function UsageStats() {
   if (selected) {
     const s = selected.species
     return (
-      <div className="w-full max-w-[1200px] mx-auto">
+      <PageShell max="6xl" className="space-y-4">
         <button
           type="button"
-          className="mb-4 text-sm text-muted hover:text-[#e6edf3]"
+          className="pixel-btn text-sm py-2 px-4"
           onClick={() => setSelected(null)}
         >
           ← Back to {displayName} usage
         </button>
-        <div className="mb-4 rounded-lg p-4 bg-surface border border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <DetailSprite name={s.name} />
-            <div>
-              <h2 className="text-2xl sm:text-3xl font-semibold m-0">{s.name}</h2>
-              <p className="text-sm text-muted m-0 mt-1">
-                {displayName} · ELO {selected.tierMinElo} –{' '}
-                {selected.tierMaxElo === Infinity ? '∞' : selected.tierMaxElo} · {selected.tierBattles} battles
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-6 text-right text-sm sm:text-base">
-            <div>
-              <div className="text-[0.7rem] uppercase tracking-wide text-muted">Usage Rank</div>
-              <div className="font-semibold text-emerald-400">#{selected.rank}</div>
-            </div>
-            <div>
-              <div className="text-[0.7rem] uppercase tracking-wide text-muted">Usage Percent</div>
-              <div className="font-semibold text-accent">
-                {s.usagePercent.toFixed(1)}
-                <span className="text-xs align-top ml-0.5">%</span>
-              </div>
-            </div>
-            {s.winRate != null ? (
+        <PageSection padded className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <DetailSprite name={s.name} />
               <div>
-                <div className="text-[0.7rem] uppercase tracking-wide text-muted">Species win rate</div>
-                <div className="font-semibold text-sky-400 tabular-nums">{s.winRate.toFixed(1)}%</div>
+                <h2 className="text-2xl sm:text-3xl font-semibold m-0">{s.name}</h2>
+                <p className="text-sm text-muted m-0 mt-1">
+                  {displayName} · ELO {selected.tierMinElo} –{' '}
+                  {selected.tierMaxElo === Infinity ? '∞' : selected.tierMaxElo} · {selected.tierBattles} battles
+                </p>
               </div>
-            ) : null}
+            </div>
+            <div className="flex gap-6 text-right text-sm sm:text-base">
+              <div>
+                <div className="text-[0.7rem] uppercase tracking-wide text-muted">Usage Rank</div>
+                <div className="font-semibold text-emerald-400">#{selected.rank}</div>
+              </div>
+              <div>
+                <div className="text-[0.7rem] uppercase tracking-wide text-muted">Usage Percent</div>
+                <div className="font-semibold text-accent">
+                  {s.usagePercent.toFixed(1)}
+                  <span className="text-xs align-top ml-0.5">%</span>
+                </div>
+              </div>
+              {s.winRate != null ? (
+                <div>
+                  <div className="text-[0.7rem] uppercase tracking-wide text-muted">Species win rate</div>
+                  <div className="font-semibold text-sky-400 tabular-nums">{s.winRate.toFixed(1)}%</div>
+                </div>
+              ) : null}
+            </div>
           </div>
-        </div>
-        <div className="rounded-lg p-4 bg-surface border border-border text-xs sm:text-sm">
+          <div className="rounded-lg p-4 bg-surface border border-border text-xs sm:text-sm">
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="space-y-1">
               <h4 className="font-semibold text-[0.8rem] text-muted uppercase tracking-wide">Moves</h4>
@@ -431,44 +449,37 @@ export function UsageStats() {
               <TopItems items={s.natures ?? {}} formatLabel max={5} />
             </div>
           </div>
-        </div>
-      </div>
+          </div>
+        </PageSection>
+      </PageShell>
     )
   }
 
   return (
-    <div className="w-full max-w-[1200px] mx-auto">
-      <header className="mb-6">
-        <h1 className="text-2xl font-semibold m-0 mb-1">{data.seasonName ?? 'Usage Stats'}</h1>
-        {data.timestamp && (
-          <p className="text-sm text-muted m-0">Updated: {new Date(data.timestamp).toLocaleString()}</p>
-        )}
-        {data.serverId && <p className="text-sm text-muted m-0">Server: {data.serverId}</p>}
-      </header>
+    <PageShell max="6xl">
+      <PageHeader
+        accent="sky"
+        eyebrow="Meta analysis"
+        title={data.seasonName ?? 'Usage Stats'}
+        description={
+          <>
+            {data.timestamp ? (
+              <span className="block">Updated: {new Date(data.timestamp).toLocaleString()}</span>
+            ) : null}
+            {data.serverId ? <span className="block mt-1">Server: {data.serverId}</span> : null}
+          </>
+        }
+      />
 
-      <div className="flex flex-wrap gap-1 mb-5" role="tablist" aria-label="Format">
-        {FORMAT_ORDER.map((id) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={formatId === id}
-            className={`py-2 px-4 rounded-md border text-sm font-medium cursor-pointer transition-colors ${
-              formatId === id
-                ? 'text-accent bg-surface-hover border-accent'
-                : 'border-border bg-surface text-muted hover:text-[#e6edf3] hover:bg-surface-hover'
-            }`}
-            onClick={() => setFormatId(id)}
-          >
-            {getFormatDisplayName(id)}
-          </button>
-        ))}
-      </div>
+      <PageTabBar
+        ariaLabel="Format"
+        tabs={FORMAT_ORDER.map((id) => ({ id, label: getFormatDisplayName(id) }))}
+        active={formatId}
+        onChange={setFormatId}
+      />
 
       {sortedTierEntries.length === 0 ? (
-        <div className="mb-6 rounded-lg p-6 bg-surface border border-border text-center">
-          <p className="text-muted m-0">No data for {displayName} yet.</p>
-        </div>
+        <PageEmptyState>No data for {displayName} yet.</PageEmptyState>
       ) : (
         sortedTierEntries.map(([tierKey, tier]) => {
           const species = tier?.species ?? []
@@ -502,6 +513,6 @@ export function UsageStats() {
           )
         })
       )}
-    </div>
+    </PageShell>
   )
 }

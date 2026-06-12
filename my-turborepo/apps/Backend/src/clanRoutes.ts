@@ -9,6 +9,7 @@ import {
 } from "./leaderboardPvpDerived.js";
 import {
   CLAN_ABSOLUTE_MAX_MEMBERS,
+  CLAN_ADMIN_XP_GRANT_MAX,
   CLAN_BASE_MAX_MEMBERS,
   CLAN_CREATE_COST,
   CLAN_DAILY_PER_MEMBER,
@@ -34,6 +35,7 @@ import {
   isClanRejoinBlocked,
   nextMemberUnlockTreasury,
 } from "./clanLogic.js";
+import { grantClanXpByAdmin } from "./clanXp.js";
 
 const DAILY_RESET_TIMEZONE = "Asia/Ho_Chi_Minh";
 
@@ -1923,6 +1925,47 @@ async function loadRecentXpGrantsForClan(
   });
 }
 
+async function loadRecentAdminXpGrantsForClan(
+  clanId: number,
+  limit = 30
+): Promise<
+  Array<{
+    id: number;
+    admin_user_id: number;
+    admin_username: string;
+    xp_amount: number;
+    note: string | null;
+    created_at: string;
+  }>
+> {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("clan_admin_xp_grants")
+    .select("id, admin_user_id, xp_amount, note, created_at")
+    .eq("clan_id", clanId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error || !data?.length) return [];
+
+  const ids = [...new Set(data.map((r) => (r as { admin_user_id: number }).admin_user_id))];
+  const { data: users } = await supabase.from("users").select("id, username").in("id", ids);
+  const nameById = new Map((users ?? []).map((u) => [(u as { id: number }).id, (u as { username: string }).username]));
+
+  return data.map((r) => {
+    const row = r as {
+      id: number;
+      admin_user_id: number;
+      xp_amount: number;
+      note: string | null;
+      created_at: string;
+    };
+    return {
+      ...row,
+      admin_username: nameById.get(row.admin_user_id) ?? `#${row.admin_user_id}`,
+    };
+  });
+}
+
 export function registerAdminClanRoutes(app: Express, deps: AdminClanDeps): void {
   const { requireAuth, requireAdmin, getLiveLeaderboard } = deps;
   const guard = [requireAuth, requireAdmin] as const;
@@ -2040,12 +2083,14 @@ export function registerAdminClanRoutes(app: Express, deps: AdminClanDeps): void
       pending_join_requests,
       recent_leaderboard_payouts,
       recent_xp_grants,
+      recent_admin_xp_grants,
       recent_donations,
       recent_disbursements,
     ] = await Promise.all([
       loadPendingJoinRequests(clanId),
       loadRecentLeaderboardPayoutsForClan(clanId, 20),
       loadRecentXpGrantsForClan(clanId, 40),
+      loadRecentAdminXpGrantsForClan(clanId, 30),
       loadRecentDonationsForClan(clanId, 25),
       loadRecentDisbursementsForClan(clanId, 25),
     ]);
@@ -2069,6 +2114,7 @@ export function registerAdminClanRoutes(app: Express, deps: AdminClanDeps): void
       pending_join_requests,
       recent_leaderboard_payouts,
       recent_xp_grants,
+      recent_admin_xp_grants,
       recent_donations,
       recent_disbursements,
       stats: {
@@ -2097,6 +2143,52 @@ export function registerAdminClanRoutes(app: Express, deps: AdminClanDeps): void
       return;
     }
     res.json({ ok: true });
+  });
+
+  app.post("/admin/clans/:clanId/grant-xp", ...guard, async (req, res) => {
+    if (!requireSupabase(res)) return;
+
+    const staff = res.locals.user as { userId: number; username?: string } | undefined;
+    if (!staff?.userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const clanId = parseInt(String(req.params.clanId), 10);
+    if (!Number.isFinite(clanId) || clanId < 1) {
+      res.status(400).json({ error: "Invalid clan id" });
+      return;
+    }
+
+    const body = req.body ?? {};
+    const amountRaw = body.amount ?? body.xp;
+    const amount = typeof amountRaw === "number" ? amountRaw : parseInt(String(amountRaw ?? ""), 10);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      res.status(400).json({ error: "amount must be a positive integer" });
+      return;
+    }
+    if (amount > CLAN_ADMIN_XP_GRANT_MAX) {
+      res.status(400).json({ error: `amount cannot exceed ${CLAN_ADMIN_XP_GRANT_MAX.toLocaleString()} XP` });
+      return;
+    }
+
+    const note = typeof body.note === "string" ? body.note : typeof body.reason === "string" ? body.reason : null;
+
+    const result = await grantClanXpByAdmin(clanId, staff.userId, amount, note);
+    if ("error" in result) {
+      const status = result.error === "Clan not found" ? 404 : 500;
+      res.status(status).json({ error: result.error });
+      return;
+    }
+
+    res.json({
+      ok: true,
+      granted: result.granted,
+      xp: result.totalXp,
+      level: result.level,
+      xp_in_level: result.xpInLevel,
+      xp_per_level: result.xpPerLevel,
+    });
   });
 }
 

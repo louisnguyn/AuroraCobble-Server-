@@ -42,6 +42,7 @@ import {
 } from '../pokemonApi'
 import { CustomSelect } from './CustomSelect'
 import { PokemonSprite } from './PokemonSprite.tsx'
+import { PageEmptyState, PageHeader, PageNotice, PageSection, PageShell } from './PageLayout.tsx'
 import { saveTeamPasteView } from '../teamPasteViewStorage.ts'
 
 function formatSpeciesLabel(apiSlug: string): string {
@@ -186,15 +187,22 @@ function SlotFormFields({
   }
 
   return (
-    <div className="pixel-panel-soft p-4 sm:p-5 space-y-3 border-2 border-accent/35 ring-1 ring-amber-900/30">
-      <p className="text-sm font-semibold text-[#f5efe6] m-0">Edit slot {slotNumber}</p>
+    <div className="pixel-panel-soft p-4 sm:p-5 space-y-4 border-2 border-accent/30 bg-gradient-to-br from-amber-950/15 to-[#0f0a1a]/80 rounded-xl">
+      <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-border/40">
+        <p className="text-sm font-semibold text-[#f5efe6] m-0">Edit slot {slotNumber}</p>
+        {draft.species.trim() ? (
+          <span className="text-xs text-muted truncate max-w-[50%]">{draft.species.trim()}</span>
+        ) : null}
+      </div>
       {draft.species.trim() ? (
-        <div className="flex justify-center py-1">
-          <PokemonSprite
-            speciesSlug={draft.speciesSlug}
-            speciesDisplay={draft.species}
-            className="w-20 h-20 sm:w-24 sm:h-24"
-          />
+        <div className="flex justify-center py-2">
+          <div className="rounded-2xl border border-border/50 bg-[#0f0a1a]/60 p-3 shadow-inner">
+            <PokemonSprite
+              speciesSlug={draft.speciesSlug}
+              speciesDisplay={draft.species}
+              className="w-20 h-20 sm:w-24 sm:h-24"
+            />
+          </div>
         </div>
       ) : null}
       <div className="grid gap-2 sm:grid-cols-2">
@@ -366,6 +374,22 @@ function formatTeamAiVerificationMessage(lang: TeamAnalysisLanguage): string {
   return lang === 'vi'
     ? 'Phân tích AI chỉ bật sau khi tài khoản của bạn được xác minh.'
     : 'Team AI unlocks after your account is verified.'
+}
+
+function TeamProgressPill({ filled }: { filled: number }) {
+  const complete = filled >= 6
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold tabular-nums ${
+        complete
+          ? 'border-emerald-500/45 bg-emerald-950/40 text-emerald-200'
+          : 'border-amber-500/35 bg-amber-950/30 text-amber-200'
+      }`}
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${complete ? 'bg-emerald-400' : 'bg-amber-400'}`} aria-hidden />
+      {filled}/6 Pokémon
+    </span>
+  )
 }
 
 export function TeamBuilder() {
@@ -733,35 +757,38 @@ export function TeamBuilder() {
   }
 
   return (
-    <div className="w-full max-w-4xl mx-auto space-y-6">
+    <PageShell max="5xl" className="!pb-8">
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} defaultMode="login" />}
-      <header>
-        <h1 className="text-2xl sm:text-3xl font-semibold m-0 text-[#f5efe6]">Team Builder</h1>
-        <p className="text-sm text-muted m-0 mt-2 max-w-2xl">
-          Build competitive teams in Showdown format with sprites and item icons. Export paste text, create a
-          PokePaste link, or open the built-in sprite viewer. Sign in to save teams to your account.
-        </p>
-      </header>
 
-      <div className="flex flex-wrap items-end gap-3">
-        <button type="button" onClick={newTeam} className="pixel-btn text-sm h-11 px-4">
-          New team
-        </button>
-        <button type="button" onClick={() => void exportPaste()} className="pixel-btn text-sm h-11 px-4">
-          Copy paste text
-        </button>
-        <button
-          type="button"
-          onClick={createPokepasteLinkForCurrentTeam}
-          disabled={pokepasteBusy}
-          className="pixel-btn-primary text-sm h-11 px-4 disabled:opacity-60"
-        >
-          {pokepasteBusy ? 'Uploading…' : 'Create PokePaste link'}
-        </button>
+      <PageHeader
+        accent="emerald"
+        eyebrow="Competitive teams"
+        title="Team Builder"
+        description="Build Showdown-ready teams with sprites and item icons. Export paste, create PokePaste links, or open the sprite viewer. Sign in to save teams to your account."
+        aside={<TeamProgressPill filled={slots.filter((s) => s.species.trim()).length} />}
+      />
+
+      <PageSection title="Quick actions" padded className="space-y-4">
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={newTeam} className="pixel-btn text-sm h-10 px-4">
+            New team
+          </button>
+          <button type="button" onClick={() => void exportPaste()} className="pixel-btn text-sm h-10 px-4">
+            Copy paste text
+          </button>
+          <button
+            type="button"
+            onClick={createPokepasteLinkForCurrentTeam}
+            disabled={pokepasteBusy}
+            className="pixel-btn-primary text-sm h-10 px-4 disabled:opacity-60"
+          >
+            {pokepasteBusy ? 'Uploading…' : 'Create PokePaste link'}
+          </button>
+        </div>
         {canUseTeamAi ? (
-          <>
-            <div className="flex flex-col gap-1 min-w-[240px] sm:min-w-[300px]">
-              <label htmlFor="tb-ai-lang" className="text-xs text-muted whitespace-nowrap m-0 px-1">
+          <div className="flex flex-wrap items-end gap-3 pt-3 border-t border-border/40">
+            <div className="flex flex-col gap-1 min-w-[200px] sm:min-w-[240px] flex-1">
+              <label htmlFor="tb-ai-lang" className="text-[11px] uppercase tracking-wide text-muted m-0 px-0.5">
                 Analysis language
               </label>
               <CustomSelect
@@ -774,14 +801,14 @@ export function TeamBuilder() {
                   { value: 'vi', label: 'Tiếng Việt' },
                 ]}
                 className="w-full"
-                buttonClassName="pixel-field text-sm h-11 px-3 w-full disabled:opacity-60"
+                buttonClassName="pixel-field text-sm h-10 px-3 w-full disabled:opacity-60"
               />
             </div>
             <button
               type="button"
               onClick={() => void runTeamAnalyseByAi()}
               disabled={aiLoading}
-              className="pixel-btn-primary text-sm h-11 px-4 disabled:opacity-60"
+              className="pixel-btn-primary text-sm h-10 px-5 disabled:opacity-60 shrink-0"
             >
               {aiLoading
                 ? aiLang === 'vi'
@@ -791,20 +818,28 @@ export function TeamBuilder() {
                   ? 'Phân tích đội (AI)'
                   : 'Team analyse by AI'}
             </button>
-          </>
+          </div>
         ) : null}
-      </div>
+      </PageSection>
 
       {(saveOk || saveError || pokepasteUrl) && (
-        <div className="pixel-panel-soft p-3 space-y-2 text-sm max-w-2xl">
-          {saveOk ? <p className="text-emerald-300 m-0">{saveOk}</p> : null}
-          {saveError ? <p className="text-red-400 m-0">{saveError}</p> : null}
+        <PageSection className="border-violet-500/30 bg-gradient-to-br from-violet-950/35 to-[#0f0a1a]/80 space-y-3 text-sm">
+          {saveOk ? (
+            <p className="text-emerald-300 m-0 rounded-lg border border-emerald-500/30 bg-emerald-950/25 px-3 py-2">
+              {saveOk}
+            </p>
+          ) : null}
+          {saveError ? (
+            <p className="text-red-400 m-0 rounded-lg border border-rose-500/30 bg-rose-950/25 px-3 py-2">
+              {saveError}
+            </p>
+          ) : null}
           {pokepasteUrl ? (
             <>
               <p className="m-0 flex flex-wrap gap-2 items-center">
                 <button
                   type="button"
-                  className="pixel-btn-primary text-sm py-2 px-3"
+                  className="pixel-btn-primary text-sm py-2 px-4"
                   onClick={() => {
                     window.location.hash = 'team/paste'
                     window.dispatchEvent(new HashChangeEvent('hashchange'))
@@ -822,15 +857,15 @@ export function TeamBuilder() {
                 </a>
               </p>
               {slots.some((s) => s.species.trim()) ? (
-                <div className="space-y-2">
-                  <p className="text-xs text-muted m-0">Team in this link:</p>
+                <div className="rounded-lg border border-border/50 bg-[#0f0a1a]/50 p-3 space-y-2">
+                  <p className="text-xs text-muted m-0">Team in this link</p>
                   <div className="flex flex-wrap gap-3 justify-center sm:justify-start">
                     {slots
                       .filter((s) => s.species.trim())
                       .map((slot, i) => (
                         <div
                           key={`${slot.speciesSlug}-${i}`}
-                          className="flex flex-col items-center gap-1 min-w-[4.5rem] max-w-[5.5rem]"
+                          className="flex flex-col items-center gap-1 min-w-[4.5rem] max-w-[5.5rem] rounded-lg border border-border/40 bg-[#0f0a1a]/60 px-2 py-2"
                         >
                           <PokemonSprite
                             speciesSlug={slot.speciesSlug || speciesDisplayToSlug(slot.species)}
@@ -847,11 +882,11 @@ export function TeamBuilder() {
               ) : null}
             </>
           ) : null}
-        </div>
+        </PageSection>
       )}
 
-      {!authLoading ? (
-        <p className="text-[11px] text-muted m-0 max-w-2xl">
+      {!authLoading && !(isAuthenticated && isAdminUser && canUseTeamAi) ? (
+        <PageNotice className="max-w-3xl">
           {!isAuthenticated ? (
             aiLang === 'vi' ? (
               <>
@@ -867,17 +902,7 @@ export function TeamBuilder() {
               </>
             )
           ) : canUseTeamAi ? (
-            isAdminUser ? (
-              aiLang === 'vi' ? (
-                <>
-                  <span className="text-[#f5efe6]/90">Không giới hạn</span> số lần phân tích AI.
-                </>
-              ) : (
-                <>
-                  <span className="text-[#f5efe6]/90">Unlimited</span> AI analyses.
-                </>
-              )
-            ) : aiLang === 'vi' ? (
+            aiLang === 'vi' ? (
               <>
                 Đã xác minh in-game. Tài khoản thường: tối đa{' '}
                 <span className="text-[#f5efe6]/90">1 lần phân tích AI mỗi 12 giờ</span>.
@@ -893,135 +918,153 @@ export function TeamBuilder() {
           ) : (
             <>{formatTeamAiVerificationMessage('en')}</>
           )}
-        </p>
+        </PageNotice>
       ) : null}
 
       {isAuthenticated && !authLoading && !canUseTeamAi ? (
-        <div className="pixel-panel-soft p-3 text-xs text-amber-100/95 border border-amber-500/35 rounded-lg m-0 max-w-2xl leading-relaxed">
+        <PageNotice variant="warn" className="max-w-2xl text-xs">
           {formatTeamAiVerificationMessage(aiLang)}
-        </div>
+        </PageNotice>
       ) : null}
 
       {isAuthenticated && (
-        <div className="pixel-panel-soft p-4 space-y-3">
-          <h2 className="text-base font-semibold text-[#f5efe6] m-0">Saved teams</h2>
+        <PageSection
+          title="Saved teams"
+          description={
+            savedList.length > 0 ? `${savedList.length} saved on your account` : undefined
+          }
+        >
           {savedLoading ? (
-            <p className="text-sm text-muted m-0">Loading…</p>
+            <div className="grid gap-3 sm:grid-cols-2 animate-pulse">
+              <div className="h-28 rounded-xl bg-[#0f0a1a]/60 border border-border/40" />
+              <div className="h-28 rounded-xl bg-[#0f0a1a]/60 border border-border/40" />
+            </div>
           ) : savedList.length === 0 ? (
-            <p className="text-sm text-muted m-0">No saved teams yet. Save one below.</p>
+            <PageEmptyState>No saved teams yet. Build a team and save it below.</PageEmptyState>
           ) : (
-            <ul className="list-none m-0 p-0 space-y-2">
+            <ul className="list-none m-0 p-0 grid gap-3 sm:grid-cols-2">
               {savedList.map((t) => (
                 <li
                   key={t.id}
-                  className="flex flex-wrap items-center gap-2 py-2 border-b border-border/30 last:border-0"
+                  className={`rounded-xl border p-4 space-y-3 transition-colors ${
+                    savedTeamRowId === t.id
+                      ? 'border-emerald-500/45 bg-emerald-950/20 ring-1 ring-emerald-500/20'
+                      : 'border-border/55 bg-[#0f0a1a]/50 hover:border-violet-500/30'
+                  }`}
                 >
-                  <span className="text-sm text-[#f5efe6] font-medium flex-1 min-w-[8rem]">{t.name}</span>
-                  <span className="text-xs text-muted">
-                    {new Date(t.updated_at).toLocaleString()}
-                  </span>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm text-[#f5efe6] font-semibold m-0 truncate">{t.name}</p>
+                      <p className="text-[11px] text-muted m-0 mt-1">
+                        {new Date(t.updated_at).toLocaleString()}
+                      </p>
+                    </div>
+                    {savedTeamRowId === t.id ? (
+                      <span className="shrink-0 rounded-md border border-emerald-500/40 bg-emerald-950/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-200">
+                        Loaded
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
                     <button
                       type="button"
-                      className="pixel-btn text-xs py-1.5 px-2"
+                      className="pixel-btn-primary text-xs py-1.5 px-2.5"
                       onClick={() => loadTeam(t)}
                     >
                       Load
                     </button>
                     <button
                       type="button"
-                      className="pixel-btn text-xs py-1.5 px-2"
+                      className="pixel-btn text-xs py-1.5 px-2.5"
                       onClick={() => void copySavedTeamPokepaste(t)}
                     >
                       Copy paste
                     </button>
                     <button
                       type="button"
-                      className="pixel-btn-primary text-xs py-1.5 px-2 disabled:opacity-60"
+                      className="pixel-btn text-xs py-1.5 px-2.5 disabled:opacity-60"
                       disabled={pokepasteBusy}
                       onClick={() => createPokepasteLinkForSavedTeam(t)}
                     >
-                      PokePaste link
+                      PokePaste
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs text-red-400/90 hover:text-red-300 py-1.5 px-2 ml-auto"
+                      onClick={() => void handleDelete(t.id)}
+                    >
+                      Delete
                     </button>
                   </div>
-                  <button
-                    type="button"
-                    className="text-xs text-red-400 hover:text-red-300 py-1.5 px-2"
-                    onClick={() => void handleDelete(t.id)}
-                  >
-                    Delete
-                  </button>
                 </li>
               ))}
             </ul>
           )}
-        </div>
+        </PageSection>
       )}
 
       {(aiError || (canUseTeamAi && aiAnalysis)) && (
-        <div className="pixel-panel-soft p-4 space-y-2 border-2 border-accent/25">
-          <h2 className="text-base font-semibold text-[#f5efe6] m-0">
-            {aiLang === 'vi' ? 'Phân tích đội (AI)' : 'AI team analysis'}
-          </h2>
-          <p className="text-[11px] text-muted m-0">
-            {aiLang === 'vi'
+        <PageSection
+          title={aiLang === 'vi' ? 'Phân tích đội (AI)' : 'AI team analysis'}
+          description={
+            aiLang === 'vi'
               ? 'Nội dung do AI tạo, có thể sai. Đội hình chỉ được gửi lên server cho một lần phân tích này.'
-              : 'Suggestions are AI-generated and may be wrong. Your team is sent to the server for this request only.'}
-          </p>
-          {aiError ? <p className="text-sm text-red-400 m-0">{aiError}</p> : null}
+              : 'Suggestions are AI-generated and may be wrong. Your team is sent to the server for this request only.'
+          }
+          className="border-cyan-500/30 bg-gradient-to-br from-cyan-950/30 via-[#0a1018]/90 to-[#0f0a1a]/90"
+        >
+          {aiError ? (
+            <p className="text-sm text-red-400 m-0 rounded-lg border border-rose-500/30 bg-rose-950/25 px-3 py-2">
+              {aiError}
+            </p>
+          ) : null}
           {canUseTeamAi && aiAnalysis ? (
-            <div className="mt-2 rounded-lg bg-surface-hover/40 border border-border/40 p-3 text-sm max-h-[min(28rem,55vh)] overflow-y-auto font-sans leading-relaxed [&>*:first-child]:mt-0">
+            <div className="rounded-xl bg-[#0f0a1a]/60 border border-border/50 p-4 text-sm max-h-[min(28rem,55vh)] overflow-y-auto font-sans leading-relaxed [&>*:first-child]:mt-0 shadow-inner">
               <ReactMarkdown components={aiAnalysisMarkdownComponents}>{aiAnalysis}</ReactMarkdown>
             </div>
           ) : null}
-        </div>
+        </PageSection>
       )}
 
-      <div className="space-y-2">
-        <label htmlFor="paste-import" className="text-sm font-medium text-[#f5efe6]">
-          Import paste (optional)
-        </label>
-        <textarea
-          id="paste-import"
-          value={pasteImport}
-          onChange={(e) => setPasteImport(e.target.value)}
-          placeholder={EXAMPLE_PASTE}
-          rows={8}
-          className="w-full pixel-field px-3 py-3 text-sm font-mono text-[#f5efe6] placeholder:text-muted/50 resize-y min-h-[120px]"
-          spellCheck={false}
-        />
-        <button type="button" onClick={importPaste} className="pixel-btn-primary text-sm py-2 px-4">
-          Apply paste to slots
-        </button>
-      </div>
-
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold text-[#f5efe6] m-0">Team preview</h2>
-        <p className="text-xs text-muted m-0">
-          Six slots — empty slots show a plus. Click a filled slot to edit moves, ability, or item.
-        </p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      <PageSection
+        title="Team roster"
+        description="Six slots — tap + to add. Click a Pokémon to edit moves, ability, or item."
+      >
+        <div className="flex justify-end -mt-2">
+          <TeamProgressPill filled={slots.filter((s) => s.species.trim()).length} />
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
           {slots.map((slot, i) => {
             const filled = Boolean(slot.species.trim())
+            const active = formSlotIndex === i
             return (
               <div
                 key={i}
-                className={`pixel-panel-soft min-h-[11rem] flex flex-col p-3 border transition-colors ${
-                  formSlotIndex === i
-                    ? 'border-accent/70 bg-surface-hover/30'
-                    : 'border-border/50'
+                className={`relative min-h-[12rem] flex flex-col rounded-xl border p-3 transition-all duration-150 ${
+                  active
+                    ? 'border-accent/70 bg-accent/5 shadow-[0_0_24px_rgba(251,191,36,0.12)] ring-1 ring-accent/30'
+                    : filled
+                      ? 'border-emerald-500/25 bg-gradient-to-b from-emerald-950/20 to-[#0f0a1a]/60 hover:border-emerald-500/40'
+                      : 'border-border/50 bg-[#0f0a1a]/40 hover:border-border/80'
                 }`}
               >
-                <p className="text-[10px] uppercase tracking-wide text-muted m-0 mb-2 text-center">
+                <p
+                  className={`text-[10px] uppercase tracking-wider font-semibold m-0 mb-2 text-center ${
+                    filled ? 'text-emerald-300/80' : 'text-muted'
+                  }`}
+                >
                   Slot {i + 1}
                 </p>
                 {!filled ? (
                   <button
                     type="button"
                     onClick={() => openSlotForm(i)}
-                    className="flex-1 flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border/70 hover:border-accent/55 hover:bg-surface-hover/40 text-muted hover:text-[#f5efe6] transition-colors min-h-[9rem]"
+                    className="flex-1 flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border/60 hover:border-accent/50 hover:bg-accent/5 text-muted hover:text-[#f5efe6] transition-colors min-h-[9.5rem] group"
                   >
-                    <span className="text-3xl font-light text-accent leading-none" aria-hidden>
+                    <span
+                      className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-dashed border-accent/40 text-2xl font-light text-accent/80 group-hover:border-accent group-hover:text-accent transition-colors"
+                      aria-hidden
+                    >
                       +
                     </span>
                     <span className="text-xs font-medium">Add Pokémon</span>
@@ -1031,38 +1074,40 @@ export function TeamBuilder() {
                     <button
                       type="button"
                       onClick={() => openSlotForm(i)}
-                      className="flex-1 flex flex-col items-center text-center gap-1.5 rounded-lg hover:bg-surface-hover/50 p-1 -m-1 transition-colors w-full"
+                      className="flex-1 flex flex-col items-center text-center gap-1.5 rounded-lg hover:bg-white/[0.03] p-1 -m-1 transition-colors w-full"
                     >
-                      <PokemonSprite
-                        speciesSlug={slot.speciesSlug || speciesDisplayToSlug(slot.species)}
-                        speciesDisplay={slot.species}
-                        className="w-14 h-14 sm:w-16 sm:h-16"
-                      />
+                      <div className="rounded-xl bg-[#0f0a1a]/50 p-1.5 border border-border/30">
+                        <PokemonSprite
+                          speciesSlug={slot.speciesSlug || speciesDisplayToSlug(slot.species)}
+                          speciesDisplay={slot.species}
+                          className="w-16 h-16 sm:w-[4.5rem] sm:h-[4.5rem]"
+                        />
+                      </div>
                       <span className="text-sm font-semibold text-[#f5efe6] leading-tight line-clamp-2 px-0.5">
                         {slot.species.trim()}
                       </span>
                       <div className="flex items-center justify-center gap-1.5 max-w-full px-1 min-h-[1.5rem]">
                         {slot.item.trim() ? (
                           <>
-                            <TeamBuilderItemIcon itemName={slot.item} className="w-6 h-6 shrink-0" />
-                            <span className="text-xs text-amber-200/90 truncate">{slot.item}</span>
+                            <TeamBuilderItemIcon itemName={slot.item} className="w-5 h-5 shrink-0" />
+                            <span className="text-[11px] text-amber-200/90 truncate">{slot.item}</span>
                           </>
                         ) : (
-                          <span className="text-xs text-muted">No item</span>
+                          <span className="text-[11px] text-muted">No item</span>
                         )}
                       </div>
                     </button>
-                    <div className="flex justify-center gap-2 mt-2 pt-2 border-t border-border/30">
+                    <div className="flex justify-center gap-3 mt-2 pt-2 border-t border-border/30">
                       <button
                         type="button"
-                        className="text-[11px] text-accent hover:underline"
+                        className="text-[11px] font-medium text-accent hover:underline"
                         onClick={() => openSlotForm(i)}
                       >
                         Edit
                       </button>
                       <button
                         type="button"
-                        className="text-[11px] text-red-400/90 hover:underline"
+                        className="text-[11px] font-medium text-red-400/90 hover:underline"
                         onClick={() => clearSlotAt(i)}
                       >
                         Remove
@@ -1074,12 +1119,16 @@ export function TeamBuilder() {
             )
           })}
         </div>
-      </section>
+      </PageSection>
 
       {formSlotIndex !== null && draft ? (
         <section className="space-y-3">
           <h3 className="text-base font-semibold text-[#f5efe6] m-0">Add / edit Pokémon</h3>
-          {formError ? <p className="text-sm text-red-400 m-0">{formError}</p> : null}
+          {formError ? (
+            <p className="text-sm text-red-400 m-0 rounded-lg border border-rose-500/30 bg-rose-950/25 px-3 py-2">
+              {formError}
+            </p>
+          ) : null}
           <SlotFormFields
             draft={draft}
             setDraft={setDraft}
@@ -1090,23 +1139,46 @@ export function TeamBuilder() {
             slotNumber={formSlotIndex + 1}
           />
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={applyDraftToSlot} className="pixel-btn-primary text-sm py-2 px-4">
+            <button type="button" onClick={applyDraftToSlot} className="pixel-btn-primary text-sm py-2 px-5">
               Save to slot
             </button>
-            <button type="button" onClick={closeForm} className="pixel-btn text-sm py-2 px-4">
+            <button type="button" onClick={closeForm} className="pixel-btn text-sm py-2 px-5">
               Cancel
             </button>
           </div>
         </section>
       ) : null}
 
-      <div className="pixel-panel-soft p-4 space-y-3">
-        <h2 className="text-base font-semibold text-[#f5efe6] m-0">
-          {savedTeamRowId != null ? 'Update saved team' : 'Save team'}
-        </h2>
-        <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
+      <details className="rounded-xl border border-border/60 bg-[#0f0a1a]/50 group">
+        <summary className="cursor-pointer list-none px-4 py-3 sm:px-5 sm:py-4 text-sm font-medium text-[#f5efe6] hover:bg-surface-hover/20 rounded-xl transition-colors [&::-webkit-details-marker]:hidden">
+          <span className="inline-flex items-center gap-2">
+            <span className="text-muted group-open:rotate-90 transition-transform inline-block">▸</span>
+            Import Showdown paste
+          </span>
+        </summary>
+        <div className="px-4 pb-4 sm:px-5 sm:pb-5 space-y-3 border-t border-border/40 pt-3">
+          <textarea
+            id="paste-import"
+            value={pasteImport}
+            onChange={(e) => setPasteImport(e.target.value)}
+            placeholder={EXAMPLE_PASTE}
+            rows={8}
+            className="w-full pixel-field px-3 py-3 text-sm font-mono text-[#f5efe6] placeholder:text-muted/50 resize-y min-h-[120px]"
+            spellCheck={false}
+          />
+          <button type="button" onClick={importPaste} className="pixel-btn-primary text-sm py-2 px-4">
+            Apply paste to slots
+          </button>
+        </div>
+      </details>
+
+      <PageSection
+        title={savedTeamRowId != null ? 'Update saved team' : 'Save to account'}
+        className="border-emerald-500/25 bg-gradient-to-br from-emerald-950/25 to-[#0f0a1a]/90"
+      >
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
           <div className="flex-1 min-w-0">
-            <label htmlFor="team-save-name" className="text-xs text-muted block mb-1">
+            <label htmlFor="team-save-name" className="text-[11px] uppercase tracking-wide text-muted block mb-1.5">
               Team name
             </label>
             <input
@@ -1115,12 +1187,16 @@ export function TeamBuilder() {
               value={teamName}
               onChange={(e) => setTeamName(e.target.value)}
               placeholder="My OU squad"
-              className="w-full pixel-field px-3 py-2 text-sm"
+              className="w-full pixel-field px-3 py-2.5 text-sm"
               maxLength={120}
             />
           </div>
-          <button type="button" onClick={() => void handleSave()} className="pixel-btn-primary py-2 px-4">
-            {savedTeamRowId != null ? 'Save changes' : 'Save to account'}
+          <button
+            type="button"
+            onClick={() => void handleSave()}
+            className="pixel-btn-primary py-2.5 px-5 shrink-0 w-full sm:w-auto"
+          >
+            {savedTeamRowId != null ? 'Save changes' : 'Save team'}
           </button>
         </div>
         {isAuthenticated && canUseTeamAi ? (
@@ -1131,13 +1207,19 @@ export function TeamBuilder() {
           </p>
         ) : null}
         {!isAuthenticated && (
-          <p className="text-xs text-muted m-0">
-            Log in to store teams on your account. You can still build and copy paste without logging in.
+          <PageNotice>Log in to store teams on your account. You can still build and copy paste without logging in.</PageNotice>
+        )}
+        {saveError && (
+          <p className="text-sm text-red-400 m-0 rounded-lg border border-rose-500/30 bg-rose-950/25 px-3 py-2">
+            {saveError}
           </p>
         )}
-        {saveError && <p className="text-sm text-red-400 m-0">{saveError}</p>}
-        {saveOk && <p className="text-sm text-emerald-400/90 m-0">{saveOk}</p>}
-      </div>
-    </div>
+        {saveOk && (
+          <p className="text-sm text-emerald-400/90 m-0 rounded-lg border border-emerald-500/30 bg-emerald-950/25 px-3 py-2">
+            {saveOk}
+          </p>
+        )}
+      </PageSection>
+    </PageShell>
   )
 }
