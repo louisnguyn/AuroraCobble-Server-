@@ -145,19 +145,57 @@ export function normalizeSlotMovesForForm(moves: string[]): [string, string, str
   return [m[0]!, m[1]!, m[2]!, m[3]!]
 }
 
+/** PokéAPI / builder slug → species line as PokePaste & Showdown expect (for sprite lookup). */
+const SHOWDOWN_SPECIES_NAMES: Record<string, string> = {
+  'mr-mime': 'Mr. Mime',
+  'mr-mime-galar': 'Mr. Mime-Galar',
+  'mr-rime': 'Mr. Rime',
+  'mime-jr': 'Mime Jr.',
+  'type-null': 'Type: Null',
+  'ho-oh': 'Ho-Oh',
+  'porygon-z': 'Porygon-Z',
+  'nidoran-m': 'Nidoran-M',
+  'nidoran-f': 'Nidoran-F',
+  'jangmo-o': 'Jangmo-o',
+  'hakamo-o': 'Hakamo-o',
+  'kommo-o': 'Kommo-o',
+  'tapu-koko': 'Tapu Koko',
+  'tapu-lele': 'Tapu Lele',
+  'tapu-bulu': 'Tapu Bulu',
+  'tapu-fini': 'Tapu Fini',
+}
+
+export function toShowdownSpeciesName(species: string, speciesSlug?: string): string {
+  const slug = (speciesSlug?.trim() || speciesDisplayToSlug(species)).toLowerCase()
+  if (SHOWDOWN_SPECIES_NAMES[slug]) return SHOWDOWN_SPECIES_NAMES[slug]!
+  return slug
+    .split('-')
+    .map((part) => (part ? part.charAt(0).toUpperCase() + part.slice(1) : part))
+    .join('-')
+}
+
+/**
+ * pokepast.es only parses pastes with CRLF line breaks (\r\n between lines, \r\n\r\n between Pokémon).
+ * LF-only exports get pokemon id 0 → broken /img/pokemon/0-0.png sprites.
+ */
+export function normalizePasteForPokepaste(paste: string): string {
+  return paste.replace(/\r\n/g, '\n').replace(/\n/g, '\r\n')
+}
+
 export function teamSlotsToPaste(slots: TeamBuildSlot[]): string {
   const blocks: string[] = []
+  const nl = '\r\n'
   for (const s of slots) {
     if (!s.species.trim()) continue
-    const species = s.species.trim()
+    const species = toShowdownSpeciesName(s.species, s.speciesSlug)
     const item = s.item.trim() || 'Nothing'
-    let block = `${species} @ ${item}\n`
-    if (s.ability?.trim()) block += `Ability: ${s.ability.trim()}\n`
-    if (s.teraType?.trim()) block += `Tera Type: ${s.teraType.trim()}\n`
+    let block = `${species} @ ${item}${nl}`
+    if (s.ability?.trim()) block += `Ability: ${s.ability.trim()}${nl}`
+    if (s.teraType?.trim()) block += `Tera Type: ${s.teraType.trim()}${nl}`
     for (const mv of s.moves) {
-      if (mv.trim()) block += `- ${mv.trim()}\n`
+      if (mv.trim()) block += `- ${mv.trim()}${nl}`
     }
-    blocks.push(block.replace(/\n+$/, ''))
+    blocks.push(block.replace(/\r\n+$/, ''))
   }
-  return blocks.join('\n\n')
+  return blocks.join(`${nl}${nl}`)
 }

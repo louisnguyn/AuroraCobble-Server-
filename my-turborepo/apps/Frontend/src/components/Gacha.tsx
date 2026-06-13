@@ -20,12 +20,11 @@ import { AuthModal } from './AuthModal'
 import { isAccountVerified, VerifiedAccountBadge } from './VerifiedAccountBadge.tsx'
 import { PageHeader, PageShell } from './PageLayout.tsx'
 import {
-  fetchPokemonInfo,
-  showdownHomeShinySpriteUrl,
-  showdownHomeSpriteUrl,
+  showdownSpriteFallbackUrls,
 } from '../pokemonApi'
+import { usePokemonSpriteSrc } from '../usePokemonSpriteSrc'
 
-type GachaSpeciesSpriteUrls = { png: string; slug: string }
+type GachaSpeciesSpriteUrls = { urls: string[]; slug: string }
 
 /** Min time on “rolling” before the strip appears (feels fair even on fast API). */
 const MIN_LOOT_MS = 2200
@@ -48,7 +47,7 @@ function parseCobbledollarsRewardLabel(label: string): number | null {
 }
 
 /**
- * Showdown HOME PNG + slug for PokéAPI fallback.
+ * Showdown Gen 5 pixel PNG + slug for HOME / PokéAPI fallback.
  * Shiny when the label contains the word "shiny" (case-insensitive).
  */
 function gachaShowdownSpriteUrls(rawLabel: string): GachaSpeciesSpriteUrls | null {
@@ -66,12 +65,12 @@ function gachaShowdownSpriteUrls(rawLabel: string): GachaSpeciesSpriteUrls | nul
   if (!slug) return null
   if (shiny) {
     return {
-      png: showdownHomeShinySpriteUrl(slug),
+      urls: showdownSpriteFallbackUrls(slug, { shiny: true }),
       slug,
     }
   }
   return {
-    png: showdownHomeSpriteUrl(slug),
+    urls: showdownSpriteFallbackUrls(slug),
     slug,
   }
 }
@@ -86,14 +85,13 @@ function GachaStripSprite({
   imgClassName?: string
 }) {
   const display = stripMinecraftFormatting(label)
-  const [src, setSrc] = useState<string | null>(() => urls?.png ?? null)
-  /** 0 png → 1 fetching PokéAPI → 2 official art */
-  const stepRef = useRef(0)
   const [showText, setShowText] = useState(!urls)
+  const { src, onError } = usePokemonSpriteSrc(urls?.slug ?? '', {
+    urls: urls?.urls,
+    onExhausted: () => setShowText(true),
+  })
 
   useEffect(() => {
-    stepRef.current = 0
-    setSrc(urls?.png ?? null)
     setShowText(!urls)
   }, [urls])
 
@@ -103,25 +101,11 @@ function GachaStripSprite({
 
   return (
     <img
-      src={src ?? urls.png}
+      src={src ?? urls.urls[0]}
       alt={display}
       className={imgClassName}
       draggable={false}
-      onError={() => {
-        if (stepRef.current === 0) {
-          stepRef.current = 1
-          void fetchPokemonInfo(urls.slug).then((info) => {
-            if (info?.image) {
-              stepRef.current = 2
-              setSrc(info.image)
-            } else {
-              setShowText(true)
-            }
-          })
-          return
-        }
-        setShowText(true)
-      }}
+      onError={onError}
     />
   )
 }

@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
 import { speciesDisplayToSlug } from '../pokepasteParse'
-import { fetchPokemonSpriteImage, showdownHomeSpriteUrl } from '../pokemonApi'
+import { usePokemonSpriteSrc } from '../usePokemonSpriteSrc'
 
 export function PokemonSprite({
   speciesSlug,
@@ -19,17 +18,7 @@ export function PokemonSprite({
   const slug =
     speciesSlug?.trim().toLowerCase() ||
     (speciesDisplay?.trim() ? speciesDisplayToSlug(speciesDisplay) : '')
-  const [src, setSrc] = useState<string | null>(() => (slug ? showdownHomeSpriteUrl(slug) : null))
-  const fallbackStep = useRef(0)
-
-  useEffect(() => {
-    fallbackStep.current = 0
-    if (!slug) {
-      setSrc(null)
-      return
-    }
-    setSrc(showdownHomeSpriteUrl(slug))
-  }, [slug, speciesDisplay])
+  const { src, onError } = usePokemonSpriteSrc(slug, { speciesDisplay })
 
   if (!slug) {
     return (
@@ -45,17 +34,11 @@ export function PokemonSprite({
 
   return (
     <img
-      src={src ?? showdownHomeSpriteUrl(slug)}
+      src={src ?? undefined}
       alt=""
-      className={`${className} object-contain shrink-0 rounded-lg bg-surface-hover/50${centered ? ' mx-auto' : ''}`}
+      className={`${className} pokemon-sprite object-contain shrink-0 rounded-lg bg-surface-hover/50${centered ? ' mx-auto' : ''}`}
       loading="lazy"
-      onError={() => {
-        if (fallbackStep.current > 0) return
-        fallbackStep.current = 1
-        void fetchPokemonSpriteImage(slug, speciesDisplay).then((url) => {
-          if (url) setSrc(url)
-        })
-      }}
+      onError={onError}
     />
   )
 }

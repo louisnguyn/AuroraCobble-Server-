@@ -24,6 +24,7 @@ import {
   parsedPokemonToSlot,
   speciesDisplayToSlug,
   teamSlotsToPaste,
+  toShowdownSpeciesName,
   type TeamBuildSlot,
 } from '../pokepasteParse'
 import { analyzeTeamWithAI, createTeamPokepasteLink, type TeamAnalysisLanguage } from '../api'
@@ -45,11 +46,15 @@ import { PokemonSprite } from './PokemonSprite.tsx'
 import { PageEmptyState, PageHeader, PageNotice, PageSection, PageShell } from './PageLayout.tsx'
 import { saveTeamPasteView } from '../teamPasteViewStorage.ts'
 
-function formatSpeciesLabel(apiSlug: string): string {
+function formatResourceLabel(apiSlug: string): string {
   return apiSlug
     .split('-')
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(' ')
+}
+
+function formatPokemonLabel(apiSlug: string): string {
+  return toShowdownSpeciesName(apiSlug, apiSlug)
 }
 
 function emptySlot(): TeamBuildSlot {
@@ -216,7 +221,7 @@ function SlotFormFields({
                 speciesSlug: species.trim() ? speciesDisplayToSlug(species) : '',
               })
             }
-            options={speciesOptions.map((p) => formatSpeciesLabel(p.name))}
+            options={speciesOptions.map((p) => formatPokemonLabel(p.name))}
             placeholder="e.g. Great Tusk"
           />
         </div>
@@ -225,7 +230,7 @@ function SlotFormFields({
             label="Item"
             value={draft.item}
             onChange={(item) => patch({ item })}
-            options={itemOptions.map((it) => formatSpeciesLabel(it.name))}
+            options={itemOptions.map((it) => formatResourceLabel(it.name))}
             placeholder="Held item"
           />
         </div>
@@ -236,7 +241,7 @@ function SlotFormFields({
             onChange={(ability) =>
               patch({ ability: ability.trim() ? ability : null })
             }
-            options={abilityOptions.map((a) => formatSpeciesLabel(a.name))}
+            options={abilityOptions.map((a) => formatResourceLabel(a.name))}
             placeholder="e.g. Protosynthesis"
           />
         </div>
@@ -268,7 +273,7 @@ function SlotFormFields({
                 setMovesFromFour(next[0]!, next[1]!, next[2]!, next[3]!)
               }}
               placeholder={`Move ${idx + 1}`}
-              options={moveOptions.map((m) => formatSpeciesLabel(m.name))}
+              options={moveOptions.map((m) => formatResourceLabel(m.name))}
             />
             )
           })}

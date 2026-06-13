@@ -91,3 +91,8 @@ export function parsePokepaste(raw: string): ParsedPokemon[] {
   }
   return out;
 }
+
+/** pokepast.es requires CRLF; LF-only pastes break species parsing and sprites. */
+export function normalizePasteForPokepaste(paste: string): string {
+  return paste.replace(/\r\n/g, "\n").replace(/\n/g, "\r\n");
+}

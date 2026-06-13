@@ -1,14 +1,14 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   fetchPokemonList,
   fetchPokemonDetail,
   pokemonSpriteUrl,
   fetchMoveSummary,
-  showdownHomeSpriteUrl,
   type PokemonListEntry,
   type PokemonDetail,
   type MoveSummary,
 } from '../pokemonApi'
+import { usePokemonSpriteSrc } from '../usePokemonSpriteSrc'
 import { PageEmptyState, PageHeader, PageShell } from './PageLayout.tsx'
 
 const TYPE_COLORS: Record<string, string> = {
@@ -54,7 +54,7 @@ function formatName(name: string): string {
   return name.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
-/** Showdown HOME PNG sprite when available; falls back to official art / id sprite. */
+/** Showdown pixel (Gen 5–9) → HOME → static Pokédex art. */
 function WikiSpriteImg({
   speciesSlug,
   fallbackSrc,
@@ -69,25 +69,15 @@ function WikiSpriteImg({
   loading?: 'lazy' | 'eager'
 }) {
   const slug = speciesSlug.trim()
-  const [src, setSrc] = useState(() => (slug ? showdownHomeSpriteUrl(slug) : fallbackSrc))
-  const usedFallback = useRef(false)
-
-  useEffect(() => {
-    usedFallback.current = false
-    setSrc(slug ? showdownHomeSpriteUrl(slug) : fallbackSrc)
-  }, [slug, fallbackSrc])
+  const { src, onError } = usePokemonSpriteSrc(slug, { finalFallback: fallbackSrc })
 
   return (
     <img
-      src={src}
+      src={src ?? fallbackSrc}
       alt={alt}
       className={className}
       loading={loading}
-      onError={() => {
-        if (usedFallback.current) return
-        usedFallback.current = true
-        setSrc(fallbackSrc)
-      }}
+      onError={onError}
     />
   )
 }

@@ -48,7 +48,14 @@ async function fetchApi<T>(
   if (token) {
     (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`
   }
-  const res = await fetch(`${API_BASE.replace(/\/$/, '')}${path}`, { ...init, headers })
+  let res: Response
+  try {
+    res = await fetch(`${API_BASE.replace(/\/$/, '')}${path}`, { ...init, headers })
+  } catch {
+    throw new Error(
+      `Cannot reach the API at ${API_BASE.replace(/\/$/, '')}. Check that the backend is running (local: port 3001) or VITE_API_URL / Cloudflare BACKEND_URL is set correctly.`
+    )
+  }
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
     throw new Error((data as { error?: string })?.error ?? `Request failed: ${res.status}`)

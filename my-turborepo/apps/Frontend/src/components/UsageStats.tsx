@@ -1,19 +1,19 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { fetchUsageStats } from '../api'
 import {
   fetchPokemonInfo,
   fetchMoveType,
   fetchItemImage,
-  showdownHomeSpriteUrl,
   toPokeApiName,
 } from '../pokemonApi'
+import { usePokemonSpriteSrc } from '../usePokemonSpriteSrc'
 import type { UsageStatsResponse, FormatUsage, SpeciesUsage } from '../types'
 import { sortTierEntries } from '../usageStatsNormalize'
 import { PageEmptyState, PageHeader, PageSection, PageShell, PageTabBar } from './PageLayout.tsx'
 
 const FORMAT_ORDER = ['singles', 'doubles', 'triples'] as const
 
-/** Showdown HOME PNG sprite first, then PokéAPI official art — same as tournament team thumbnails. */
+/** Showdown pixel (Gen 5–9) → HOME → PokéAPI game sprites. */
 function SpeciesSpriteImg({
   name,
   className,
@@ -24,17 +24,7 @@ function SpeciesSpriteImg({
   alt?: string
 }) {
   const slug = name.trim() ? toPokeApiName(name) : ''
-  const [src, setSrc] = useState<string | null>(() => (slug ? showdownHomeSpriteUrl(slug) : null))
-  const fallbackAttempted = useRef(false)
-
-  useEffect(() => {
-    fallbackAttempted.current = false
-    if (!slug) {
-      setSrc(null)
-      return
-    }
-    setSrc(showdownHomeSpriteUrl(slug))
-  }, [slug])
+  const { src, onError } = usePokemonSpriteSrc(slug)
 
   if (!slug) {
     return (
@@ -46,17 +36,11 @@ function SpeciesSpriteImg({
   }
   return (
     <img
-      src={src ?? showdownHomeSpriteUrl(slug)}
+      src={src ?? undefined}
       alt={alt}
       className={className}
       loading="lazy"
-      onError={() => {
-        if (fallbackAttempted.current) return
-        fallbackAttempted.current = true
-        void fetchPokemonInfo(name).then((info) => {
-          if (info?.image) setSrc(info.image)
-        })
-      }}
+      onError={onError}
     />
   )
 }
@@ -231,7 +215,7 @@ function TeammateRow({ name, pct }: { name: string; pct: number }) {
   return (
     <div className="flex items-center gap-2 py-1 px-2 rounded-lg bg-surface-hover">
       <div className="w-8 h-8 lg:w-10 lg:h-10 shrink-0 rounded bg-surface flex items-center justify-center overflow-hidden">
-        <SpeciesSpriteImg name={name} className="w-full h-full object-contain [image-rendering:auto]" alt={name} />
+        <SpeciesSpriteImg name={name} className="w-full h-full object-contain pokemon-sprite" alt={name} />
       </div>
       <span className="text-xs font-medium truncate max-w-[100px]">{name}</span>
       <span className="text-xs text-muted shrink-0">{pct.toFixed(0)}%</span>
@@ -243,7 +227,7 @@ function TeammateRow({ name, pct }: { name: string; pct: number }) {
 function DetailSprite({ name }: { name: string }) {
   return (
     <div className="w-20 h-20 md:w-28 md:h-28 rounded-2xl bg-surface-hover flex items-center justify-center overflow-hidden">
-      <SpeciesSpriteImg name={name} className="w-full h-full object-contain [image-rendering:auto]" alt={name} />
+      <SpeciesSpriteImg name={name} className="w-full h-full object-contain pokemon-sprite" alt={name} />
     </div>
   )
 }
@@ -282,7 +266,7 @@ function SpeciesCard({
           <div className="w-16 h-16 md:w-32 md:h-32 lg:w-50 lg:h-50 shrink-0 rounded-xl bg-surface-hover flex items-center justify-center overflow-hidden">
             <SpeciesSpriteImg
               name={s.name}
-              className="w-full h-full object-contain [image-rendering:auto]"
+              className="w-full h-full object-contain pokemon-sprite"
               alt={s.name}
             />
           </div>

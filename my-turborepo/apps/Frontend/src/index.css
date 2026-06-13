@@ -808,7 +808,7 @@
     height: auto;
     object-fit: contain;
     object-position: center;
-    image-rendering: auto;
+    image-rendering: pixelated;
     filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45));
     user-select: none;
     pointer-events: none;
@@ -2475,6 +2475,11 @@
     width: 4.5rem;
     height: 4.5rem;
     flex-shrink: 0;
+    image-rendering: pixelated;
+  }
+
+  .pokemon-sprite {
+    image-rendering: pixelated;
   }
 
   .team-mon-sprite--empty {

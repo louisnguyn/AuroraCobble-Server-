@@ -112,6 +112,75 @@ function showdownSpriteSlug(speciesSlug: string): string {
 }
 
 /**
+ * Showdown basename variants — PokéAPI uses hyphens (iron-valiant) but Showdown
+ * often omits them (ironvaliant). Form suffixes like -galar / -megax keep hyphens.
+ */
+export function showdownSpriteSlugCandidates(speciesSlug: string): string[] {
+  const primary = showdownSpriteSlug(speciesSlug)
+  const compact = primary.replace(/-/g, '')
+  return compact !== primary ? [primary, compact] : [primary]
+}
+
+const SHOWDOWN_SPRITE_BASE = 'https://play.pokemonshowdown.com/sprites'
+
+function showdownFolderSpriteUrl(folder: string, slug: string): string {
+  return `${SHOWDOWN_SPRITE_BASE}/${folder}/${encodeURIComponent(slug)}.png`
+}
+
+/**
+ * Ordered Showdown URLs: Gen 5 pixel → Gen 6 pixel → HOME, trying slug variants.
+ * Covers species through Gen 9 (Showdown adds SV pixel art to the gen5 folder).
+ */
+export function showdownSpriteFallbackUrls(
+  speciesSlug: string,
+  opts?: { shiny?: boolean }
+): string[] {
+  const shiny = opts?.shiny ?? false
+  const slugs = showdownSpriteSlugCandidates(speciesSlug)
+  const urls: string[] = []
+
+  const pixelFolders = shiny ? (['gen5-shiny'] as const) : (['gen5', 'gen6'] as const)
+  for (const folder of pixelFolders) {
+    for (const slug of slugs) {
+      urls.push(showdownFolderSpriteUrl(folder, slug))
+    }
+  }
+
+  const homeFolder = shiny ? 'home-shiny' : 'home'
+  for (const slug of slugs) {
+    urls.push(showdownFolderSpriteUrl(homeFolder, slug))
+  }
+
+  return [...new Set(urls)]
+}
+
+/**
+ * Pokémon Showdown Gen 5 pixel front sprites (B/W style).
+ * https://play.pokemonshowdown.com/sprites/gen5/
+ */
+export function showdownGen5SpriteUrl(speciesSlug: string): string {
+  return showdownSpriteFallbackUrls(speciesSlug)[0] ?? showdownFolderSpriteUrl('gen5', showdownSpriteSlug(speciesSlug))
+}
+
+/** Shiny Gen 5 pixel PNG. */
+export function showdownGen5ShinySpriteUrl(speciesSlug: string): string {
+  return (
+    showdownSpriteFallbackUrls(speciesSlug, { shiny: true })[0] ??
+    showdownFolderSpriteUrl('gen5-shiny', showdownSpriteSlug(speciesSlug))
+  )
+}
+
+/** Primary app sprite — Gen 5 pixel art. */
+export function showdownSpriteUrl(speciesSlug: string): string {
+  return showdownGen5SpriteUrl(speciesSlug)
+}
+
+/** Primary app shiny sprite — Gen 5 pixel art. */
+export function showdownShinySpriteUrl(speciesSlug: string): string {
+  return showdownGen5ShinySpriteUrl(speciesSlug)
+}
+
+/**
  * Pokémon Showdown static HOME front sprites (PNG).
  * https://play.pokemonshowdown.com/sprites/home/
  */
@@ -142,6 +211,14 @@ const detailCache = new Map<string, PokemonDetail>()
 const evolutionCache = new Map<number, EvolutionStage[]>()
 const speciesVarietiesCache = new Map<number, EvolutionForm[]>()
 
+/** Gen 9 overworld ride / traversal varieties — not battle forms, hide in Wiki. */
+function isTraversalOnlyForm(pokemonName: string): boolean {
+  return (
+    /-(?:limited|sprinting|swimming|gliding)-build$/.test(pokemonName) ||
+    /-(?:low-power|drive|aquatic|glide)-mode$/.test(pokemonName)
+  )
+}
+
 async function fetchSpeciesVarieties(speciesId: number): Promise<EvolutionForm[]> {
   if (speciesVarietiesCache.has(speciesId)) return speciesVarietiesCache.get(speciesId) ?? []
   try {
@@ -164,6 +241,7 @@ async function fetchSpeciesVarieties(speciesId: number): Promise<EvolutionForm[]
         return name && !Number.isNaN(id) ? { id, name } : null
       })
       .filter((f): f is EvolutionForm => f != null)
+      .filter((f) => !isTraversalOnlyForm(f.name))
     speciesVarietiesCache.set(speciesId, forms)
     return forms
   } catch {
@@ -233,7 +311,11 @@ export async function fetchPokemonDetail(idOrName: string | number): Promise<Pok
       height: number
       weight: number
       species?: { url?: string }
-      sprites?: { other?: { 'official-artwork'?: { front_default?: string } }; front_default?: string }
+      sprites?: {
+        other?: { 'official-artwork'?: { front_default?: string } }
+        front_default?: string
+        versions?: Record<string, Record<string, { front_default?: string | null }>>
+      }
       types?: Array<{ type?: { name?: string } }>
       stats?: Array<{ base_stat: number; stat?: { name?: string } }>
       abilities?: Array<{ ability?: { name?: string } }>
@@ -245,8 +327,7 @@ export async function fetchPokemonDetail(idOrName: string | number): Promise<Pok
     const speciesIdStr = speciesUrl.split('/').filter(Boolean).pop()
     const speciesId = speciesIdStr ? parseInt(speciesIdStr, 10) : data.id
     const speciesIdNum = Number.isNaN(speciesId) ? data.id : speciesId
-    const image =
-      data.sprites?.other?.['official-artwork']?.front_default ?? data.sprites?.front_default ?? ''
+    const image = extractPokeApiSprite(data)
     const types = (data.types ?? []).map((t) => t.type?.name ?? '').filter(Boolean)
     const statMap: Record<string, number> = {}
     ;(data.stats ?? []).forEach((s) => {
@@ -298,7 +379,36 @@ export function toPokeApiName(name: string): string {
     .replace(/^-$|-$/g, '') || name.toLowerCase()
 }
 
-/** Try PokéAPI official art using slug and/or display name (for when Showdown sprites 404). */
+/** Best pixel / game sprite from a PokéAPI pokemon payload (Gen 9 → Gen 5 → HOME → art). */
+function extractPokeApiSprite(data: {
+  id?: number
+  sprites?: {
+    front_default?: string | null
+    other?: {
+      home?: { front_default?: string | null }
+      'official-artwork'?: { front_default?: string | null }
+    }
+    versions?: Record<string, Record<string, { front_default?: string | null }>>
+  }
+}): string {
+  const s = data.sprites
+  const id = data.id ?? 0
+  const versions = s?.versions ?? {}
+  return (
+    versions['generation-ix']?.['scarlet-violet']?.front_default ??
+    versions['generation-viii']?.['brilliant-diamond-shining-pearl']?.front_default ??
+    versions['generation-vii']?.['ultra-sun-ultra-moon']?.front_default ??
+    versions['generation-vi']?.['omegaruby-alphasapphire']?.front_default ??
+    versions['generation-v']?.['black-white']?.front_default ??
+    s?.other?.home?.front_default ??
+    s?.front_default ??
+    s?.other?.['official-artwork']?.front_default ??
+    (id > 0 ? pokemonSpriteUrl(id) : '') ??
+    ''
+  )
+}
+
+/** Try PokéAPI game sprites using slug and/or display name (when Showdown sprites 404). */
 export async function fetchPokemonSpriteImage(
   speciesSlug?: string | null,
   speciesDisplay?: string | null
@@ -337,14 +447,15 @@ export async function fetchPokemonInfo(name: string): Promise<PokemonInfo | null
       return null
     }
     const data = (await res.json()) as {
+      id?: number
       sprites?: {
         other?: { 'official-artwork'?: { front_default?: string } }
         front_default?: string
+        versions?: Record<string, Record<string, { front_default?: string | null }>>
       }
       types?: Array<{ type?: { name?: string } }>
     }
-    const image =
-      data.sprites?.other?.['official-artwork']?.front_default ?? data.sprites?.front_default ?? ''
+    const image = extractPokeApiSprite(data)
     const types = (data.types ?? []).map((t) => t.type?.name ?? '').filter(Boolean)
     const info: PokemonInfo = { image, types }
     cache.set(key, info)

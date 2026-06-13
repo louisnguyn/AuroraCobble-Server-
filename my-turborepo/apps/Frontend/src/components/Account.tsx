@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import {
   buyPokemonShopOffer,
@@ -37,7 +37,55 @@ import { isAccountVerified, VerifiedAccountBadge } from './VerifiedAccountBadge.
 import { RoleBadge } from './RoleBadge.tsx'
 import { AccountRankHistory } from './AccountRankHistory.tsx'
 import { normalizePvpTierSlugForAssets, pvpTierHumanName, PvPTierBadge } from './PvPTierBadge.tsx'
-import { PageHeader, PageShell, PageSection, PageTabBar } from './PageLayout.tsx'
+import { PageHeader, PageNotice, PageShell, PageSection, PageTabBar } from './PageLayout.tsx'
+
+type DailyStatAccent = 'violet' | 'amber' | 'sky' | 'emerald' | 'cyan'
+
+const DAILY_STAT_SHELL: Record<DailyStatAccent, { box: string; label: string }> = {
+  violet: {
+    box: 'border-violet-500/40 bg-gradient-to-b from-violet-950/45 to-[#0f0a1a]/60',
+    label: 'text-violet-300/85',
+  },
+  amber: {
+    box: 'border-amber-500/45 bg-gradient-to-b from-amber-950/50 to-[#0f0a1a]/60',
+    label: 'text-amber-300/85',
+  },
+  sky: {
+    box: 'border-sky-500/40 bg-gradient-to-b from-sky-950/45 to-[#0f0a1a]/60',
+    label: 'text-sky-300/85',
+  },
+  emerald: {
+    box: 'border-emerald-500/35 bg-gradient-to-b from-emerald-950/35 to-[#0f0a1a]/60',
+    label: 'text-emerald-300/85',
+  },
+  cyan: {
+    box: 'border-cyan-500/35 bg-gradient-to-b from-cyan-950/35 to-[#0f0a1a]/60',
+    label: 'text-cyan-300/85',
+  },
+}
+
+function DailyRewardStatCard({
+  label,
+  value,
+  sub,
+  accent = 'violet',
+  valueClassName = 'text-[#f5efe6]',
+}: {
+  label: string
+  value: ReactNode
+  sub?: string
+  accent?: DailyStatAccent
+  valueClassName?: string
+}) {
+  const tone = DAILY_STAT_SHELL[accent]
+  return (
+    <div className={`rounded-xl border px-3 py-4 text-center ${tone.box}`}>
+      <p className={`text-[10px] uppercase tracking-wider font-semibold m-0 mb-2 ${tone.label}`}>{label}</p>
+      <div className={`text-2xl sm:text-3xl font-bold tabular-nums m-0 leading-none ${valueClassName}`}>{value}</div>
+      {sub ? <p className="text-[11px] text-muted mt-2 m-0 leading-snug">{sub}</p> : null}
+    </div>
+  )
+}
 
 function formatPokemonShopCategory(category: string): string {
   const labels: Record<string, string> = {
@@ -699,177 +747,163 @@ export function Account() {
 
       {activeTab === 'daily' && (
         <>
-          <div className="mb-4 rounded-lg border border-amber-500/30 bg-[#0a1020] px-4 py-3 shadow-[inset_0_1px_0_0_rgba(251,191,36,0.08)]">
-            <h3 className="text-sm font-semibold text-amber-200/95 m-0 mb-2 tracking-tight">PVP leaderboard</h3>
-            <p className="text-sm text-[#e2e8f0] m-0">
-              Current rank:{' '}
-              <span className="text-[#fbbf24] font-medium inline-flex flex-wrap items-center gap-x-1.5 gap-y-1">
-                {userPvpRank?.rank != null ? (
-                  <>
-                    <span className="tabular-nums">#{userPvpRank.rank}</span>
-                    {userPvpRank.tier ? (
-                      <>
-                        <span className="text-slate-500 font-normal"> | </span>
+          <div className="mb-5 rounded-xl border border-amber-500/30 bg-gradient-to-br from-amber-950/35 via-[#0a1020]/90 to-[#0f0a1a]/95 p-4 sm:p-5 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[10px] uppercase tracking-widest text-amber-300/90 font-semibold m-0">
+                PVP leaderboard
+              </p>
+              <span className="text-[11px] text-muted">Auto at 00:00 — separate from daily claim</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <DailyRewardStatCard
+                accent="amber"
+                label="Your rank"
+                value={
+                  userPvpRank?.rank != null ? (
+                    <span className="inline-flex flex-wrap items-center justify-center gap-1.5">
+                      #{userPvpRank.rank}
+                      {userPvpRank.tier ? (
                         <PvPTierBadge
                           slug={normalizePvpTierSlugForAssets(userPvpRank.tier)}
                           displayName={pvpTierHumanName(userPvpRank.tier)}
-                          fallbackTextClassName="text-[#fbbf24]"
                           imgHeightClass="h-5"
                         />
-                      </>
-                    ) : null}
-                  </>
-                ) : (
-                  'Unranked'
-                )}
-              </span>
-            </p>
-            <p className="text-sm m-0 mt-2">
-              <span className="text-slate-400">Next reset reward: </span>
-              {pvpLeaderboardPreview.inTop3 ? (
-                <span className="text-amber-100/95">
-                  <span className="tabular-nums font-semibold">
-                    {pvpLeaderboardPreview.cobble.toLocaleString()} Cobble$
-                  </span>
-                  {pvpLeaderboardPreview.tickets > 0 ? (
-                    <span> + {pvpLeaderboardPreview.tickets} normal ticket(s)</span>
-                  ) : null}
-                  <span className="text-slate-500 font-normal text-xs">
-                    {' '}
-                    - if you&apos;re still in the top 3 after the next reset
-                  </span>
-                </span>
-              ) : (
-                <span className="text-slate-500">- For top 3 only. Credited to your site balance automatically.</span>
-              )}
-            </p>
-            <p className="text-xs text-slate-500 m-0 mt-2 leading-relaxed">
-              Not part of the daily claim below - only your streak and role bonuses use that button.
-            </p>
+                      ) : null}
+                    </span>
+                  ) : (
+                    'Unranked'
+                  )
+                }
+                sub="Top 3 only"
+              />
+              <DailyRewardStatCard
+                accent="amber"
+                label="Cobble$ reward"
+                value={
+                  pvpLeaderboardPreview.inTop3 ? (
+                    <span className="text-[#fbbf24]">{pvpLeaderboardPreview.cobble.toLocaleString()}</span>
+                  ) : (
+                    '—'
+                  )
+                }
+                sub={pvpLeaderboardPreview.inTop3 ? 'If still top 3 at reset' : 'Not in top 3'}
+              />
+              <DailyRewardStatCard
+                accent="sky"
+                label="Tickets"
+                value={pvpLeaderboardPreview.inTop3 && pvpLeaderboardPreview.tickets > 0 ? `+${pvpLeaderboardPreview.tickets}` : '—'}
+                sub="Normal tickets"
+              />
+            </div>
           </div>
 
           <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-3">Daily login &amp; role</h2>
           {dailyLoading ? (
-            <p className="text-sm text-muted mb-6">Loading rewards...</p>
+            <p className="text-sm text-muted mb-6">Loading rewards…</p>
           ) : dailyLoadError ? (
             <p className="text-sm text-error mb-6">{dailyLoadError}</p>
           ) : !daily ? (
             <p className="text-sm text-muted mb-6">No reward data.</p>
           ) : (
-            <div className="mb-6 pixel-well p-4 space-y-4">
-              <p className="text-sm text-muted m-0">
-                Reset: 00:00 ({daily.timeZone})  |  Date: {daily.date}
-              </p>
-              <p className="text-sm text-muted mt-2 mb-0">Next reset in: {dailyResetCountdown}</p>
-
-              <section>
-                <h3 className="text-sm font-semibold text-[#cbd5e1] m-0 mb-2">Your rank perks</h3>
-                <div className="text-xs text-muted space-y-1.5 border border-border/50 rounded-lg px-2 py-2 bg-[#0f172a]/50">
-                  {rewardsBreakdown.rb ? (
-                    <>
-                      <p className="m-0 text-[#e2e8f0]">
-                        Rank: <span className="text-slate-300">({rewardsBreakdown.rb.minecraftRole})</span>
-                      </p>
-                      {rewardsBreakdown.roleFlatCobble > 0 ? (
-                        <p className="m-0">
-                          <span className="text-slate-400">Extra Cobble$ (with daily claim): </span>
-                          <span className="tabular-nums text-amber-200/95">
-                            +{rewardsBreakdown.roleFlatCobble.toLocaleString()}
-                          </span>
-                        </p>
-                      ) : (
-                        <p className="m-0 text-slate-500">No extra Cobble$ from rank for this tier.</p>
-                      )}
-                      {rewardsBreakdown.roleTickets > 0 ? (
-                        <p className="m-0">
-                          <span className="text-slate-400">Extra tickets (with daily claim): </span>
-                          <span className="tabular-nums text-sky-200/95">+{rewardsBreakdown.roleTickets}</span> normal
-                          ticket(s)
-                        </p>
-                      ) : (
-                        <p className="m-0 text-slate-500">No extra tickets from rank.</p>
-                      )}
-                      {rewardsBreakdown.claimedToday ? (
-                        <p className="m-0 text-emerald-300/90 text-[11px]">
-                          Role bonuses were included when you claimed today&apos;s daily reward.
-                        </p>
-                      ) : null}
-                      {!rewardsBreakdown.canClaimDaily && !rewardsBreakdown.claimedToday && daily.eligible === false ? (
-                        <p className="m-0 text-amber-300/90 text-[11px]">
-                          Join the server after reset to unlock the daily bundle (streak + role together).
-                        </p>
-                      ) : null}
-                    </>
-                  ) : (
-                    <p className="m-0 text-slate-500">Role bonus data unavailable.</p>
-                  )}
-                </div>
-              </section>
-
-              <section className="border-t border-border/50 pt-3">
-                <h3 className="text-sm font-semibold text-[#cbd5e1] m-0 mb-2">Daily streak</h3>
-                <p className="text-xs text-muted m-0 mb-1.5">
-                  Total days claimed:{' '}
-                  <span className="tabular-nums text-slate-300">
-                    {(daily.totalClaimDays ?? 0).toLocaleString()}
-                  </span>
-                </p>
-                <p className="text-sm text-violet-200 m-0">
-                  Next step: Day {daily.streak.nextDay}  |  {daily.streak.nextReward?.label ?? '-'}
-                </p>
-                <p className="text-xs text-muted mt-1 m-0">
-                  Base Cobble$ from streak (before rank extras):{' '}
-                  {rewardsBreakdown.nr?.kind === 'cobbledollars' ? (
-                    <span className="tabular-nums text-slate-300">
-                      {rewardsBreakdown.streakLadderCobble.toLocaleString()}
-                    </span>
-                  ) : (
-                    <span className="text-slate-400">
-                      - (today&apos;s reward: {rewardsBreakdown.nr?.label ?? '-'})
-                    </span>
-                  )}
-                </p>
-                <p className={`text-sm mt-2 mb-0 ${daily.eligible ? 'text-emerald-300' : 'text-amber-300'}`}>
-                  {daily.eligible
-                    ? 'Eligible today: you have been online at least once after reset.'
-                    : 'Not eligible yet today. Join the server first.'}
-                </p>
-                {rewardsBreakdown.claimedToday ? (
-                  <p className="text-sm text-emerald-300 mt-2 m-0">
-                    Claimed today (Day {daily.claim?.streakDay ?? '?'}) - {daily.claim?.selectedReward ?? 'Reward'}
+            <div className="mb-6 rounded-xl border border-violet-500/30 bg-gradient-to-br from-violet-950/35 via-[#120a22]/85 to-[#0f0a1a]/95 p-4 sm:p-5 space-y-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-violet-300/90 font-semibold m-0 mb-1">
+                    Today&apos;s bundle
                   </p>
-                ) : null}
-              </section>
+                  <p className="text-sm text-[#e2e8f0] m-0">
+                    Streak + role perks — one claim per day after you join in-game
+                  </p>
+                </div>
+                <p className="text-xs text-muted m-0 shrink-0 tabular-nums">
+                  {daily.date} · reset {dailyResetCountdown}
+                </p>
+              </div>
 
-              <section className="border-t border-border/40 pt-4">
-                <h3 className="text-sm font-semibold text-[#cbd5e1] m-0 mb-2">Daily claim total</h3>
-                <p className="text-sm m-0 text-[#e2e8f0]">
-                  Cobble$:{' '}
-                  <span className="tabular-nums text-[#fbbf24] font-semibold">
-                    {rewardsBreakdown.totalCobble.toLocaleString()}
-                  </span>
-                  {'  |  '}
-                  Tickets:{' '}
-                  <span className="tabular-nums text-sky-200/95 font-semibold">{rewardsBreakdown.totalTickets}</span>
-                </p>
-                <p className="text-xs text-muted mt-2 mb-3">
-                  Claims your <strong className="text-slate-400">daily streak</strong> and <strong className="text-slate-400">rank perks</strong> above. PVP rewards use the separate box.
-                </p>
+              {rewardsBreakdown.claimedToday ? (
+                <PageNotice variant="success">
+                  Claimed today — Day {daily.claim?.streakDay ?? '?'} · {daily.claim?.selectedReward ?? 'Reward'}
+                </PageNotice>
+              ) : daily.eligible ? (
+                <PageNotice variant="success">Eligible — join verified for today. Tap claim below.</PageNotice>
+              ) : (
+                <PageNotice variant="warn">Join the server after reset to unlock today&apos;s bundle.</PageNotice>
+              )}
+
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <DailyRewardStatCard
+                  accent="violet"
+                  label="Streak"
+                  value={`Day ${daily.streak.nextDay}`}
+                  sub={
+                    rewardsBreakdown.nr?.kind === 'cobbledollars'
+                      ? `+${rewardsBreakdown.streakLadderCobble.toLocaleString()} CD`
+                      : (rewardsBreakdown.nr?.label ?? 'Next reward')
+                  }
+                />
+                <DailyRewardStatCard
+                  accent="amber"
+                  label="Role Cobble$"
+                  value={
+                    rewardsBreakdown.roleFlatCobble > 0 ? (
+                      <span className="text-[#fbbf24]">+{rewardsBreakdown.roleFlatCobble.toLocaleString()}</span>
+                    ) : (
+                      '—'
+                    )
+                  }
+                  sub={
+                    rewardsBreakdown.rb ? (
+                      <span className="inline-flex items-center justify-center gap-1.5 flex-wrap">
+                        <RoleBadge roleKey={rewardsBreakdown.rb.minecraftRole} />
+                      </span>
+                    ) : (
+                      'No rank bonus'
+                    )
+                  }
+                />
+                <DailyRewardStatCard
+                  accent="sky"
+                  label="Role tickets"
+                  value={rewardsBreakdown.roleTickets > 0 ? `+${rewardsBreakdown.roleTickets}` : '—'}
+                  sub="Normal tickets"
+                />
+                <DailyRewardStatCard
+                  accent="emerald"
+                  label="Claim total"
+                  value={
+                    <span className="text-[#fbbf24]">{rewardsBreakdown.totalCobble.toLocaleString()}</span>
+                  }
+                  sub={`${rewardsBreakdown.totalTickets} ticket${rewardsBreakdown.totalTickets === 1 ? '' : 's'}`}
+                  valueClassName=""
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted">
+                <span>
+                  Lifetime claims:{' '}
+                  <strong className="text-slate-300 tabular-nums">{(daily.totalClaimDays ?? 0).toLocaleString()}</strong>
+                </span>
+                <span>Reset 00:00 ({daily.timeZone})</span>
+              </div>
+
+              <div className="pt-1 flex flex-col sm:flex-row sm:items-center gap-3">
                 <button
                   type="button"
                   onClick={() => void handleClaimDailyReward()}
                   disabled={rewardsClaimBusy || !rewardsBreakdown.hasClaimable}
-                  className="py-2 px-4 pixel-btn-primary disabled:opacity-50"
+                  className="py-2.5 px-6 pixel-btn-primary disabled:opacity-50 w-full sm:w-auto text-base font-semibold"
                 >
-                  {rewardsClaimBusy ? 'Claiming...' : 'Claim daily reward'}
+                  {rewardsClaimBusy ? 'Claiming…' : 'Claim daily reward'}
                 </button>
-                {rewardsClaimSuccess ? (
-                  <p className="text-sm text-emerald-300 mt-3 mb-0">{rewardsClaimSuccess}</p>
+                {!rewardsBreakdown.hasClaimable && !rewardsBreakdown.claimedToday ? (
+                  <span className="text-xs text-muted">Claim unlocks after an in-game login today.</span>
                 ) : null}
-                {rewardsClaimError ? (
-                  <p className="text-sm text-error mt-3 mb-0">{rewardsClaimError}</p>
-                ) : null}
-              </section>
+              </div>
+
+              {rewardsClaimSuccess ? (
+                <p className="text-sm text-emerald-300 m-0">{rewardsClaimSuccess}</p>
+              ) : null}
+              {rewardsClaimError ? <p className="text-sm text-error m-0">{rewardsClaimError}</p> : null}
             </div>
           )}
         </>

@@ -1,3 +1,5 @@
+import { normalizePasteForPokepaste } from "./pokepasteParse.js";
+
 const POKEPASTE_CREATE_URL = "https://pokepast.es/create";
 const MAX_PASTE_CHARS = 12_000;
 
@@ -6,7 +8,7 @@ export async function createPokepasteShareUrl(opts: {
   title?: string;
   author?: string;
 }): Promise<string> {
-  const paste = opts.paste.trim();
+  const paste = normalizePasteForPokepaste(opts.paste.trim());
   if (!paste) {
     throw new Error("paste required");
   }
