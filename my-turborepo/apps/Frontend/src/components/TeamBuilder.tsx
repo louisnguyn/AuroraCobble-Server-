@@ -45,6 +45,7 @@ import { CustomSelect } from './CustomSelect'
 import { PokemonSprite } from './PokemonSprite.tsx'
 import { PageEmptyState, PageHeader, PageNotice, PageSection, PageShell } from './PageLayout.tsx'
 import { saveTeamPasteView } from '../teamPasteViewStorage.ts'
+import { getShowdownLearnableMoveNames, getShowdownPokemonAbilities, validateShowdownSlot } from '../showdownData'
 
 function formatResourceLabel(apiSlug: string): string {
   return apiSlug
@@ -171,6 +172,8 @@ function SlotFormFields({
   itemOptions,
   abilityOptions,
   moveOptions,
+  learnableMoveLabels,
+  learnableAbilityNames,
   slotNumber,
 }: {
   draft: TeamBuildSlot
@@ -179,9 +182,51 @@ function SlotFormFields({
   itemOptions: ItemListEntry[]
   abilityOptions: AbilityListEntry[]
   moveOptions: MoveListEntry[]
+  learnableMoveLabels: string[] | null
+  learnableAbilityNames: string[] | null
   slotNumber: number
 }) {
   const [m0, m1, m2, m3] = normalizeSlotMovesForForm(draft.moves)
+
+  const abilityAutocompleteOptions = useMemo(() => {
+    const current = draft.ability?.trim() ?? ''
+
+    if (!draft.species.trim()) {
+      return abilityOptions.map((a) => formatResourceLabel(a.name))
+    }
+
+    if (!learnableAbilityNames) {
+      return current ? [current] : []
+    }
+
+    const options = [...learnableAbilityNames].sort((a, b) => a.localeCompare(b))
+    if (current && !options.some((o) => o.toLowerCase() === current.toLowerCase())) {
+      options.unshift(current)
+    }
+    return options
+  }, [draft.species, draft.ability, learnableAbilityNames, abilityOptions])
+
+  const moveAutocompleteOptions = useMemo(() => {
+    const currentMoves = [m0, m1, m2, m3].map((x) => x.trim()).filter(Boolean)
+
+    if (!draft.species.trim()) {
+      return moveOptions.map((m) => formatResourceLabel(m.name))
+    }
+
+    if (!learnableMoveLabels) {
+      return currentMoves
+    }
+
+    const options = [...learnableMoveLabels].sort((a, b) => a.localeCompare(b))
+    const seen = new Set(options.map((o) => o.toLowerCase()))
+    for (const m of currentMoves) {
+      if (!seen.has(m.toLowerCase())) {
+        options.unshift(m)
+        seen.add(m.toLowerCase())
+      }
+    }
+    return options
+  }, [draft.species, learnableMoveLabels, moveOptions, m0, m1, m2, m3])
 
   const patch = (partial: Partial<TeamBuildSlot>) =>
     setDraft((prev) => (prev ? { ...prev, ...partial } : null))
@@ -241,7 +286,7 @@ function SlotFormFields({
             onChange={(ability) =>
               patch({ ability: ability.trim() ? ability : null })
             }
-            options={abilityOptions.map((a) => formatResourceLabel(a.name))}
+            options={abilityAutocompleteOptions}
             placeholder="e.g. Protosynthesis"
           />
         </div>
@@ -273,7 +318,7 @@ function SlotFormFields({
                 setMovesFromFour(next[0]!, next[1]!, next[2]!, next[3]!)
               }}
               placeholder={`Move ${idx + 1}`}
-              options={moveOptions.map((m) => formatResourceLabel(m.name))}
+              options={moveAutocompleteOptions}
             />
             )
           })}
@@ -433,10 +478,14 @@ export function TeamBuilder() {
   /** Which slot (0–5) is being edited; null = form hidden */
   const [formSlotIndex, setFormSlotIndex] = useState<number | null>(null)
   const [draft, setDraft] = useState<TeamBuildSlot | null>(null)
+  const [learnableMoveLabels, setLearnableMoveLabels] = useState<string[] | null>(null)
+  const [learnableAbilityNames, setLearnableAbilityNames] = useState<string[] | null>(null)
 
   const closeForm = useCallback(() => {
     setFormSlotIndex(null)
     setDraft(null)
+    setLearnableMoveLabels(null)
+    setLearnableAbilityNames(null)
     setFormError(null)
   }, [])
 
@@ -453,6 +502,34 @@ export function TeamBuilder() {
     },
     [slots],
   )
+
+  useEffect(() => {
+    const slug = draft?.speciesSlug?.trim() || (draft?.species ? speciesDisplayToSlug(draft.species) : '')
+    if (!slug) {
+      setLearnableMoveLabels(null)
+      setLearnableAbilityNames(null)
+      return
+    }
+    let cancelled = false
+    setLearnableMoveLabels(null)
+    setLearnableAbilityNames(null)
+    Promise.all([getShowdownLearnableMoveNames(slug), getShowdownPokemonAbilities(slug)])
+      .then(([moves, abilities]) => {
+        if (!cancelled) {
+          setLearnableMoveLabels(moves)
+          setLearnableAbilityNames(abilities)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLearnableMoveLabels([])
+          setLearnableAbilityNames([])
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [draft?.species, draft?.speciesSlug])
 
   useEffect(() => {
     let cancelled = false
@@ -518,13 +595,36 @@ export function TeamBuilder() {
     if (formSlotIndex === i) closeForm()
   }, [formSlotIndex, closeForm])
 
-  const applyDraftToSlot = useCallback(() => {
+  const applyDraftToSlot = useCallback(async () => {
     if (formSlotIndex === null || !draft) return
     if (!draft.species.trim()) {
       setFormError('Species is required.')
       return
     }
+    setFormError(null)
     const speciesSlug = draft.speciesSlug.trim() || speciesDisplayToSlug(draft.species)
+
+    try {
+      const { invalidAbility, invalidMoves } = await validateShowdownSlot({
+        speciesSlug,
+        ability: draft.ability,
+        moves: draft.moves,
+      })
+      const errors: string[] = []
+      if (invalidAbility) {
+        errors.push(`${draft.species.trim()} cannot have ability "${invalidAbility}"`)
+      }
+      if (invalidMoves.length > 0) {
+        errors.push(`${draft.species.trim()} cannot learn: ${invalidMoves.join(', ')}`)
+      }
+      if (errors.length > 0) {
+        setFormError(errors.join('. '))
+        return
+      }
+    } catch {
+      /* Showdown data unavailable — allow save */
+    }
+
     setSlots((prev) => {
       const next = [...prev]
       next[formSlotIndex] = { ...draft, speciesSlug }
@@ -891,7 +991,7 @@ export function TeamBuilder() {
       )}
 
       {!authLoading && !(isAuthenticated && isAdminUser && canUseTeamAi) ? (
-        <PageNotice className="max-w-3xl">
+        <PageNotice className="w-full">
           {!isAuthenticated ? (
             aiLang === 'vi' ? (
               <>
@@ -927,7 +1027,7 @@ export function TeamBuilder() {
       ) : null}
 
       {isAuthenticated && !authLoading && !canUseTeamAi ? (
-        <PageNotice variant="warn" className="max-w-2xl text-xs">
+        <PageNotice variant="warn" className="w-full text-xs">
           {formatTeamAiVerificationMessage(aiLang)}
         </PageNotice>
       ) : null}
@@ -1141,6 +1241,8 @@ export function TeamBuilder() {
             itemOptions={itemOptions}
             abilityOptions={abilityOptions}
             moveOptions={moveOptions}
+            learnableMoveLabels={learnableMoveLabels}
+            learnableAbilityNames={learnableAbilityNames}
             slotNumber={formSlotIndex + 1}
           />
           <div className="flex flex-wrap gap-2">

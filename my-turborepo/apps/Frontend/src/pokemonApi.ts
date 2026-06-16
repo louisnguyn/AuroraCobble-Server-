@@ -44,6 +44,9 @@ export interface MoveSummary {
   power: number | null
   accuracy: number | null
   damageClass: string | null
+  pp?: number | null
+  priority?: number | null
+  desc?: string | null
 }
 
 /** Fetch list of Pokémon (id + name). Default limit 1025 (all current species). */
@@ -697,10 +700,24 @@ export async function fetchItemList(): Promise<ItemListEntry[]> {
   }
 }
 
-/** Fetch move summary (type, power, accuracy, damage class) from PokéAPI. Cached. */
+/** Fetch move summary — Showdown dex first (PvP-accurate), then PokéAPI. Cached. */
 export async function fetchMoveSummary(moveName: string): Promise<MoveSummary | null> {
   const key = pokeApiResourceSlug(moveName)
   if (moveSummaryCache.has(key)) return moveSummaryCache.get(key) ?? null
+
+  try {
+    const { getShowdownMove, resolveShowdownMoveId, showdownMoveToSummary } = await import('./showdownData')
+    const showdownId = await resolveShowdownMoveId(key)
+    const showdownMove = await getShowdownMove(showdownId)
+    if (showdownMove) {
+      const summary: MoveSummary = showdownMoveToSummary(showdownMove)
+      moveSummaryCache.set(key, summary)
+      if (showdownId !== key) moveSummaryCache.set(showdownId, summary)
+      return summary
+    }
+  } catch {
+    /* Showdown static data unavailable — fall back to PokéAPI */
+  }
 
   try {
     const res = await fetch(`https://pokeapi.co/api/v2/move/${encodeURIComponent(key)}`)
@@ -712,13 +729,20 @@ export async function fetchMoveSummary(moveName: string): Promise<MoveSummary | 
       type?: { name?: string }
       power?: number | null
       accuracy?: number | null
+      pp?: number | null
+      priority?: number | null
       damage_class?: { name?: string }
+      flavor_text_entries?: Array<{ flavor_text?: string; language?: { name?: string } }>
     }
+    const enFlavor = (data.flavor_text_entries ?? []).find((e) => e.language?.name === 'en')
     const summary: MoveSummary = {
       type: data.type?.name ?? null,
       power: data.power ?? null,
       accuracy: data.accuracy ?? null,
       damageClass: data.damage_class?.name ?? null,
+      pp: data.pp ?? null,
+      priority: data.priority ?? null,
+      desc: enFlavor?.flavor_text?.replace(/\s+/g, ' ').trim() ?? null,
     }
     moveSummaryCache.set(key, summary)
     return summary

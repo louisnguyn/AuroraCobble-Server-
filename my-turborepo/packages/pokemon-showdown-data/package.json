@@ -1,0 +1,10 @@
+{
+  "name": "@repo/pokemon-showdown-data",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "download": "node scripts/download.mjs",
+    "sync-frontend": "node scripts/sync-to-frontend.mjs"
+  }
+}

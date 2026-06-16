@@ -172,8 +172,7 @@ export function BattleReplayCard({ r, viewerIgn }: { r: BattleReplayPayload; vie
               </button>
             </div>
             <p className="text-[0.65rem] text-muted m-0 leading-snug">
-              Uses ChatGPT-style analysis on our server — battle narrative, notable turns, and per-trainer faint vs standing
-              Pokémon when the log supports it.
+              Short AI recap: Pokémon remaining per trainer and whether the match looks ELO-buffing (forfeit, stall, etc.).
             </p>
             {aiError ? <p className="text-xs text-rose-400 m-0">{aiError}</p> : null}
             {aiSummary ? (

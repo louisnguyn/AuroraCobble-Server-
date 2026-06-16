@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   fetchPokemonList,
   fetchPokemonDetail,
@@ -8,6 +8,7 @@ import {
   type PokemonDetail,
   type MoveSummary,
 } from '../pokemonApi'
+import { getShowdownLearnableMoveSlugs, getShowdownMoveSummaries } from '../showdownData'
 import { usePokemonSpriteSrc } from '../usePokemonSpriteSrc'
 import { PageEmptyState, PageHeader, PageShell } from './PageLayout.tsx'
 
@@ -90,6 +91,7 @@ export function Wiki() {
   const [detail, setDetail] = useState<PokemonDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [moveSummaries, setMoveSummaries] = useState<Record<string, MoveSummary | null>>({})
+  const [learnsetMoves, setLearnsetMoves] = useState<string[] | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -110,6 +112,7 @@ export function Wiki() {
     if (selectedId == null) {
       setDetail(null)
       setMoveSummaries({})
+      setLearnsetMoves(null)
       return
     }
     let cancelled = false
@@ -127,24 +130,69 @@ export function Wiki() {
     }
   }, [selectedId])
 
-  const movesToShow =
-    detail && detail.moves.length > 0 ? detail.moves.slice(0, 40) : detail?.moves ?? []
-
   useEffect(() => {
-    if (!detail || movesToShow.length === 0) return
+    if (!detail) {
+      setLearnsetMoves(null)
+      return
+    }
     let cancelled = false
-    movesToShow.forEach((name) => {
-      if (moveSummaries[name]) return
-      fetchMoveSummary(name).then((summary) => {
-        if (!cancelled) {
-          setMoveSummaries((prev) => ({ ...prev, [name]: summary }))
-        }
+    setLearnsetMoves(null)
+    getShowdownLearnableMoveSlugs(detail.name)
+      .then((slugs) => {
+        if (!cancelled) setLearnsetMoves(slugs)
       })
-    })
+      .catch(() => {
+        if (!cancelled) setLearnsetMoves(null)
+      })
     return () => {
       cancelled = true
     }
-  }, [detail?.id])
+  }, [detail?.name])
+
+  const movesToShow = useMemo(() => {
+    if (learnsetMoves && learnsetMoves.length > 0) return learnsetMoves
+    if (detail && detail.moves.length > 0) return detail.moves.slice(0, 40)
+    return detail?.moves ?? []
+  }, [learnsetMoves, detail])
+
+  useEffect(() => {
+    if (!detail || movesToShow.length === 0) {
+      return
+    }
+    let cancelled = false
+    setMoveSummaries({})
+
+    const loadSummaries = async () => {
+      const names = movesToShow
+      if (learnsetMoves && learnsetMoves.length > 0) {
+        const showdown = await getShowdownMoveSummaries(names)
+        if (cancelled) return
+        const merged: Record<string, MoveSummary | null> = { ...showdown }
+        const missing = names.filter((m) => merged[m] == null)
+        await Promise.all(
+          missing.map(async (name) => {
+            const summary = await fetchMoveSummary(name)
+            if (!cancelled) merged[name] = summary
+          }),
+        )
+        if (!cancelled) setMoveSummaries(merged)
+        return
+      }
+
+      const merged: Record<string, MoveSummary | null> = {}
+      await Promise.all(
+        names.map(async (name) => {
+          merged[name] = await fetchMoveSummary(name)
+        }),
+      )
+      if (!cancelled) setMoveSummaries(merged)
+    }
+
+    void loadSummaries()
+    return () => {
+      cancelled = true
+    }
+  }, [detail?.id, learnsetMoves, movesToShow])
 
   const filtered =
     search.trim() === ''
@@ -333,13 +381,14 @@ export function Wiki() {
                   <h3 className="text-sm font-semibold text-muted uppercase tracking-wide mb-2">
                     Moves it can learn
                   </h3>
-                  <div className="rounded bg-bg/40 border border-border/40">
-                    <div className="flex items-center px-3 py-2 text-[10px] sm:text-xs text-muted bg-bg/80 border-b border-border/40 uppercase tracking-wide">
+                  <div className="rounded bg-bg/40 border border-border/40 max-h-[28rem] overflow-y-auto">
+                    <div className="flex items-center px-3 py-2 text-[10px] sm:text-xs text-muted bg-bg/80 border-b border-border/40 uppercase tracking-wide sticky top-0 z-10">
                       <span className="flex-1">Move</span>
                       <span className="w-20 text-center">Type</span>
                       <span className="w-10 text-center">Cat</span>
                       <span className="w-10 text-center">Pow</span>
                       <span className="w-10 text-center">Acc</span>
+                      <span className="w-10 text-center hidden sm:block">PP</span>
                     </div>
                     <div className="divide-y divide-border/40">
                       {movesToShow.map((m) => {
@@ -354,35 +403,42 @@ export function Wiki() {
                             ? 'Stat'
                             : '—'
                         return (
-                          <div
-                            key={m}
-                            className="flex items-center px-3 py-1.5 text-xs sm:text-sm"
-                          >
-                            <span className="flex-1 font-medium truncate">
-                              {formatName(m)}
-                            </span>
-                            <span className="w-20 flex justify-center">
-                              {typeName ? (
-                                <span
-                                  className={`inline-block px-2 py-0.5 rounded text-[10px] sm:text-xs font-medium text-white ${
-                                    TYPE_COLORS[typeName] ?? 'bg-surface-hover'
-                                  }`}
-                                >
-                                  {formatName(typeName)}
-                                </span>
-                              ) : (
-                                <span className="text-muted">—</span>
-                              )}
-                            </span>
-                            <span className="w-10 text-center text-muted text-[10px] sm:text-xs">
-                              {damageClass}
-                            </span>
-                            <span className="w-10 text-center text-[10px] sm:text-xs">
-                              {summary?.power ?? '—'}
-                            </span>
-                            <span className="w-10 text-center text-[10px] sm:text-xs">
-                              {summary?.accuracy ?? '—'}
-                            </span>
+                          <div key={m} className="px-3 py-1.5 text-xs sm:text-sm">
+                            <div className="flex items-center">
+                              <span className="flex-1 font-medium truncate">
+                                {formatName(m)}
+                              </span>
+                              <span className="w-20 flex justify-center">
+                                {typeName ? (
+                                  <span
+                                    className={`inline-block px-2 py-0.5 rounded text-[10px] sm:text-xs font-medium text-white ${
+                                      TYPE_COLORS[typeName] ?? 'bg-surface-hover'
+                                    }`}
+                                  >
+                                    {formatName(typeName)}
+                                  </span>
+                                ) : (
+                                  <span className="text-muted">—</span>
+                                )}
+                              </span>
+                              <span className="w-10 text-center text-muted text-[10px] sm:text-xs">
+                                {damageClass}
+                              </span>
+                              <span className="w-10 text-center text-[10px] sm:text-xs">
+                                {summary?.power ?? '—'}
+                              </span>
+                              <span className="w-10 text-center text-[10px] sm:text-xs">
+                                {summary?.accuracy ?? '—'}
+                              </span>
+                              <span className="w-10 text-center text-[10px] sm:text-xs hidden sm:block">
+                                {summary?.pp ?? '—'}
+                              </span>
+                            </div>
+                            {summary?.desc ? (
+                              <p className="text-[10px] sm:text-xs text-muted mt-0.5 pr-2 leading-snug">
+                                {summary.desc}
+                              </p>
+                            ) : null}
                           </div>
                         )
                       })}
@@ -403,7 +459,7 @@ export function Wiki() {
         accent="violet"
         eyebrow="Reference"
         title="Pokémon Database"
-        description="Browse and search Pokémon. Data from PokéAPI."
+        description="Browse and search Pokémon. Stats from PokéAPI; moves & learnsets from Pokémon Showdown dex."
       />
 
       <input

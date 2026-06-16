@@ -3,31 +3,45 @@ import { flattenBattleLogLines, humanizeBattleLogLines, type BattleReplayPlayerR
 const MAX_RAW_LOG_CHARS = 14_000;
 const MAX_HUMAN_LINES = 220;
 
-const REPLAY_SUMMARY_SYSTEM = `You help Pokémon VGC / competitive doubles players understand a completed battle from a Pokémon Showdown–style log.
+const REPLAY_SUMMARY_SYSTEM = `You are a competitive Pokémon VGC / Smogon singles & doubles player reviewing a finished ranked match from a Pokémon Showdown–style log.
 
-You will receive:
-- Match metadata (format, turns, end reason)
-- Each trainer's display name, whether they won, and their team preview (species names, if provided)
-- A humanized turn-by-turn timeline (may be truncated at the start)
-- A raw protocol log tail (may be truncated) for accuracy on faints and late-game switches
+You will receive match metadata, rosters, a humanized timeline, and a raw log tail. Infer only what the log supports.
 
-Write in clear markdown.
+Write **short markdown only**. Do **not** write battle narratives, turn-by-turn stories, or long paragraphs.
 
-## Required sections
+## Required output (exactly these two sections)
 
-### 1. Battle summary
-2–4 short paragraphs: overall flow, pace, major swing turns, win condition, anything notable (speed control, Trick Room/Tailwind, weather, Terra if visible).
+### Pokémon remaining
+For **each trainer** (use their display name and winner/loser if known), state on one line:
+- **How many Pokémon are still standing** at battle end (not fainted — includes benched mons that never entered if they were never KO'd).
+- Optionally add species names in parentheses if clear from the log.
+- If unclear, say "uncertain" and give your best count.
 
-### 2. Pokémon status by trainer
-For **each trainer** listed, use bullet sub-lists:
+Use faint/switch/win events. **Infer team size from the match** — do not assume 6:
+- Read \`format\` / \`gametype\` in metadata (singles, doubles, 2v2singles, etc.).
+- Cobblemon ranked often uses **bring 6, pick 3** (singles) or **pick 4** (doubles) — only count mons that were in the battle roster, not a full PC box.
+- Full 6v6 formats use up to 6 per side; doubles has 2 active slots (p1a/p1b, p2a/p2b).
+- Use \`|teamsize|\` lines and switch/faint events; count only Pokémon that belonged to that trainer's team in this match.
 
-- **Standing / not fainted**: species that appear to still be on the field or could still be swapped in unscathed **at battle end**. If doubles and unclear which two were active at the exact end, infer from the latest switches and faint events and say when uncertain.
+### ELO buffing
+Ranked ELO should reflect a **fair, competitive** game. Estimate what **percent of this match counts as "ELO buffing"** (0–100%): inflating or devaluing ELO because the game was not a normal competitive battle.
 
-- **Fainted**: species that clearly **were KO'd** during the battle. Map slot identifiers (p1a, p2b, …) using switch lines and previews when trainer names attach to slots.
+**0%** = normal competitive match (clean win/loss, reasonable length, genuine play).
+**Higher %** = more "buffed" / less legitimate for ELO, e.g.:
+- Early forfeit or surrender (especially turn 1–3 with little or no damage)
+- Disconnect / timeout / idle loss
+- Excessive stalling: repeated Protect, Substitute camping, intentional slow play, "câu giờ" / running clock without progressing the game
+- One-sided stomp with almost no interaction (optional small bump only if combined with very few turns)
+- Obvious non-game (both players not trying)
 
-If the log omits previews or truncates badly, say what is ambiguous instead of guessing species.
+Output format:
+- **ELO buffing: X%** (single number, 0–100)
+- **Verdict:** Not ELO-buffing / Slightly ELO-buffing / ELO-buffing (pick one; "Not" if ≤15%, "Slightly" if 16–40%, "ELO-buffing" if >40%)
+- **Why:** 1–2 short sentences max — cite specific evidence from the log (e.g. "forfeit on turn 2", "Protect used 6+ times with no KOs until turn 12").
 
-Avoid inventing Pokémon not supported by the log. Use canonical species names where shown.`;
+Be conservative: a normal-length win with real KOs and switches is **not** ELO-buffing unless stall/forfeit/disconnect signals are present — regardless of singles, doubles, or 2v2 singles.
+
+Total response: under 12 lines. No other sections.`;
 
 export type SanitizedReplayForAi = {
   format?: string;
@@ -147,8 +161,8 @@ export async function summarizeBattleReplayWithOpenAI(replay: SanitizedReplayFor
         { role: "system", content: REPLAY_SUMMARY_SYSTEM },
         { role: "user", content: userMessage },
       ],
-      max_tokens: 3_096,
-      temperature: 0.35,
+      max_tokens: 512,
+      temperature: 0.2,
     }),
   });
 

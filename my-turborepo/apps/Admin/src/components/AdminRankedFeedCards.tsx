@@ -154,7 +154,7 @@ export function AdminBattleReplayCard({ r }: { r: BattleReplayPayload }) {
               </button>
             </div>
             <p className="text-[0.65rem] text-slate-500 m-0 leading-snug">
-              Battle recap and per-team faint vs standing Pokémon when inferable from the log.
+              Short recap: Pokémon left per trainer and ELO-buffing % (forfeit, Protect stall, etc.).
             </p>
             {aiError ? <p className="text-xs text-rose-400 m-0">{aiError}</p> : null}
             {aiSummary ? (
