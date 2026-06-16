@@ -17,6 +17,7 @@ import {
   type TournamentBracketSlot,
 } from '../authApi'
 import { formatBracketMatchKeyLabel } from '../bracketLabels'
+import { AdminUserSearchField } from './AdminUserSearchField'
 
 type TRow = {
   id: number
@@ -1151,11 +1152,11 @@ export function TournamentAdmin() {
                 <p className="text-xs text-muted m-0 pb-1">Seed {seedRank} — no participant saved yet</p>
               )}
             </div>
-            <input
-              className={fieldClass}
-              placeholder="Display name (IGN)"
+            <AdminUserSearchField
               value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
+              onChange={setDisplayName}
+              inputClassName={fieldClass}
+              hint="Search registered website accounts (username = in-game name). Pick from the list or type manually for guests."
             />
             <textarea
               className={`${fieldClass} min-h-[180px] font-mono text-xs`}
