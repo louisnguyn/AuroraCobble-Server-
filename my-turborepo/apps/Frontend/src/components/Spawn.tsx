@@ -3,6 +3,7 @@ import { fetchSpawnBoss, fetchSpawnPokemon } from '../api'
 import type { SpawnBossResponse, SpawnPokemonResponse } from '../types'
 import { CustomSelect } from './CustomSelect'
 import { PageHeader, PageShell, PageTabBar } from './PageLayout.tsx'
+import { PokemonSprite } from './PokemonSprite.tsx'
 
 type SpawnSection = 'pokemon' | 'boss'
 
@@ -17,14 +18,77 @@ function stripMinecraftFormatting(value: string): string {
 
 function formatRate(value: number | null | undefined): string {
   if (value == null || Number.isNaN(value)) return '—'
+  if (value <= 0) return '0%'
   const percent = value * 100
-  const decimals = percent < 1 ? 3 : percent < 10 ? 2 : 1
-  return `${percent.toFixed(decimals)}%`
+  if (percent >= 10) return `${percent.toFixed(1)}%`
+  if (percent >= 1) return `${percent.toFixed(2)}%`
+  // Sub-1% spawn rates (e.g. shiny 0.0001%) need more precision than 3 decimals
+  const trimmed = percent.toFixed(8).replace(/\.?0+$/, '')
+  return `${trimmed}%`
 }
 
-function prettyBiomes(value: string | null): string {
-  const s = normalize(value)
-  return stripMinecraftFormatting(s).replace(/_/g, ' ').replace(/\|/g, ' · ')
+function formatLabelFromSlug(slug: string): string {
+  return slug
+    .replace(/^minecraft:/i, '')
+    .replace(/^cobblemon:/i, '')
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ')
+}
+
+function parseBiomeList(value: string | null): string[] {
+  const s = stripMinecraftFormatting(normalize(value))
+  if (s === '—') return []
+  return s
+    .split(/[·|]/)
+    .map((b) => b.trim())
+    .filter(Boolean)
+    .map((b) => formatLabelFromSlug(b.replace(/_/g, ' ')))
+}
+
+type ParsedBossReward = {
+  item: string
+  qty: number
+  chance: number
+}
+
+function parseBossRewards(value: string | null): ParsedBossReward[] {
+  const s = stripMinecraftFormatting(normalize(value))
+  if (s === '—') return []
+  return s
+    .split(';')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const m = part.match(/^(.+?)\s+x(\d+)\s*\(([\d.]+)\)\s*$/i)
+      if (!m) return null
+      const chance = Number.parseFloat(m[3]!)
+      if (!Number.isFinite(chance)) return null
+      return {
+        item: formatLabelFromSlug(m[1]!.trim()),
+        qty: Number.parseInt(m[2]!, 10),
+        chance,
+      }
+    })
+    .filter((r): r is ParsedBossReward => r != null)
+}
+
+function formatRewardChance(chance: number): string {
+  if (chance >= 1) return 'Guaranteed'
+  const pct = chance * 100
+  if (pct >= 10) return `${pct.toFixed(0)}%`
+  if (pct >= 1) return `${pct.toFixed(1)}%`
+  return `${pct.toFixed(2)}%`
+}
+
+function bossNameToSlug(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/['.]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
 }
 
 function rarityColor(value: string | null): string {
@@ -141,66 +205,121 @@ export function Spawn() {
       />
 
       {section === 'boss' && (
-        <div className="pixel-panel-soft p-4 sm:p-6">
-          <div className="flex flex-wrap gap-3 mb-4">
+        <div className="pixel-panel-soft p-4 sm:p-6 space-y-4">
+          <div className="flex flex-wrap items-center gap-3">
             <input
-              type="text"
+              type="search"
               value={bossSearch}
               onChange={(e) => setBossSearch(e.target.value)}
-              placeholder="Search Boss..."
+              placeholder="Search boss…"
               className="min-w-[220px] flex-1 px-3 py-2.5 pixel-field text-base placeholder:text-muted/70"
+              aria-label="Search boss"
             />
+            {!bossLoading && !bossError && bossData ? (
+              <p className="text-sm text-muted m-0 tabular-nums">
+                {bossData.rows.length} boss{bossData.rows.length === 1 ? '' : 'es'}
+              </p>
+            ) : null}
           </div>
 
           {bossLoading ? (
-            <div className="py-10 text-center text-muted">Loading boss spawn data...</div>
+            <div className="py-10 text-center text-muted">Loading boss spawn data…</div>
           ) : bossError ? (
             <div className="p-3 text-error text-base bg-[#1a0f16] border-2 border-error/45 rounded-sm">{bossError}</div>
           ) : (bossData?.rows.length ?? 0) === 0 ? (
             <div className="py-10 text-center text-muted">No boss spawn data found.</div>
           ) : (
-            <div className="overflow-x-auto pixel-well max-h-[60vh] overflow-y-auto">
-              <table className="w-full text-base">
-                <thead className="sticky top-0 z-10 bg-bg/40">
-                  <tr className="bg-bg/40 border-b border-border">
-                    <th className="text-left py-2 px-3 font-semibold">N.</th>
-                    <th className="text-left py-2 px-3 font-semibold">Boss</th>
-                    <th className="text-left py-2 px-3 font-semibold">Spawn Biomes</th>
-                    <th className="text-left py-2 px-3 font-semibold">Normal Rate</th>
-                    <th className="text-left py-2 px-3 font-semibold">Shiny Rate</th>
-                    <th className="text-left py-2 px-3 font-semibold">Reward</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {bossData?.rows.map((row, idx) => (
-                    <tr
-                      key={row.id}
-                      className="border-b border-border/50 align-top transition-colors hover:bg-accent/10"
-                    >
-                      <td className="py-2 px-3 text-muted">{idx + 1}</td>
-                      <td className="py-2 px-3 font-medium text-[#e2e8f0]">
-                        {stripMinecraftFormatting(normalize(row.boss_name))}
-                      </td>
-                      <td className="py-2 px-3 text-muted whitespace-pre-wrap">{prettyBiomes(row.spawn_biomes)}</td>
-                      <td className="py-2 px-3 text-emerald-300 tabular-nums">
-                        {formatRate(row.normal_rate)}
-                      </td>
-                      <td className="py-2 px-3 text-orange-400 tabular-nums">
-                        {formatRate(row.shiny_rate)}
-                      </td>
-                      {(() => {
-                        const title = stripMinecraftFormatting(normalize(row.reward))
-                        const shown = title
-                        return (
-                          <td className="py-2 px-3 text-muted whitespace-pre-wrap break-words" title={title}>
-                            {shown}
-                          </td>
-                        )
-                      })()}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 max-h-[70vh] overflow-y-auto pr-1">
+              {bossData?.rows.map((row, idx) => {
+                const bossName = stripMinecraftFormatting(normalize(row.boss_name))
+                const biomes = parseBiomeList(row.spawn_biomes)
+                const rewards = parseBossRewards(row.reward)
+                const slug = bossNameToSlug(bossName)
+
+                return (
+                  <article
+                    key={row.id}
+                    className="rounded-xl border border-amber-500/20 bg-gradient-to-br from-amber-950/20 via-[#0f0a1a]/80 to-[#0f0a1a]/95 p-4 space-y-3 hover:border-amber-400/35 transition-colors"
+                  >
+                    <header className="flex items-center gap-3">
+                      <PokemonSprite
+                        speciesSlug={slug}
+                        speciesDisplay={bossName}
+                        className="w-14 h-14 sm:w-16 sm:h-16"
+                        centered={false}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] uppercase tracking-wide text-amber-300/80 m-0 font-semibold">
+                          Boss #{idx + 1}
+                        </p>
+                        <h3 className="text-base font-semibold text-[#f5efe6] m-0 truncate">{bossName}</h3>
+                      </div>
+                    </header>
+
+                    <div className="flex flex-wrap gap-2">
+                      <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-950/30 px-2.5 py-1 text-xs">
+                        <span className="text-muted">Normal</span>
+                        <span className="font-semibold text-emerald-300 tabular-nums">
+                          {formatRate(row.normal_rate)}
+                        </span>
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 rounded-lg border border-orange-500/30 bg-orange-950/25 px-2.5 py-1 text-xs">
+                        <span className="text-muted">Shiny</span>
+                        <span className="font-semibold text-orange-300 tabular-nums">
+                          {formatRate(row.shiny_rate)}
+                        </span>
+                      </span>
+                    </div>
+
+                    {biomes.length > 0 ? (
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wide text-muted m-0 mb-1.5">Spawn biomes</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {biomes.map((biome) => (
+                            <span
+                              key={biome}
+                              className="inline-block rounded-md border border-violet-500/25 bg-violet-950/25 px-2 py-0.5 text-[11px] text-violet-100/90"
+                            >
+                              {biome}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {rewards.length > 0 ? (
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wide text-muted m-0 mb-1.5">Rewards</p>
+                        <ul className="list-none m-0 p-0 space-y-1.5">
+                          {rewards.map((r, i) => (
+                            <li
+                              key={`${r.item}-${r.qty}-${i}`}
+                              className="flex items-center justify-between gap-2 rounded-lg border border-border/40 bg-[#0a0812]/60 px-2.5 py-1.5 text-xs"
+                            >
+                              <span className="text-[#e2e8f0] font-medium truncate">
+                                {r.item}
+                                <span className="text-muted font-normal"> ×{r.qty}</span>
+                              </span>
+                              <span
+                                className={`shrink-0 tabular-nums font-semibold ${
+                                  r.chance >= 1 ? 'text-emerald-300' : 'text-amber-300/90'
+                                }`}
+                              >
+                                {formatRewardChance(r.chance)}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : row.reward ? (
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wide text-muted m-0 mb-1">Rewards</p>
+                        <p className="text-xs text-muted m-0 break-words">{stripMinecraftFormatting(normalize(row.reward))}</p>
+                      </div>
+                    ) : null}
+                  </article>
+                )
+              })}
             </div>
           )}
         </div>
