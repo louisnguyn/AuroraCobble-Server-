@@ -11,7 +11,6 @@ export const GRANT_ONLY_ROLE_KEYS = new Set([
   "youtuber",
   "builder",
   "legend",
-  "ultimate",
   "overlord",
   "god",
 ]);
@@ -32,12 +31,13 @@ export type RoleCatalogEntry = {
   perks: RoleWebsitePerks;
 };
 
-/** Cobble$ shop — only up to MASTER; Legend+ are grant/request-only (see GRANT_ONLY_ROLE_KEYS). */
+/** Cobble$ shop — NOOB through ULTIMATE; Legend+ above Ultimate are grant/request-only. */
 const PURCHASABLE: { key: string; label: string; cost: number }[] = [
   { key: "noob", label: "NOOB", cost: 100_000 },
   { key: "elite", label: "ELITE", cost: 500_000 },
   { key: "pro", label: "PRO", cost: 1_000_000 },
   { key: "master", label: "MASTER", cost: 2_000_000 },
+  { key: "ultimate", label: "ULTIMATE", cost: 3_000_000 },
 ];
 
 const GRANT_ONLY_LABELS: Record<string, string> = {
@@ -117,10 +117,10 @@ export function getWebsiteShopDiscountPercent(roleKey: string): number {
     elite: 8,
     pro: 10,
     master: 15,
-    legend: 18,
-    ultimate: 21,
-    overlord: 25,
-    god: 30,
+    legend: 21,
+    ultimate: 18,
+    overlord: 23,
+    god: 25,
   };
   return byRole[k] ?? 0;
 }
@@ -131,19 +131,22 @@ export function getWebsiteShopDiscountPercent(roleKey: string): number {
  */
 export function getDailyLoginFlatCobbleBonusPerClaim(roleKey: string): number {
   const k = normalizeRoleKey(roleKey);
-  if (GRANT_ONLY_FLAT_SHOP_DISCOUNT_15.has(k)) return 85_000;
   const byRole: Record<string, number> = {
     [DEFAULT_MINECRAFT_ROLE]: 0,
     noob: 25_000,
     elite: 40_000,
     pro: 50_000,
     master: 75_000,
-    legend: 100_000,
-    ultimate: 150_000,
-    overlord: 200_000,
-    god: 300_000,
+    helper: 90_000,
+    mod: 100_000,
+    legend: 120_000,
+    ultimate: 100_000,
+    overlord: 150_000,
+    god: 200_000,
   };
-  return byRole[k] ?? 0;
+  if (k in byRole) return byRole[k]!;
+  if (GRANT_ONLY_FLAT_SHOP_DISCOUNT_15.has(k)) return 85_000;
+  return 0;
 }
 
 /** Bonus normal website tickets on every successful daily claim (in addition to streak reward). */
