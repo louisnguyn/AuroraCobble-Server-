@@ -12,13 +12,13 @@ export const CLAN_TREASURY_MILESTONE = 250_000;
 /** @deprecated Use {@link CLAN_TREASURY_MILESTONE}. */
 export const CLAN_DONATE_MILESTONE = CLAN_TREASURY_MILESTONE;
 
-export const CLAN_DAILY_PER_MEMBER = 50_000;
+export const CLAN_DAILY_PER_MEMBER = 25_000;
 
 /** Daily treasury bonus for #1 on each clan leaderboard category (Asia/Ho_Chi_Minh). */
-export const CLAN_LEADERBOARD_DAILY_REWARD_TOP1 = 200_000;
+export const CLAN_LEADERBOARD_DAILY_REWARD_TOP1 = 100_000;
 
 /** Daily treasury bonus for #2 on each clan leaderboard category. */
-export const CLAN_LEADERBOARD_DAILY_REWARD_TOP2 = 100_000;
+export const CLAN_LEADERBOARD_DAILY_REWARD_TOP2 = 50_000;
 
 /** Base clan XP when a member claims their daily login reward. */
 export const CLAN_XP_BASE_PER_DAILY_CLAIM = 50;

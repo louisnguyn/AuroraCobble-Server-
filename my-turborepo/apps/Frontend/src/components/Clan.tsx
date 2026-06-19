@@ -753,8 +753,8 @@ export function Clan() {
   const [lbTreasury, setLbTreasury] = useState<ClanLeaderboardEntry[]>([])
   const [lbTotalElo, setLbTotalElo] = useState<ClanLeaderboardEntry[]>([])
   const [lbLevel, setLbLevel] = useState<ClanLeaderboardEntry[]>([])
-  const [lbRewardTop1, setLbRewardTop1] = useState(200_000)
-  const [lbRewardTop2, setLbRewardTop2] = useState(100_000)
+  const [lbRewardTop1, setLbRewardTop1] = useState(100_000)
+  const [lbRewardTop2, setLbRewardTop2] = useState(50_000)
   const [lbLoading, setLbLoading] = useState(true)
   const [lbView, setLbView] = useState<ClanLbView>('top_treasury')
   const [activeTab, setActiveTab] = useState<ClanPageTab>('browse')
@@ -1187,7 +1187,7 @@ export function Clan() {
                 <h3 className="clan-how-block-title">Daily income &amp; rewards</h3>
                 <ul className="clan-how-list">
                   <li>
-                    <strong>{fmt(50_000)} CD × members</strong> credited to treasury daily at 00:00 Asia/Ho_Chi_Minh.
+                    <strong>{fmt(25_000)} CD × members</strong> credited to treasury daily at 00:00 Asia/Ho_Chi_Minh.
                   </li>
                   <li>
                     <strong>#1 on each leaderboard</strong> earns {fmt(lbRewardTop1)} CD/day; <strong>#2</strong> earns{' '}
