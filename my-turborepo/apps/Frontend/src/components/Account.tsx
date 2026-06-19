@@ -1,3 +1,4 @@
+import { displayInventoryItemName } from '../inventoryLabels'
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import {
@@ -230,20 +231,7 @@ export function Account() {
     3: 1,
   }
 
-  const displayItemName = (key: string): string => {
-    const map: Record<string, string> = {
-      exp_candy_xl: 'EXP Candy XL',
-      ancient_origin_ball: 'Ancient Origin Ball',
-      master_ball: 'Master Ball',
-      gold_bottle_cap: 'Gold Bottle Cap',
-    }
-    if (map[key]) return map[key]
-    return key
-      .split('_')
-      .filter(Boolean)
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(' ')
-  }
+  const displayItemName = displayInventoryItemName
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -377,11 +365,12 @@ export function Account() {
   }, [daily?.timeZone])
 
   const pvpLeaderboardPreview = useMemo(() => {
-    const rk = userPvpRank?.rank ?? null
+    const isRanked = userPvpRank?.status === 'ranked' && userPvpRank.rank != null
+    const rk = isRanked ? userPvpRank.rank : null
     const inTop3 = rk != null && rk >= 1 && rk <= 3
     const cobble = rk != null ? PVP_DAILY_REWARD_BY_RANK[rk] ?? 0 : 0
     const tickets = rk != null ? PVP_DAILY_TICKETS_BY_RANK[rk] ?? 0 : 0
-    return { rk, inTop3, cobble, tickets }
+    return { rk, inTop3, cobble, tickets, isRanked }
   }, [userPvpRank])
 
   const rewardsBreakdown = useMemo(() => {
@@ -759,7 +748,7 @@ export function Account() {
                 accent="amber"
                 label="Your rank"
                 value={
-                  userPvpRank?.rank != null ? (
+                  pvpLeaderboardPreview.isRanked && userPvpRank?.rank != null ? (
                     <span className="inline-flex flex-wrap items-center justify-center gap-1.5">
                       #{userPvpRank.rank}
                       {userPvpRank.tier ? (
@@ -1252,13 +1241,17 @@ export function Account() {
             Premium and partner ranks are not available for direct purchase. Submit a request for staff review.
           </p>
           <div className="mb-4 space-y-3">
-            {(roleCat?.grantOnly ?? []).map((g) => (
-              <div
+            {(roleCat?.grantOnly ?? []).map((g) => {
+              const isSelected = grantRolePick === g.key
+              return (
+              <button
                 key={g.key}
-                className={`flex flex-col gap-3 rounded-lg border px-3 py-3 sm:px-4 transition-colors ${
-                  grantRolePick === g.key
-                    ? 'border-emerald-500/55 bg-emerald-950/15'
-                    : 'border-border/70 bg-[#0a0f18]/40 hover:border-border'
+                type="button"
+                onClick={() => setGrantRolePick(g.key)}
+                className={`w-full text-left flex flex-col gap-3 rounded-xl border px-3 py-3 sm:px-4 transition-[border-color,background,box-shadow] duration-150 ${
+                  isSelected
+                    ? 'border-emerald-500/55 bg-emerald-950/20 ring-2 ring-emerald-500/25'
+                    : 'border-border/70 bg-[#0a0f18]/40 hover:border-emerald-500/30 hover:bg-[#0a0f18]/70'
                 }`}
               >
                 <div className="flex flex-row items-start justify-between gap-3">
@@ -1273,75 +1266,116 @@ export function Account() {
                       </p>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setGrantRolePick(g.key)}
-                    className={`shrink-0 self-start px-3 py-2 text-xs rounded-md border text-[#e2e8f0] ${
-                      grantRolePick === g.key
-                        ? 'border-emerald-500/70 bg-emerald-950/30'
-                        : 'border-border bg-[#0f172a] hover:bg-[#1e293b]'
+                  <span
+                    className={`shrink-0 self-start px-3 py-1.5 text-xs font-semibold rounded-full border ${
+                      isSelected
+                        ? 'border-emerald-400/60 bg-emerald-500/15 text-emerald-200'
+                        : 'border-border/80 bg-[#0f172a]/80 text-muted'
                     }`}
                   >
-                    {grantRolePick === g.key ? 'Selected' : 'Select'}
-                  </button>
+                    {isSelected ? 'Selected' : 'Select'}
+                  </span>
                 </div>
                 <div className="w-full border-t border-border/45 pt-3">
                   <RolePerksSummary perks={g.perks} />
                 </div>
-              </div>
-            ))}
+              </button>
+              )
+            })}
           </div>
-          <div className="mb-6 pixel-well p-4 space-y-3">
-            {roleStatus?.pending ? (
-              <p className="text-sm text-amber-200 m-0">
-                Pending approval: <strong>{roleStatus.pending.requested_role}</strong> (sent{' '}
-                {new Date(roleStatus.pending.created_at).toLocaleString()})
+          <div className="mb-6 rounded-xl border border-emerald-500/20 bg-gradient-to-b from-emerald-950/15 via-[#0a0f18]/50 to-[#0a0f18]/80 p-5 sm:p-6 space-y-4">
+            <div>
+              <h3 className="text-sm font-semibold text-[#e2e8f0] m-0">Submit your request</h3>
+              <p className="text-xs text-muted m-0 mt-1 leading-relaxed">
+                One pending request at a time. Include links or context so staff can review faster.
               </p>
+            </div>
+            {roleStatus?.pending ? (
+              <div
+                className="rounded-lg border border-amber-500/35 bg-amber-950/25 px-4 py-3"
+                role="status"
+              >
+                <p className="text-xs font-semibold uppercase tracking-wide text-amber-200/90 m-0 mb-1">
+                  Pending approval
+                </p>
+                <p className="text-sm text-[#e2e8f0] m-0">
+                  <strong className="text-amber-100">{roleStatus.pending.requested_role}</strong>
+                  <span className="text-muted"> · sent {new Date(roleStatus.pending.created_at).toLocaleString()}</span>
+                </p>
+              </div>
             ) : (
-              <form onSubmit={handleSubmitGrant} className="space-y-2">
-                <label className="block text-sm text-[#e2e8f0]">
-                  Selected rank
+              <form onSubmit={handleSubmitGrant} className="space-y-4">
+                <div className="rounded-lg border border-white/[0.07] bg-slate-950/45 px-4 py-3 space-y-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted m-0">Selected rank</p>
+                  {grantRolePick ? (
+                    <div className="flex flex-wrap items-center gap-3">
+                      <RoleBadge roleKey={grantRolePick} />
+                      <span className="text-sm font-semibold text-[#e2e8f0]">
+                        {(roleCat?.grantOnly ?? []).find((g) => g.key === grantRolePick)?.label ?? grantRolePick}
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-amber-200/85 m-0">Choose a rank from the list above first.</p>
+                  )}
                   <CustomSelect
+                    id="grant-role-pick"
                     value={grantRolePick}
                     onChange={(v) => setGrantRolePick(v)}
-                    options={[
-                      { value: '', label: '- Pick from the list above or here -' },
-                      ...(roleCat?.grantOnly ?? []).map((g) => ({
-                        value: g.key,
-                        label: `${g.label} (${g.key})`,
-                      })),
-                    ]}
-                    className="mt-1"
-                    buttonClassName="block w-full rounded border border-border bg-[#0f172a] px-2 py-2 text-base text-[#e2e8f0]"
+                    placeholder="Pick a rank…"
+                    options={(roleCat?.grantOnly ?? []).map((g) => ({
+                      value: g.key,
+                      label: g.label,
+                    }))}
                   />
-                </label>
-                <label className="block text-sm text-[#e2e8f0]">
-                  Message (optional)
+                </div>
+                <div>
+                  <label htmlFor="grant-req-msg" className="block text-[10px] font-semibold uppercase tracking-wide text-muted mb-1.5">
+                    Message <span className="normal-case font-normal text-muted/80">(optional)</span>
+                  </label>
                   <textarea
+                    id="grant-req-msg"
                     value={grantMessage}
                     onChange={(e) => setGrantMessage(e.target.value)}
-                    rows={2}
-                    className="mt-1 block w-full rounded border border-border bg-[#0f172a] px-2 py-2 text-base text-[#e2e8f0]"
-                    placeholder="e.g. TikTok link / why you need this rank..."
+                    rows={3}
+                    maxLength={2000}
+                    className="w-full px-3 py-2.5 rounded-lg bg-[#08080f] border border-border/80 text-[#e2e8f0] text-sm leading-relaxed placeholder:text-muted/70 focus:outline-none focus:border-cyan-400/50 focus:ring-2 focus:ring-cyan-400/15 resize-y min-h-[5rem]"
+                    placeholder="e.g. TikTok / YouTube link, follower count, why you need this rank…"
                   />
-                </label>
+                </div>
                 <button
                   type="submit"
                   disabled={grantSubmitting || !grantRolePick || Boolean(roleStatus?.pending)}
-                  className="py-2 px-4 pixel-btn-primary disabled:opacity-50"
+                  className="w-full sm:w-auto min-w-[10rem] py-2.5 px-5 pixel-btn-primary disabled:opacity-50 text-base font-semibold"
                 >
-                  {grantSubmitting ? 'Sending...' : 'Submit request'}
+                  {grantSubmitting ? 'Sending…' : 'Submit request'}
                 </button>
               </form>
             )}
             {roleStatus?.lastResolved ? (
-              <p className="text-xs text-muted m-0 border-t border-border/60 pt-2">
-                Latest: {roleStatus.lastResolved.status} - {roleStatus.lastResolved.requested_role}
-                {roleStatus.lastResolved.resolved_at
-                  ? `  |  ${new Date(roleStatus.lastResolved.resolved_at).toLocaleString()}`
-                  : ''}
-                {roleStatus.lastResolved.admin_note ? ` - Note: ${roleStatus.lastResolved.admin_note}` : ''}
-              </p>
+              <div className="rounded-lg border border-border/60 bg-[#0f172a]/40 px-4 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted m-0 mb-1">Latest request</p>
+                <p className="text-xs text-[#e2e8f0]/90 m-0 leading-relaxed">
+                  <span
+                    className={
+                      roleStatus.lastResolved.status === 'approved'
+                        ? 'text-emerald-300 font-semibold'
+                        : roleStatus.lastResolved.status === 'rejected'
+                          ? 'text-red-300 font-semibold'
+                          : 'text-muted font-semibold'
+                    }
+                  >
+                    {roleStatus.lastResolved.status}
+                  </span>
+                  {' · '}
+                  {roleStatus.lastResolved.requested_role}
+                  {roleStatus.lastResolved.resolved_at
+                    ? ` · ${new Date(roleStatus.lastResolved.resolved_at).toLocaleString()}`
+                    : ''}
+                  {roleStatus.lastResolved.admin_note ? (
+                    <span className="block mt-1.5 text-muted">Note: {roleStatus.lastResolved.admin_note}</span>
+                  ) : null}
+                </p>
+              </div>
             ) : null}
           </div>
 

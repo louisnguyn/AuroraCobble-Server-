@@ -320,9 +320,14 @@ function normalizeName(s: string): string {
 async function syncWebsitePvpRanksFromLeaderboard(payload: unknown): Promise<void> {
   if (!supabase) return;
   const rows = rankedPvpRowsForWebsiteRewards(payload);
-  if (!rows.length) return;
   const { data: users, error: usersErr } = await supabase.from("users").select("id, username");
   if (usersErr || !users?.length) return;
+
+  if (!rows.length) {
+    await supabase.from("user_pvp_ranks").delete().neq("user_id", 0);
+    return;
+  }
+
   const byUsername = new Map<string, { id: number }>();
   for (const u of users as { id: number; username: string }[]) {
     byUsername.set(normalizeName(u.username), { id: u.id });
@@ -338,6 +343,7 @@ async function syncWebsitePvpRanksFromLeaderboard(payload: unknown): Promise<voi
         format_key: r.formatKey,
         rank_position: r.rank,
         elo: r.elo,
+        matches_played: r.matches ?? 0,
         source_updated_at: now,
         updated_at: now,
       };
@@ -348,11 +354,32 @@ async function syncWebsitePvpRanksFromLeaderboard(payload: unknown): Promise<voi
     format_key: string;
     rank_position: number;
     elo: number | null;
+    matches_played: number;
     source_updated_at: string;
     updated_at: string;
   }>;
-  if (!upserts.length) return;
-  await supabase.from("user_pvp_ranks").upsert(upserts, { onConflict: "user_id" });
+  if (!upserts.length) {
+    await supabase.from("user_pvp_ranks").delete().neq("user_id", 0);
+    return;
+  }
+  let upsertErr = (await supabase.from("user_pvp_ranks").upsert(upserts, { onConflict: "user_id" })).error;
+  if (upsertErr && /matches_played|schema cache/i.test(upsertErr.message)) {
+    upsertErr = (
+      await supabase.from("user_pvp_ranks").upsert(
+        upserts.map(({ matches_played: _m, ...rest }) => rest),
+        { onConflict: "user_id" }
+      )
+    ).error;
+  }
+  if (upsertErr) {
+    console.warn("[pvp-rank] sync upsert:", upsertErr.message);
+    return;
+  }
+  const rankedUserIds = upserts.map((u) => u.user_id);
+  const staleIds = (users as { id: number }[]).map((u) => u.id).filter((id) => !rankedUserIds.includes(id));
+  if (staleIds.length) {
+    await supabase.from("user_pvp_ranks").delete().in("user_id", staleIds);
+  }
 }
 
 async function notifyDiscordPull(
@@ -3067,18 +3094,25 @@ app.get("/user/pvp-rank", requireAuth, async (_req, res) => {
   if (hasLive) {
     const snap = livePvpSnapFromLeaderboardForWebsiteUser(lb, user.username ?? "");
     if (snap != null) {
-      await supabase.from("user_pvp_ranks").upsert(
-        {
-          user_id: user.userId,
-          minecraft_username: snap.ladderPlayerName,
-          format_key: snap.formatKey,
-          rank_position: snap.rank,
-          elo: snap.elo,
-          source_updated_at: now,
-          updated_at: now,
-        },
-        { onConflict: "user_id" }
-      );
+      const rankRow = {
+        user_id: user.userId,
+        minecraft_username: snap.ladderPlayerName,
+        format_key: snap.formatKey,
+        rank_position: snap.rank,
+        elo: snap.elo,
+        matches_played: snap.matches,
+        source_updated_at: now,
+        updated_at: now,
+      };
+      let upsertErr = (await supabase.from("user_pvp_ranks").upsert(rankRow, { onConflict: "user_id" })).error;
+      if (upsertErr && /matches_played|schema cache/i.test(upsertErr.message)) {
+        const { matches_played: _m, ...withoutMatches } = rankRow;
+        upsertErr = (await supabase.from("user_pvp_ranks").upsert(withoutMatches, { onConflict: "user_id" })).error;
+      }
+      if (upsertErr) {
+        res.status(500).json({ error: upsertErr.message });
+        return;
+      }
       res.json({
         rank: snap.rank,
         status: "ranked",
@@ -3091,32 +3125,60 @@ app.get("/user/pvp-rank", requireAuth, async (_req, res) => {
       return;
     }
 
-    res.json({ rank: null, status: "unranked" });
+    await supabase.from("user_pvp_ranks").delete().eq("user_id", user.userId);
+    res.json({ rank: null, status: "unranked", elo: null, tier: null });
     return;
   }
 
-  const { data, error } = await supabase
-    .from("user_pvp_ranks")
-    .select("rank_position, minecraft_username, format_key, elo, source_updated_at")
-    .eq("user_id", user.userId)
-    .maybeSingle();
-  const missingRankTable = Boolean(
-    error && /user_pvp_ranks|relation|does not exist|schema cache/i.test(error.message)
-  );
-  if (error && !missingRankTable) {
-    res.status(500).json({ error: error.message });
-    return;
-  }
-  const row = data as
-    | {
-        rank_position: number;
-        minecraft_username: string;
-        format_key: string;
-        elo: number | null;
-        source_updated_at: string;
+  type UserPvpRankRow = {
+    rank_position: number;
+    minecraft_username: string;
+    format_key: string;
+    elo: number | null;
+    matches_played?: number | null;
+    source_updated_at: string;
+  };
+  let row: UserPvpRankRow | null = null;
+  {
+    const { data, error } = await supabase
+      .from("user_pvp_ranks")
+      .select("rank_position, minecraft_username, format_key, elo, matches_played, source_updated_at")
+      .eq("user_id", user.userId)
+      .maybeSingle();
+    const missingRankTable = Boolean(
+      error && /user_pvp_ranks|relation|does not exist|schema cache/i.test(error.message)
+    );
+    if (error && !missingRankTable && !/matches_played|schema cache/i.test(error.message)) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+    if (!error) row = data as UserPvpRankRow | null;
+    else if (/matches_played|schema cache/i.test(error.message)) {
+      const fallback = await supabase
+        .from("user_pvp_ranks")
+        .select("rank_position, minecraft_username, format_key, elo, source_updated_at")
+        .eq("user_id", user.userId)
+        .maybeSingle();
+      if (fallback.error && !/user_pvp_ranks|relation|does not exist|schema cache/i.test(fallback.error.message)) {
+        res.status(500).json({ error: fallback.error.message });
+        return;
       }
-    | null;
+      row = fallback.data as UserPvpRankRow | null;
+    }
+  }
   if (row) {
+    const matchesPlayed =
+      typeof row.matches_played === "number" && Number.isFinite(row.matches_played)
+        ? Math.max(0, Math.trunc(row.matches_played))
+        : null;
+    if (matchesPlayed != null && matchesPlayed <= 0) {
+      res.json({ rank: null, status: "unranked", elo: null, tier: null });
+      return;
+    }
+    if (matchesPlayed == null && row.elo === 1000) {
+      res.json({ rank: null, status: "unranked", elo: null, tier: null });
+      return;
+    }
     res.json({
       rank: row.rank_position,
       status: "ranked",
@@ -3129,7 +3191,7 @@ app.get("/user/pvp-rank", requireAuth, async (_req, res) => {
     return;
   }
 
-  res.json({ rank: null, status: "unranked" });
+  res.json({ rank: null, status: "unranked", elo: null, tier: null });
 });
 
 function rankedPayloadInvolvesUsername(payload: unknown, username: string): boolean {
@@ -3231,9 +3293,9 @@ const DAILY_STREAK_REWARDS = [
 ] as const;
 const SHOP_ITEMS = [
   { itemKey: "exp_candy_xl", label: "EXP Candy XL", cost: 70_000 },
-  { itemKey: "ancient_origin_ball", label: "Ancient Origin Ball", cost: 1_000_000 },
-  { itemKey: "master_ball", label: "Master Ball", cost: 500_000 },
-  { itemKey: "gold_bottle_cap", label: "Gold Bottle Cap", cost: 11_000_000 },
+  { itemKey: "silver_bottle_cap", label: "Silver Bottle Cap", cost: 500_000 },
+  { itemKey: "master_ball", label: "Master Ball", cost: 1_000_000 },
+  { itemKey: "ancient_origin_ball", label: "Ancient Origin Ball", cost: 1_250_000 },
 ] as const;
 
 const BATTLEPASS_SHOP_ITEMS = [
@@ -3505,21 +3567,46 @@ function buildPokemonShopOffers(windowStartIso: string) {
 
 const INVENTORY_ITEM_DEFS = [
   { key: "exp_candy_xl", label: "EXP Candy XL", itemId: "cobblemon:exp_candy_xl" },
-  { key: "ancient_origin_ball", label: "Ancient Origin Ball", itemId: "cobblemon:ancient_origin_ball" },
+  { key: "silver_bottle_cap", label: "Silver Bottle Cap", itemId: "obc:bottle_cap" },
   { key: "master_ball", label: "Master Ball", itemId: "cobblemon:master_ball" },
-  // Website key is gold_bottle_cap; mod registry id is bottle_cap_gold (not obc:gold_bottle_cap).
-  { key: "gold_bottle_cap", label: "Gold Bottle Cap", itemId: "obc:bottle_cap_gold" },
+  { key: "ancient_origin_ball", label: "Ancient Origin Ball", itemId: "cobblemon:ancient_origin_ball" },
 ] as const;
 const INVENTORY_CLAIM_COMMAND_TEMPLATE =
   process.env.INVENTORY_CLAIM_COMMAND_TEMPLATE?.trim() ||
   "give {player} {item_id} {amount}";
 
-function inventoryItemDef(itemKey: string) {
-  return INVENTORY_ITEM_DEFS.find((it) => it.key === itemKey);
-}
-
 function normalizeInventoryKey(itemKey: string): string {
   return itemKey.trim().toLowerCase();
+}
+
+/** Legacy website keys → current catalog (gold bottle cap → silver). */
+function canonicalInventoryKey(itemKey: string): string {
+  const k = normalizeInventoryKey(itemKey);
+  if (k === "gold_bottle_cap") return "silver_bottle_cap";
+  return k;
+}
+
+function inventoryItemDef(itemKey: string) {
+  return INVENTORY_ITEM_DEFS.find((it) => it.key === canonicalInventoryKey(itemKey));
+}
+
+async function findUserInventoryRow(
+  userId: number,
+  itemKey: string
+): Promise<{ id: number; quantity: number; item_key: string } | null> {
+  if (!supabase) return null;
+  const key = canonicalInventoryKey(itemKey);
+  const candidates = key === "silver_bottle_cap" ? ["silver_bottle_cap", "gold_bottle_cap"] : [key];
+  for (const k of candidates) {
+    const { data } = await supabase
+      .from("user_inventory")
+      .select("id, quantity, item_key")
+      .eq("user_id", userId)
+      .eq("item_key", k)
+      .maybeSingle();
+    if (data) return data as { id: number; quantity: number; item_key: string };
+  }
+  return null;
 }
 
 function localDateOnly(d: Date, timeZone: string): string {
@@ -3682,20 +3769,15 @@ async function incrementUserInventory(
   amount: number
 ): Promise<number> {
   if (!supabase) throw new Error("Database not configured");
-  const key = normalizeInventoryKey(itemKey);
-  const { data: row } = await supabase
-    .from("user_inventory")
-    .select("id, quantity")
-    .eq("user_id", userId)
-    .eq("item_key", key)
-    .maybeSingle();
+  const key = canonicalInventoryKey(itemKey);
+  const row = await findUserInventoryRow(userId, key);
   const now = new Date().toISOString();
   if (row) {
-    const newQty = (row as { quantity: number }).quantity + amount;
+    const newQty = row.quantity + amount;
     const { error } = await supabase
       .from("user_inventory")
       .update({ quantity: newQty, updated_at: now })
-      .eq("id", (row as { id: number }).id);
+      .eq("id", row.id);
     if (error) throw new Error(error.message);
     return newQty;
   }
@@ -4038,7 +4120,7 @@ app.get("/user/inventory", requireAuth, async (_req, res) => {
   const rows = (data ?? []) as { item_key: string; quantity: number }[];
   const merged = new Map<string, number>();
   for (const r of rows) {
-    const key = normalizeInventoryKey(r.item_key);
+    const key = canonicalInventoryKey(r.item_key);
     merged.set(key, (merged.get(key) ?? 0) + (Number(r.quantity) || 0));
   }
   res.json({
@@ -4059,7 +4141,7 @@ app.post("/user/inventory/claim", requireAuth, async (req, res) => {
     return;
   }
   const itemKeyRaw = typeof req.body?.itemKey === "string" ? req.body.itemKey.trim() : "";
-  const itemKey = normalizeInventoryKey(itemKeyRaw);
+  const itemKey = canonicalInventoryKey(itemKeyRaw);
   const qtyRaw = req.body?.quantity;
   const quantity = Number.isFinite(Number(qtyRaw)) ? Math.floor(Number(qtyRaw)) : 1;
   if (quantity < 1 || quantity > 999) {
@@ -4077,15 +4159,7 @@ app.post("/user/inventory/claim", requireAuth, async (req, res) => {
     return;
   }
 
-  let row =
-    (
-      await supabase
-        .from("user_inventory")
-        .select("id, quantity, item_key")
-        .eq("user_id", user.userId)
-        .eq("item_key", itemKey)
-        .maybeSingle()
-    ).data as { id: number; quantity: number; item_key: string } | null;
+  let row = await findUserInventoryRow(user.userId, itemKey);
 
   if (!row) {
     res.status(400).json({ error: "Not enough quantity in inventory" });

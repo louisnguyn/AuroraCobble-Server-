@@ -135,16 +135,41 @@ export async function fetchPublicProfileByUsername(
       formatKey = null;
     }
   } else {
-    const { data: pv } = await supabase
+    type PvRow = {
+      rank_position?: number | null;
+      elo?: number | null;
+      format_key?: string | null;
+      matches_played?: number | null;
+    };
+    let pv: PvRow | null = null;
+    const primary = await supabase
       .from("user_pvp_ranks")
-      .select("rank_position, elo, format_key")
+      .select("rank_position, elo, format_key, matches_played")
       .eq("user_id", uid)
       .maybeSingle();
+    if (!primary.error) pv = primary.data as PvRow | null;
+    else if (/matches_played|schema cache/i.test(primary.error.message)) {
+      const fallback = await supabase
+        .from("user_pvp_ranks")
+        .select("rank_position, elo, format_key")
+        .eq("user_id", uid)
+        .maybeSingle();
+      if (!fallback.error) pv = fallback.data as PvRow | null;
+    }
     if (pv) {
-      const pr = pv as { rank_position?: number | null; elo?: number | null; format_key?: string | null };
-      rank = typeof pr.rank_position === "number" ? pr.rank_position : null;
-      elo = typeof pr.elo === "number" ? pr.elo : null;
-      formatKey = typeof pr.format_key === "string" ? pr.format_key : null;
+      const pr = pv;
+      const matches =
+        typeof pr.matches_played === "number" && Number.isFinite(pr.matches_played)
+          ? Math.max(0, Math.trunc(pr.matches_played))
+          : null;
+      const eloVal = typeof pr.elo === "number" ? pr.elo : null;
+      const staleUnranked =
+        (matches != null && matches <= 0) || (matches == null && eloVal === 1000);
+      if (!staleUnranked) {
+        rank = typeof pr.rank_position === "number" ? pr.rank_position : null;
+        elo = eloVal;
+        formatKey = typeof pr.format_key === "string" ? pr.format_key : null;
+      }
     }
   }
 

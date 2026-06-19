@@ -15,6 +15,15 @@ export function normalizePvpIgName(s: string): string {
   return s.trim().toLowerCase();
 }
 
+function readNumericField(v: unknown): number | undefined {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim() !== "") {
+    const n = parseInt(v.trim(), 10);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  return undefined;
+}
+
 /** Match count from API player/entry (`matches` is what the public leaderboard uses). */
 function readLeaderboardMatches(p: Record<string, unknown>): number | undefined {
   const raw =
@@ -27,12 +36,21 @@ function readLeaderboardMatches(p: Record<string, unknown>): number | undefined 
     p.matches_played ??
     p.matchesPlayed ??
     p.games;
-  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
-  if (typeof raw === "string" && raw.trim() !== "") {
-    const n = parseInt(raw.trim(), 10);
-    return Number.isFinite(n) ? n : undefined;
-  }
+  const direct = readNumericField(raw);
+  if (direct != null) return direct;
+  const wins = readNumericField(p.wins ?? p.win ?? p.w ?? p.victories);
+  const losses = readNumericField(p.losses ?? p.loss ?? p.l ?? p.defeats);
+  if (wins != null || losses != null) return Math.max(0, (wins ?? 0) + (losses ?? 0));
   return undefined;
+}
+
+export function normalizePvpMatchCount(matches: number | undefined): number {
+  return typeof matches === "number" && Number.isFinite(matches) ? Math.max(0, Math.trunc(matches)) : 0;
+}
+
+/** Ranked ladder row = at least one completed match (0 matches / unset = unranked). */
+export function isPvpLadderRowRanked(row: Pick<PvpLeaderboardRow, "matches">): boolean {
+  return normalizePvpMatchCount(row.matches) > 0;
 }
 
 function mapRawPlayersToPvpRows(players: unknown[], formatKey: string): PvpLeaderboardRow[] {
@@ -126,10 +144,24 @@ export function extractPvpRowsFromLeaderboardPayload(
 
 /** Same ordering as public Leaderboard.tsx: exclude never-played (`matches <= 0` or unset), then re-rank #1–#n. */
 export function filterPvpRowsWithPlayedMatchesAndRerank(rows: PvpLeaderboardRow[]): PvpLeaderboardRow[] {
-  const played = rows
-    .filter((r) => typeof r.matches === "number" && Number.isFinite(r.matches) && r.matches > 0)
-    .sort((a, b) => a.rank - b.rank);
+  const played = rows.filter(isPvpLadderRowRanked).sort((a, b) => a.rank - b.rank);
   return played.map((r, i) => ({ ...r, rank: i + 1 }));
+}
+
+/** Raw ladder row for a website IGN (before matches filter), singles then doubles. */
+export function rawPvpRowForWebsiteUser(
+  payload: unknown,
+  ign: string,
+  options?: { preferredFormat?: "singles" | "doubles" }
+): PvpLeaderboardRow | null {
+  const want = normalizePvpIgName(ign);
+  if (!want) return null;
+  for (const pref of ["singles", "doubles"] as const) {
+    const rows = extractPvpRowsFromLeaderboardPayload(payload, { preferredFormat: pref });
+    const mine = rows.find((r) => normalizePvpIgName(r.playerName) === want);
+    if (mine) return mine;
+  }
+  return null;
 }
 
 export function rankedPvpRowsForWebsiteRewards(
@@ -159,12 +191,12 @@ export function leaderboardPayloadHasSyncedData(payload: unknown): boolean {
 export const UNRANKED_ELO_DEFAULT = 1000;
 
 /**
- * Highest ELO across singles and doubles for a website IGN on the live ladder.
- * Returns {@link UNRANKED_ELO_DEFAULT} when not ranked in either format.
+ * Highest ELO across singles and doubles for a ranked website IGN on the live ladder.
+ * Returns null when the player has no ranked matches (0 matches / not on ladder).
  */
-export function bestEloForWebsiteUserFromLeaderboard(payload: unknown, ign: string): number {
+export function bestEloForWebsiteUserFromLeaderboard(payload: unknown, ign: string): number | null {
   const want = normalizePvpIgName(ign);
-  if (!want) return UNRANKED_ELO_DEFAULT;
+  if (!want) return null;
   let best: number | null = null;
   for (const pref of ["singles", "doubles"] as const) {
     const rows = rankedPvpRowsForWebsiteRewards(payload, pref);
@@ -174,7 +206,12 @@ export function bestEloForWebsiteUserFromLeaderboard(payload: unknown, ign: stri
       best = best == null ? e : Math.max(best, e);
     }
   }
-  return best ?? UNRANKED_ELO_DEFAULT;
+  return best;
+}
+
+/** Display / fallback ELO when unranked (starting rating before any match). */
+export function displayEloForWebsiteUserFromLeaderboard(payload: unknown, ign: string): number {
+  return bestEloForWebsiteUserFromLeaderboard(payload, ign) ?? UNRANKED_ELO_DEFAULT;
 }
 
 /**
@@ -185,6 +222,7 @@ export function livePvpSnapFromLeaderboardForWebsiteUser(payload: unknown, ign: 
   rank: number;
   elo: number | null;
   formatKey: string;
+  matches: number;
   /** Name as it appears on the CobbleRanked ladder (casing may differ from website username). */
   ladderPlayerName: string;
 } | null {
@@ -193,13 +231,17 @@ export function livePvpSnapFromLeaderboardForWebsiteUser(payload: unknown, ign: 
   for (const pref of ["singles", "doubles"] as const) {
     const rows = rankedPvpRowsForWebsiteRewards(payload, pref);
     const mine = rows.find((r) => normalizePvpIgName(r.playerName) === want);
-    if (mine)
+    if (mine && isPvpLadderRowRanked(mine)) {
+      const raw = rawPvpRowForWebsiteUser(payload, ign, { preferredFormat: pref });
+      if (raw && !isPvpLadderRowRanked(raw)) return null;
       return {
         rank: mine.rank,
         elo: mine.elo,
         formatKey: mine.formatKey,
+        matches: normalizePvpMatchCount(mine.matches),
         ladderPlayerName: mine.playerName,
       };
+    }
   }
   return null;
 }

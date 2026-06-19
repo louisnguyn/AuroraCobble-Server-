@@ -1,3 +1,4 @@
+import { formatWalletLedgerDetail } from '../inventoryLabels'
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import {
@@ -285,7 +286,7 @@ export function CobbleWebsiteWallet({ onBalanceUpdated }: { onBalanceUpdated?: (
                       </div>
                       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 mt-1 text-muted">
                         <span className="truncate" title={tx.detail ?? undefined}>
-                          {tx.detail || '—'}
+                          {formatWalletLedgerDetail(tx.detail)}
                         </span>
                         <span className="tabular-nums shrink-0 text-[#fbbf24]/90">
                           Bal. {Number(tx.balance_after).toLocaleString()}
@@ -340,7 +341,7 @@ export function CobbleWebsiteWallet({ onBalanceUpdated }: { onBalanceUpdated?: (
                       </div>
                       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 mt-1 text-muted">
                         <span className="truncate" title={tx.detail ?? undefined}>
-                          {tx.detail || '—'}
+                          {formatWalletLedgerDetail(tx.detail)}
                         </span>
                         <span className="tabular-nums shrink-0 text-sky-200/85">
                           Bal. {Number(tx.balance_after).toLocaleString()}

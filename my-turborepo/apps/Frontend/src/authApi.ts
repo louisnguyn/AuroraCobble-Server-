@@ -1016,8 +1016,8 @@ export interface ClanMemberRow {
   role: string
   donated_total: number
   joined_at: string
-  /** Highest singles/doubles ELO from live ladder, or 1000 if unranked. */
-  elo: number
+  /** Highest singles/doubles ELO from live ladder; null if unranked (0 matches). */
+  elo: number | null
 }
 
 export interface ClanLeaderboardEntry {

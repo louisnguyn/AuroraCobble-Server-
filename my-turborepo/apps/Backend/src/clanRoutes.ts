@@ -5,7 +5,6 @@ import { uploadClanAvatarToStorage } from "./clanAvatarUpload.js";
 import {
   bestEloForWebsiteUserFromLeaderboard,
   leaderboardPayloadHasSyncedData,
-  UNRANKED_ELO_DEFAULT,
 } from "./leaderboardPvpDerived.js";
 import {
   CLAN_ABSOLUTE_MAX_MEMBERS,
@@ -342,17 +341,37 @@ async function loadDbElosForUserIds(userIds: number[]): Promise<Map<number, numb
   const out = new Map<number, number | null>();
   if (!supabase || userIds.length === 0) return out;
   const unique = [...new Set(userIds)];
-  const { data, error } = await supabase
+  let rows: Array<{ user_id: number; elo: number | null; matches_played?: number | null }> = [];
+  const primary = await supabase
     .from("user_pvp_ranks")
-    .select("user_id, elo")
+    .select("user_id, elo, matches_played")
     .in("user_id", unique);
-  if (error) {
-    console.warn("[clans] load elos:", error.message);
+  if (!primary.error) rows = (primary.data ?? []) as typeof rows;
+  else if (/matches_played|schema cache/i.test(primary.error.message)) {
+    const fallback = await supabase.from("user_pvp_ranks").select("user_id, elo").in("user_id", unique);
+    if (fallback.error) {
+      console.warn("[clans] load elos:", fallback.error.message);
+      return out;
+    }
+    rows = (fallback.data ?? []) as typeof rows;
+  } else {
+    console.warn("[clans] load elos:", primary.error.message);
     return out;
   }
-  for (const row of data ?? []) {
-    const r = row as { user_id: number; elo: number | null };
+  for (const r of rows) {
     const elo = r.elo != null && Number.isFinite(r.elo) ? Math.trunc(r.elo) : null;
+    const matches =
+      typeof r.matches_played === "number" && Number.isFinite(r.matches_played)
+        ? Math.max(0, Math.trunc(r.matches_played))
+        : null;
+    if (matches != null && matches <= 0) {
+      out.set(r.user_id, null);
+      continue;
+    }
+    if (matches == null && elo === 1000) {
+      out.set(r.user_id, null);
+      continue;
+    }
     out.set(r.user_id, elo);
   }
   return out;
@@ -362,30 +381,31 @@ function resolveMemberElo(
   username: string,
   dbElo: number | null | undefined,
   liveLeaderboard: unknown | null | undefined
-): number {
+): number | null {
   if (liveLeaderboard && leaderboardPayloadHasSyncedData(liveLeaderboard)) {
     return bestEloForWebsiteUserFromLeaderboard(liveLeaderboard, username);
   }
   if (dbElo != null && Number.isFinite(dbElo)) return Math.trunc(dbElo);
-  return UNRANKED_ELO_DEFAULT;
+  return null;
 }
 
 async function loadElosForMembers(
   members: { user_id: number; username: string }[],
   getLiveLeaderboard?: () => unknown
-): Promise<Map<number, number>> {
+): Promise<Map<number, number | null>> {
   const live = getLiveLeaderboard?.() ?? null;
   const dbByUser = await loadDbElosForUserIds(members.map((m) => m.user_id));
-  const out = new Map<number, number>();
+  const out = new Map<number, number | null>();
   for (const m of members) {
     out.set(m.user_id, resolveMemberElo(m.username, dbByUser.get(m.user_id), live));
   }
   return out;
 }
 
-function totalEloFromMemberElos(elos: number[]): number | null {
-  if (elos.length === 0) return null;
-  return elos.reduce((a, b) => a + b, 0);
+function totalEloFromMemberElos(elos: Array<number | null>): number | null {
+  const ranked = elos.filter((e): e is number => e != null && Number.isFinite(e));
+  if (ranked.length === 0) return null;
+  return ranked.reduce((a, b) => a + b, 0);
 }
 
 async function loadTotalEloByClanIds(
@@ -416,7 +436,8 @@ async function loadTotalEloByClanIds(
   );
   const byClan = new Map<number, number[]>();
   for (const m of memberRows) {
-    const elo = eloByUser.get(m.user_id) ?? UNRANKED_ELO_DEFAULT;
+    const elo = eloByUser.get(m.user_id);
+    if (elo == null) continue;
     const arr = byClan.get(m.clan_id) ?? [];
     arr.push(elo);
     byClan.set(m.clan_id, arr);
@@ -438,7 +459,7 @@ async function loadClanMembers(
     role: string;
     donated_total: number;
     joined_at: string;
-    elo: number;
+    elo: number | null;
   }>
 > {
   if (!supabase) return [];
@@ -467,7 +488,7 @@ async function loadClanMembers(
       role: row.role,
       donated_total: row.donated_total,
       joined_at: row.joined_at,
-      elo: eloByUser.get(row.user_id) ?? UNRANKED_ELO_DEFAULT,
+      elo: eloByUser.get(row.user_id) ?? null,
     };
   });
 }
@@ -2074,7 +2095,7 @@ export function registerAdminClanRoutes(app: Express, deps: AdminClanDeps): void
 
     const members = await loadClanMembers(clanId, getLiveLeaderboard);
     const memberCount = members.length;
-    const totalElo = members.reduce((sum, m) => sum + m.elo, 0);
+    const totalElo = totalEloFromMemberElos(members.map((m) => m.elo));
 
     const { topTreasury, topTotalElo, topLevel } = await buildClanLeaderboards(getLiveLeaderboard, 50);
     const leaderboard_ranks = clanLeaderboardRanksForClan(clanId, topTreasury, topTotalElo, topLevel);
@@ -2122,7 +2143,10 @@ export function registerAdminClanRoutes(app: Express, deps: AdminClanDeps): void
         recent_donations_count: recent_donations.length,
         recent_disbursements_total: recent_disbursements.reduce((s, d) => s + d.amount, 0),
         pending_join_requests_count: pending_join_requests.length,
-        avg_member_elo: memberCount > 0 ? Math.round(totalElo / memberCount) : null,
+        avg_member_elo: (() => {
+          const ranked = members.map((m) => m.elo).filter((e): e is number => e != null);
+          return ranked.length > 0 ? Math.round(ranked.reduce((a, b) => a + b, 0) / ranked.length) : null;
+        })(),
       },
       leaderboard_rewards: leaderboardRewardsMeta(),
     });

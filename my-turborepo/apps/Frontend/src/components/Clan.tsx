@@ -1642,10 +1642,13 @@ export function Clan() {
                 .sort((a, b) => {
                   if (a.role === 'leader') return -1
                   if (b.role === 'leader') return 1
-                  return b.elo - a.elo
+                  const aElo = a.elo ?? -1
+                  const bElo = b.elo ?? -1
+                  return bElo - aElo
                 })
                 .map((m) => {
-                  const tier = getPvpTierFromElo(m.elo)
+                  const isRanked = m.elo != null
+                  const tier = isRanked ? getPvpTierFromElo(m.elo) : null
                   const isYou = user?.id === m.user_id
                   return (
                     <li
@@ -1665,8 +1668,16 @@ export function Clan() {
                       </div>
                       <div className="clan-member-side">
                         <span className="clan-member-elo inline-flex items-center gap-1.5">
-                          {fmt(m.elo)} ELO
-                          <PvPTierBadge slug={tier.slug} displayName={tier.displayName} imgHeightClass="h-5" />
+                          {isRanked ? (
+                            <>
+                              {fmt(m.elo!)} ELO
+                              {tier ? (
+                                <PvPTierBadge slug={tier.slug} displayName={tier.displayName} imgHeightClass="h-5" />
+                              ) : null}
+                            </>
+                          ) : (
+                            <span className="text-muted">Unranked</span>
+                          )}
                         </span>
                         <span className="clan-member-donated">{fmt(m.donated_total)} CD donated</span>
                       </div>
