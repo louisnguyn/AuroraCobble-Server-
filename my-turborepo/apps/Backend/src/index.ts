@@ -3310,7 +3310,7 @@ const BATTLEPASS_SHOP_ITEMS = [
   {
     itemKey: "battlepass_premium",
     label: "Battle Pass — Premium",
-    cost: 2_200_000,
+    cost: 1_650_000,
     battlePassKind: "premium" as const,
   },
 ] as const;
