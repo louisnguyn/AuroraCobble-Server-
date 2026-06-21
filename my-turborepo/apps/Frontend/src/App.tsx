@@ -7,6 +7,7 @@ import { Leaderboard } from './components/Leaderboard.tsx'
 import { Wiki } from './components/Wiki.tsx'
 import { Restrictions } from './components/Restrictions.tsx'
 import { Gacha } from './components/Gacha.tsx'
+import { Poker } from './components/Poker.tsx'
 import { AuthModal } from './components/AuthModal.tsx'
 import { Account } from './components/Account.tsx'
 import { Spawn } from './components/Spawn.tsx'
@@ -40,6 +41,7 @@ type Page =
   | 'wiki'
   | 'restrictions'
   | 'gacha'
+  | 'poker'
   | 'spawn'
   | 'account'
   | 'tournament'
@@ -56,6 +58,7 @@ const PAGES: { id: Page; label: string }[] = [
   { id: 'restrictions', label: 'Restrictions' },
   { id: 'teambuilder', label: 'Team Builder' },
   { id: 'gacha', label: 'Gacha' },
+  { id: 'poker', label: 'Pokémon Poker' },
   { id: 'spawn', label: 'Spawn' },
   { id: 'account', label: 'Account' },
   { id: 'profile', label: 'Profile' },
@@ -114,6 +117,13 @@ function NavIcon({ page }: { page: Page }) {
           <path d="M12 4v16M4 12h16" />
         </svg>
       )
+    case 'poker':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={cls}>
+          <rect x="4" y="6" width="14" height="18" rx="2" transform="rotate(-8 11 15)" />
+          <rect x="8" y="4" width="14" height="18" rx="2" transform="rotate(8 15 13)" />
+        </svg>
+      )
     case 'spawn':
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={cls}>
@@ -166,6 +176,10 @@ function AppContent() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [showAuth, setShowAuth] = useState(false)
   const { isAuthenticated, user, logout } = useAuth()
+  const canUsePoker = Boolean(user?.is_admin) || isAccountVerified(user)
+  const navPages = PAGES.filter(
+    ({ id }) => id !== 'poker' || (isAuthenticated && canUsePoker)
+  )
   const [hashProfileSlug, setHashProfileSlug] = useState<string | null>(() =>
     typeof window !== 'undefined' ? parseProfileSlugFromLocation() : null
   )
@@ -298,7 +312,7 @@ function AppContent() {
       >
         <p className="sidebar-section-label px-3 mb-2">User</p>
         <ul className="list-none m-0 p-0">
-          {PAGES.map(({ id, label }) => (
+          {navPages.map(({ id, label }) => (
             <li key={id} className="m-0 mb-1.5">
               <button
                 type="button"
@@ -329,6 +343,7 @@ function AppContent() {
           <TeamPasteViewPage onBack={() => goTo('teambuilder')} />
         )}
         {page === 'gacha' && <Gacha />}
+        {page === 'poker' && <Poker />}
         {page === 'spawn' && <Spawn />}
         {page === 'clan' && <Clan />}
         {page === 'account' && <Account />}

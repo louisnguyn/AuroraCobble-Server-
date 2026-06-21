@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import { createServer } from "http";
 import multer from "multer";
 import cron from "node-cron";
 import {
@@ -64,6 +65,7 @@ import {
 import { registerTournamentRoutes } from "./tournamentRoutes.js";
 import { registerTournamentPredictionRoutes } from "./tournamentPrediction.js";
 import { registerAdminClanRoutes, registerClanRoutes, startClanDailyIncomeScheduler } from "./clanRoutes.js";
+import { attachPokerWebSocket, registerPokerRoutes } from "./pokerRoutes.js";
 import { grantClanXpForDailyLoginClaim } from "./clanXp.js";
 import { registerBattleRestrictionsRoutes } from "./battleRestrictionsRoutes.js";
 import { analyzeTeamPokepaste } from "./teamAnalyzeAi.js";
@@ -7153,7 +7155,18 @@ registerAdminClanRoutes(app, {
   getLiveLeaderboard: () => cobbleStore.leaderboard,
 });
 
-app.listen(port, () => {
+registerPokerRoutes(app, { requireAuth });
+
+const httpServer = createServer(app);
+
+attachPokerWebSocket(httpServer, {
+  cobbledollarsCurrency: COBBLEDOLLARS_CURRENCY,
+  ensureUserCobbledollarsRow,
+  recordCobbledollarLedger,
+  incrementUserCurrency,
+});
+
+httpServer.listen(port, () => {
   console.log(`Backend http://localhost:${port}`);
   if (supabase) {
     void Promise.all([

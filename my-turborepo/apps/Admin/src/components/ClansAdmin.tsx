@@ -16,6 +16,11 @@ function formatCd(n: number): string {
   return n.toLocaleString(undefined, { maximumFractionDigits: 0 })
 }
 
+function formatMemberElo(elo: number | null | undefined): string {
+  if (elo == null || !Number.isFinite(elo)) return 'Unranked'
+  return formatCd(elo)
+}
+
 function formatDt(s: string): string {
   return new Date(s).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 }
@@ -192,7 +197,7 @@ export function ClansAdmin() {
     return [...detail.members].sort((a, b) => {
       if (a.role === 'leader' && b.role !== 'leader') return -1
       if (b.role === 'leader' && a.role !== 'leader') return 1
-      return b.donated_total - a.donated_total || b.elo - a.elo
+      return b.donated_total - a.donated_total || (b.elo ?? -1) - (a.elo ?? -1)
     })
   }, [detail])
 
@@ -627,6 +632,10 @@ export function ClansAdmin() {
 
                     {detailTab === 'members' ? (
                       <>
+                        {sortedMembers.length === 0 ? (
+                          <p className="text-sm text-muted m-0 py-6 text-center">No members in this clan.</p>
+                        ) : (
+                          <>
                         <div className="md:hidden space-y-2">
                           {sortedMembers.map((m) => (
                             <div
@@ -649,7 +658,7 @@ export function ClansAdmin() {
                               <div className="grid grid-cols-2 gap-2 text-xs">
                                 <div className="rounded-md bg-black/20 px-2 py-1.5">
                                   <p className="text-muted m-0">ELO</p>
-                                  <p className="text-[#f5efe6] font-medium m-0 tabular-nums">{formatCd(m.elo)}</p>
+                                  <p className="text-[#f5efe6] font-medium m-0 tabular-nums">{formatMemberElo(m.elo)}</p>
                                 </div>
                                 <div className="rounded-md bg-black/20 px-2 py-1.5">
                                   <p className="text-muted m-0">Donated</p>
@@ -693,7 +702,7 @@ export function ClansAdmin() {
                                     )}
                                   </td>
                                   <td className="px-3 py-2.5 text-right text-[#f5efe6] tabular-nums">
-                                    {formatCd(m.elo)}
+                                    {formatMemberElo(m.elo)}
                                   </td>
                                   <td className="px-3 py-2.5 text-right text-amber-200/90 tabular-nums">
                                     {formatCd(m.donated_total)} CD
@@ -706,6 +715,8 @@ export function ClansAdmin() {
                             </tbody>
                           </table>
                         </div>
+                          </>
+                        )}
                       </>
                     ) : null}
 

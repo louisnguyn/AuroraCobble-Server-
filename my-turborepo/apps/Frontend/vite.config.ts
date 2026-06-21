@@ -47,11 +47,14 @@ export default defineConfig({
     include: ['react-markdown'],
   },
   server: {
+    port: 5174,
+    strictPort: true,
     proxy: {
       '/api': {
         target: 'http://localhost:3001',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
+        ws: true,
       },
     },
   },

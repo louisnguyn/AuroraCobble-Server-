@@ -963,7 +963,8 @@ export interface AdminClanMember {
   role: string
   donated_total: number
   joined_at: string
-  elo: number
+  /** Null when the player has no ranked PvP matches. */
+  elo: number | null
 }
 
 export interface AdminClanJoinRequest {

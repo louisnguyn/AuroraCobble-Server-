@@ -30,6 +30,8 @@ const LEDGER_KIND_LABEL: Record<string, string> = {
   clan_donate_refund: 'Clan donation refund',
   clan_disburse: 'Clan fund payout',
   clan_daily_tickets: 'Clan daily tickets',
+  poker_bet: 'Poker bet',
+  poker_payout: 'Poker payout',
 }
 
 const TICKET_LEDGER_KIND_LABEL: Record<string, string> = {
