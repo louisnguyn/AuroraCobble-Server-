@@ -1,12 +1,12 @@
 import { supabase } from "./supabase.js";
 
-export const HOLDEM_MIN_BUY_IN = 1_000;
-export const HOLDEM_MAX_BUY_IN = 5_000;
-export const HOLDEM_DEFAULT_BUY_IN = 2_000;
-export const HOLDEM_DEFAULT_SB = 25;
-export const HOLDEM_DEFAULT_BB = 50;
-export const HOLDEM_MIN_SB = 10;
-export const HOLDEM_MAX_SB = 250;
+export const HOLDEM_MIN_BUY_IN = 10_000;
+export const HOLDEM_MAX_BUY_IN = 100_000;
+export const HOLDEM_DEFAULT_BUY_IN = 50_000;
+export const HOLDEM_DEFAULT_SB = 250;
+export const HOLDEM_DEFAULT_BB = 500;
+export const HOLDEM_MIN_SB = 100;
+export const HOLDEM_MAX_SB = 2_500;
 export const HOLDEM_MIN_PLAYERS = 2;
 export const HOLDEM_MAX_PLAYERS = 3;
 export const HOLDEM_ACTION_MS = 45_000;

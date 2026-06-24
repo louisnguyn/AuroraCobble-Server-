@@ -619,12 +619,29 @@ async function processAction(
   sendError(userId, "Unknown action");
 }
 
-async function cashOutAndLeave(userId: number, room: Room): Promise<void> {
+async function cashOutAndLeave(userId: number, room: Room): Promise<boolean> {
   const idx = seatIndexOf(room, userId);
-  if (idx < 0) return;
+  if (idx < 0) return true;
   const seat = room.seats[idx]!;
-  if (walletDeps && seat.chips > 0 && room.phase === "lobby") {
-    await creditPokerCashOut(walletDeps, userId, seat.chips, `Table ${room.code} · cash-out`);
+  // Leave is only allowed in lobby or hand_over — always return table chips to wallet.
+  if (seat.chips > 0) {
+    if (!walletDeps) {
+      sendError(userId, "Wallet not available — try again later or contact staff.");
+      return false;
+    }
+    try {
+      await creditPokerCashOut(walletDeps, userId, seat.chips, `Table ${room.code} · cash-out`);
+    } catch (err) {
+      console.error(
+        "[poker] cash-out failed",
+        userId,
+        room.code,
+        seat.chips,
+        err instanceof Error ? err.message : err
+      );
+      sendError(userId, "Could not credit Cobble$ to your wallet — try leaving again or contact staff.");
+      return false;
+    }
   }
   room.seats[idx] = null;
   userRoom.delete(userId);
@@ -639,6 +656,7 @@ async function cashOutAndLeave(userId: number, room: Room): Promise<void> {
     room.message = `${seat.username} left the table.`;
     broadcastRoom(room);
   }
+  return true;
 }
 
 export function registerPokerSocket(userId: number, _username: string, ws: WebSocket): void {
@@ -671,7 +689,10 @@ export async function handlePokerMessage(
       sendError(userId, "Leave your current table first");
       return;
     }
-    if (!walletDeps) return;
+    if (!walletDeps) {
+      sendError(userId, "Wallet not available — try again later.");
+      return;
+    }
     const buyIn = clampBuyIn(msg.buyIn) ?? HOLDEM_DEFAULT_BUY_IN;
     const smallBlind = clampBlind(msg.smallBlind, HOLDEM_DEFAULT_SB);
     const bigBlind = clampBlind(msg.bigBlind, Math.max(smallBlind * 2, HOLDEM_DEFAULT_BB));
@@ -755,7 +776,10 @@ export async function handlePokerMessage(
       sendError(userId, "Table is full");
       return;
     }
-    if (!walletDeps) return;
+    if (!walletDeps) {
+      sendError(userId, "Wallet not available — try again later.");
+      return;
+    }
     const spend = await spendPokerBuyIn(walletDeps, userId, room.settings.buyIn, `Table ${code} buy-in`);
     if (!spend.ok) {
       sendError(userId, spend.error);
@@ -787,7 +811,8 @@ export async function handlePokerMessage(
       sendError(userId, "Cannot leave during a hand");
       return;
     }
-    await cashOutAndLeave(userId, room);
+    const left = await cashOutAndLeave(userId, room);
+    if (!left) return;
     const ws = sockets.get(userId);
     if (ws && ws.readyState === ws.OPEN) ws.send(JSON.stringify({ type: "left" }));
     return;

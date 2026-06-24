@@ -107,9 +107,9 @@ export function Poker() {
   const [joinPassword, setJoinPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [tableName, setTableName] = useState('Pokémon Table')
-  const [buyIn, setBuyIn] = useState('2000')
-  const [smallBlind, setSmallBlind] = useState('25')
-  const [bigBlind, setBigBlind] = useState('50')
+  const [buyIn, setBuyIn] = useState('50000')
+  const [smallBlind, setSmallBlind] = useState('250')
+  const [bigBlind, setBigBlind] = useState('500')
   const [createPassword, setCreatePassword] = useState('')
   const [raiseTo, setRaiseTo] = useState('')
 
@@ -137,6 +137,7 @@ export function Poker() {
         setError(data.message ?? 'Error')
       } else if (data.type === 'left') {
         setRoom(null)
+        loadWallet()
       } else if (data.type === 'connected') {
         setError(null)
       }
@@ -236,8 +237,8 @@ export function Poker() {
     )
   }
 
-  const minBuy = config?.minBuyIn ?? 1_000
-  const maxBuy = config?.maxBuyIn ?? 5_000
+  const minBuy = config?.minBuyIn ?? 10_000
+  const maxBuy = config?.maxBuyIn ?? 100_000
 
   return (
     <PageShell max="6xl" className="space-y-4">
