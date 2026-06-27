@@ -7062,9 +7062,10 @@ const BOSS_SPAWN_WARNING_COMMANDS = [
   "title @a subtitle {\"text\":\"A mysterious boss will appear in the Raid Area! Use /raid\",\"color\":\"gold\"}",
 ] as const;
 const BOSS_SPAWN_COMMANDS = [
-  "execute in minecraft:overworld run crd spawnboss 3096 223 1217 minecraft:overworld random false false false",
-  "execute in minecraft:overworld run crd spawnboss 3093 227 1188 minecraft:overworld random false false false",
-  "execute in minecraft:overworld run crd spawnboss 3093 227 1287 minecraft:overworld random false false false",
+  "execute in minecraft:overworld run crd spawnboss 1930 160 3103 minecraft:overworld random false false false",
+  "execute in minecraft:overworld run crd spawnboss 2004 160 3034 minecraft:overworld random false false false",
+  "execute in minecraft:overworld run crd spawnboss 2003 161 3175 minecraft:overworld random false false false",
+  "execute in minecraft:overworld run crd spawnboss 2077 160 3103 minecraft:overworld random false false false",
 ] as const;
 const BOSS_SPAWN_WARNING_DELAY_MS = 60_000;
 let bossSpawnCycleInProgress = false;
