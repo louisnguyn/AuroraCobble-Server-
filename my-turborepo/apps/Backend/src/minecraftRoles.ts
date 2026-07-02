@@ -103,6 +103,31 @@ export function getPurchasableCost(roleKey: string): number | null {
   return row ? row.cost : null;
 }
 
+/** Limited-time percent off all website Cobble$ shops (items, Pokémon shop, battle pass, rank shop). */
+export const SHOP_EVENT_DISCOUNT_PERCENT = 10;
+
+/** Cobble$ after integer percent-off. */
+export function applyCobbleShopDiscount(baseCobble: number, discountPercent: number): number {
+  const b = Math.floor(Number(baseCobble));
+  const p = Math.min(100, Math.max(0, Math.floor(Number(discountPercent))));
+  if (!Number.isFinite(b) || b <= 0 || p <= 0) return Math.max(0, b);
+  const out = Math.floor((b * (100 - p)) / 100);
+  return Math.max(1, out);
+}
+
+/** Event discount only (e.g. rank shop list prices). */
+export function applyWebsiteShopEventPrice(baseCobble: number): number {
+  return applyCobbleShopDiscount(baseCobble, SHOP_EVENT_DISCOUNT_PERCENT);
+}
+
+/** Event discount, then rank shop discount (items, Pokémon shop, battle pass). */
+export function applyWebsiteShopPrice(baseCobble: number, roleDiscountPercent: number): number {
+  return applyCobbleShopDiscount(
+    applyCobbleShopDiscount(baseCobble, SHOP_EVENT_DISCOUNT_PERCENT),
+    roleDiscountPercent
+  );
+}
+
 /**
  * Percent off website Cobble$ shop (items + Pokémon shop).
  * Staff/special grant ranks (champion, helper, mod, tiktok, youtuber, builder): 15%.

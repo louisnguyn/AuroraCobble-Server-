@@ -40,10 +40,13 @@ import {
   getPurchasableCost,
   getRoleCatalog,
   getWebsiteShopDiscountPercent,
+  applyWebsiteShopEventPrice,
+  applyWebsiteShopPrice,
   isKnownRoleKey,
   listAllKnownRoleKeys,
   normalizeRoleKey,
   runLuckpermsParentSet,
+  SHOP_EVENT_DISCOUNT_PERCENT,
 } from "./minecraftRoles.js";
 import {
   buildGivePokemonOtherCommand,
@@ -2283,7 +2286,17 @@ app.post("/admin/verification-requests/:id/reject", requireAuth, requireAdmin, a
 
 // --- Minecraft rank: catalog, Cobble$ purchase (RCON LuckPerms), grant-only requests ---
 app.get("/roles/catalog", requireAuth, (_req, res) => {
-  res.json({ currency: COBBLEDOLLARS_CURRENCY, ...getRoleCatalog() });
+  const catalog = getRoleCatalog();
+  res.json({
+    currency: COBBLEDOLLARS_CURRENCY,
+    shopEventDiscountPercent: SHOP_EVENT_DISCOUNT_PERCENT,
+    ...catalog,
+    purchasable: catalog.purchasable.map((entry) => ({
+      ...entry,
+      listCost: entry.cost ?? null,
+      cost: entry.cost != null ? applyWebsiteShopEventPrice(entry.cost) : undefined,
+    })),
+  });
 });
 
 app.get("/user/role-request", requireAuth, async (_req, res) => {
@@ -2617,11 +2630,12 @@ app.post("/roles/buy", requireAuth, async (req, res) => {
     return;
   }
   const roleKey = normalizeRoleKey(String((req.body as { roleKey?: unknown })?.roleKey ?? ""));
-  const cost = getPurchasableCost(roleKey);
-  if (cost == null || roleKey === DEFAULT_MINECRAFT_ROLE || GRANT_ONLY_ROLE_KEYS.has(roleKey)) {
+  const listCost = getPurchasableCost(roleKey);
+  if (listCost == null || roleKey === DEFAULT_MINECRAFT_ROLE || GRANT_ONLY_ROLE_KEYS.has(roleKey)) {
     res.status(400).json({ error: "This rank cannot be purchased on the web shop." });
     return;
   }
+  const cost = applyWebsiteShopEventPrice(listCost);
 
   const wallet = await ensureUserCobbledollarsRow(user.userId);
   if (!wallet) {
@@ -2682,6 +2696,8 @@ app.post("/roles/buy", requireAuth, async (req, res) => {
     ok: true,
     roleKey,
     cost,
+    listCost,
+    shopEventDiscountPercent: SHOP_EVENT_DISCOUNT_PERCENT,
     newBalance,
   });
 });
@@ -3317,15 +3333,6 @@ const BATTLEPASS_SHOP_ITEMS = [
 
 function battlePassShopItemByKey(itemKey: string) {
   return BATTLEPASS_SHOP_ITEMS.find((x) => x.itemKey === itemKey);
-}
-
-/** Cobble$ after integer percent-off (rank shop discount). */
-function applyCobbleShopDiscount(baseCobble: number, discountPercent: number): number {
-  const b = Math.floor(Number(baseCobble));
-  const p = Math.min(100, Math.max(0, Math.floor(Number(discountPercent))));
-  if (!Number.isFinite(b) || b <= 0 || p <= 0) return Math.max(0, b);
-  const out = Math.floor((b * (100 - p)) / 100);
-  return Math.max(1, out);
 }
 
 async function getUserMinecraftRoleForShop(userId: number): Promise<string> {
@@ -4220,17 +4227,18 @@ app.get("/shop/items", requireAuth, async (_req, res) => {
   res.json({
     currency: COBBLEDOLLARS_CURRENCY,
     shopDiscountPercent,
+    shopEventDiscountPercent: SHOP_EVENT_DISCOUNT_PERCENT,
     items: SHOP_ITEMS.map((item) => ({
       itemKey: item.itemKey,
       label: item.label,
       cost: item.cost,
-      discountedCost: applyCobbleShopDiscount(item.cost, shopDiscountPercent),
+      discountedCost: applyWebsiteShopPrice(item.cost, shopDiscountPercent),
     })),
     battlePassItems: BATTLEPASS_SHOP_ITEMS.map((item) => ({
       itemKey: item.itemKey,
       label: item.label,
       cost: item.cost,
-      discountedCost: applyCobbleShopDiscount(item.cost, shopDiscountPercent),
+      discountedCost: applyWebsiteShopPrice(item.cost, shopDiscountPercent),
       battlePassKind: item.battlePassKind,
       owned: item.battlePassKind === "premium" ? owned.premium : owned.party,
     })),
@@ -4280,7 +4288,7 @@ app.post("/shop/buy", requireAuth, async (req, res) => {
     }
     const role = await getUserMinecraftRoleForShop(user.userId);
     const shopDiscountPercent = getWebsiteShopDiscountPercent(role);
-    const totalCost = applyCobbleShopDiscount(bpItem.cost, shopDiscountPercent);
+    const totalCost = applyWebsiteShopPrice(bpItem.cost, shopDiscountPercent);
 
     const wallet = await ensureUserCobbledollarsRow(user.userId);
     if (!wallet) {
@@ -4372,7 +4380,7 @@ app.post("/shop/buy", requireAuth, async (req, res) => {
   }
   const role = await getUserMinecraftRoleForShop(user.userId);
   const shopDiscountPercent = getWebsiteShopDiscountPercent(role);
-  const totalCost = applyCobbleShopDiscount(item.cost * quantity, shopDiscountPercent);
+  const totalCost = applyWebsiteShopPrice(item.cost * quantity, shopDiscountPercent);
 
   const wallet = await ensureUserCobbledollarsRow(user.userId);
   if (!wallet) {
@@ -4468,11 +4476,12 @@ app.get("/pokemon-shop/offers", requireAuth, async (req, res) => {
   res.json({
     refreshHours: POKEMON_SHOP_REFRESH_HOURS,
     shopDiscountPercent,
+    shopEventDiscountPercent: SHOP_EVENT_DISCOUNT_PERCENT,
     windowStart: windowStartIso,
     windowEnd: end.toISOString(),
     offers: offers.map((o) => {
       const listPrice = o.price;
-      const price = applyCobbleShopDiscount(listPrice, shopDiscountPercent);
+      const price = applyWebsiteShopPrice(listPrice, shopDiscountPercent);
       const purchasedByYou = mineBySlot.has(o.slot);
       return {
         slot: o.slot,
@@ -4517,7 +4526,7 @@ app.post("/pokemon-shop/buy", requireAuth, async (req, res) => {
   }
   const role = await getUserMinecraftRoleForShop(user.userId);
   const shopDiscountPercent = getWebsiteShopDiscountPercent(role);
-  const payPrice = applyCobbleShopDiscount(offer.price, shopDiscountPercent);
+  const payPrice = applyWebsiteShopPrice(offer.price, shopDiscountPercent);
 
   const { data: taken } = await supabase
     .from("user_pokemon_shop_purchases")

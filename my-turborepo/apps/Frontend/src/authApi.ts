@@ -575,12 +575,14 @@ export interface BattlePassShopItem extends ShopItem {
 export async function fetchShopItems(): Promise<{
   currency: string
   shopDiscountPercent: number
+  shopEventDiscountPercent: number
   items: ShopItem[]
   battlePassItems: BattlePassShopItem[]
 }> {
   return fetchApi<{
     currency: string
     shopDiscountPercent: number
+    shopEventDiscountPercent: number
     items: ShopItem[]
     battlePassItems: BattlePassShopItem[]
   }>('/shop/items')
@@ -623,13 +625,17 @@ export type RoleWebsitePerks = {
 export type RoleCatalogEntry = {
   key: string
   label: string
+  /** Sale price (after event discount when active). */
   cost?: number
+  /** List price before event discount. */
+  listCost?: number | null
   purchasable: boolean
   perks: RoleWebsitePerks
 }
 
 export async function fetchRoleCatalog(): Promise<{
   currency: string
+  shopEventDiscountPercent: number
   defaultRole: string
   memberPerks: RoleWebsitePerks
   purchasable: RoleCatalogEntry[]
@@ -637,6 +643,7 @@ export async function fetchRoleCatalog(): Promise<{
 }> {
   return fetchApi<{
     currency: string
+    shopEventDiscountPercent: number
     defaultRole: string
     memberPerks: RoleWebsitePerks
     purchasable: RoleCatalogEntry[]
@@ -715,6 +722,7 @@ export interface PokemonShopOffer {
 export interface PokemonShopOffersResponse {
   refreshHours: number
   shopDiscountPercent: number
+  shopEventDiscountPercent: number
   windowStart: string
   windowEnd: string
   offers: PokemonShopOffer[]
@@ -1007,6 +1015,12 @@ export interface ClanPublic {
   leaderboard_daily_reward_top1: number
   /** Treasury bonus for holding #2 on a leaderboard category (per category, daily). */
   leaderboard_daily_reward_top2: number
+  /** Max Cobble$ leaders can pay out from treasury per calendar day (Asia/Ho_Chi_Minh). */
+  treasury_daily_disburse_max?: number
+  /** Cobble$ already paid out from treasury today (leader view). */
+  treasury_daily_disbursed_today?: number
+  /** Cobble$ still available for treasury payouts today (leader view). */
+  treasury_daily_disburse_remaining?: number
   created_at: string
 }
 

@@ -1058,6 +1058,15 @@ export function Clan() {
       setDisburseError('Enter a valid amount.')
       return
     }
+    const remaining = myClan.treasury_daily_disburse_remaining
+    if (remaining != null && amount > remaining) {
+      setDisburseError(
+        remaining <= 0
+          ? `Daily payout limit reached (max ${fmt(myClan.treasury_daily_disburse_max ?? 3_000_000)} CD per day). Resets at 00:00 Asia/Ho_Chi_Minh.`
+          : `Amount exceeds today's remaining payout limit (${fmt(remaining)} CD left today).`
+      )
+      return
+    }
     setDisburseBusy(true)
     setDisburseError(null)
     try {
@@ -1737,8 +1746,16 @@ export function Clan() {
                 <h3 className="clan-section-title">Treasury payouts</h3>
                 <p className="clan-section-hint">
                   Send Cobble$ from the clan treasury to any member — including yourself. This lowers the treasury and
-                  can reduce milestone progress.
+                  can reduce milestone progress. Leaders can pay out up to{' '}
+                  <strong>{fmt(myClan.treasury_daily_disburse_max ?? 3_000_000)} CD</strong> per calendar day (resets
+                  00:00 Asia/Ho_Chi_Minh).
                 </p>
+                {myClan.treasury_daily_disburse_remaining != null ? (
+                  <p className="clan-section-hint m-0 mb-3">
+                    Today: <strong>{fmt(myClan.treasury_daily_disbursed_today ?? 0)}</strong> paid out ·{' '}
+                    <strong>{fmt(myClan.treasury_daily_disburse_remaining)}</strong> remaining
+                  </p>
+                ) : null}
                 <form onSubmit={handleDisburse} className="clan-treasury-form">
                   <div className="clan-treasury-field">
                     <label className="clan-label" htmlFor="disburse-member">

@@ -14,6 +14,7 @@ import {
   CLAN_DAILY_PER_MEMBER,
   CLAN_TREASURY_MILESTONE,
   CLAN_TREASURY_MILESTONES,
+  CLAN_TREASURY_DAILY_DISBURSE_MAX,
   CLAN_LEADERBOARD_DAILY_REWARD_TOP1,
   CLAN_LEADERBOARD_DAILY_REWARD_TOP2,
   CLAN_LEADERBOARD_REWARD_CATEGORIES,
@@ -33,6 +34,7 @@ import {
   clanXpInCurrentLevel,
   isClanRejoinBlocked,
   nextMemberUnlockTreasury,
+  clanTreasuryDisburseDailyMeta,
 } from "./clanLogic.js";
 import { grantClanXpByAdmin } from "./clanXp.js";
 
@@ -109,6 +111,26 @@ function todayKeyInTimezone(): string {
   const m = parts.find((p) => p.type === "month")?.value ?? "00";
   const d = parts.find((p) => p.type === "day")?.value ?? "00";
   return `${y}-${m}-${d}`;
+}
+
+/** Midnight at start of the current calendar day in {@link DAILY_RESET_TIMEZONE} (UTC+7, no DST). */
+function startOfTodayIsoInTimezone(): string {
+  return `${todayKeyInTimezone()}T00:00:00+07:00`;
+}
+
+async function loadClanTreasuryDisbursedToday(clanId: number): Promise<number> {
+  if (!supabase) return 0;
+  const since = startOfTodayIsoInTimezone();
+  const { data, error } = await supabase
+    .from("clan_disbursements")
+    .select("amount")
+    .eq("clan_id", clanId)
+    .gte("created_at", since);
+  if (error) {
+    console.warn("[clans] load daily disburse total:", error.message);
+    return 0;
+  }
+  return (data ?? []).reduce((sum, row) => sum + (row as { amount: number }).amount, 0);
 }
 
 function normalizeClanName(raw: unknown): string | null {
@@ -1055,10 +1077,11 @@ export function registerClanRoutes(app: Express, deps: ClanDeps): void {
     const leader = members.find((m) => m.role === "leader");
     const { topTreasury, topTotalElo, topLevel } = await buildClanLeaderboards(getLiveLeaderboard, 50);
     const lbRanks = clanLeaderboardRanksForClan(membership.clan.id, topTreasury, topTotalElo, topLevel);
-    const [recentLeaderboardPayouts, recentDonations, recentDisbursements] = await Promise.all([
+    const [recentLeaderboardPayouts, recentDonations, recentDisbursements, disbursedToday] = await Promise.all([
       loadRecentLeaderboardPayoutsForClan(membership.clan.id),
       loadRecentDonationsForClan(membership.clan.id, 20),
       loadRecentDisbursementsForClan(membership.clan.id, 20),
+      loadClanTreasuryDisbursedToday(membership.clan.id),
     ]);
     const payload = serializeClanPublic(
       membership.clan,
@@ -1079,6 +1102,7 @@ export function registerClanRoutes(app: Express, deps: ClanDeps): void {
         recent_leaderboard_payouts: recentLeaderboardPayouts,
         recent_donations: recentDonations,
         recent_disbursements: recentDisbursements,
+        ...clanTreasuryDisburseDailyMeta(disbursedToday),
       },
       pending_join_requests: pendingJoinRequests,
       my_pending_join_requests: [],
@@ -1577,6 +1601,16 @@ export function registerClanRoutes(app: Express, deps: ClanDeps): void {
     }
 
     const clan = membership.clan;
+    const disbursedToday = await loadClanTreasuryDisbursedToday(clanId);
+    const disburseMeta = clanTreasuryDisburseDailyMeta(disbursedToday);
+    if (amount > disburseMeta.treasury_daily_disburse_remaining) {
+      res.status(400).json({
+        error: `Daily treasury payout limit reached (max ${CLAN_TREASURY_DAILY_DISBURSE_MAX.toLocaleString("en-US")} CD per day)`,
+        ...disburseMeta,
+        requested: amount,
+      });
+      return;
+    }
     if (clan.bank_balance < amount) {
       res.status(400).json({ error: "Not enough in clan fund", bank_balance: clan.bank_balance });
       return;
@@ -1603,7 +1637,12 @@ export function registerClanRoutes(app: Express, deps: ClanDeps): void {
       amount,
     });
 
-    res.json({ ok: true, bank_balance: newBank, recipient_username: recipient.username });
+    res.json({
+      ok: true,
+      bank_balance: newBank,
+      recipient_username: recipient.username,
+      ...clanTreasuryDisburseDailyMeta(disbursedToday + amount),
+    });
   });
 
   app.post("/clans/:clanId/kick", requireAuth, async (req, res) => {

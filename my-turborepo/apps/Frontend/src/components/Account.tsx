@@ -176,6 +176,7 @@ export function Account() {
   const [shopItems, setShopItems] = useState<ShopItem[]>([])
   const [battlePassShopItems, setBattlePassShopItems] = useState<BattlePassShopItem[]>([])
   const [shopDiscountPercent, setShopDiscountPercent] = useState(0)
+  const [shopEventDiscountPercent, setShopEventDiscountPercent] = useState(10)
   const [shopBusyItem, setShopBusyItem] = useState<string | null>(null)
   const [shopError, setShopError] = useState<string | null>(null)
   const [shopSuccess, setShopSuccess] = useState<string | null>(null)
@@ -295,6 +296,9 @@ export function Account() {
         setShopItems(shop.items ?? [])
         setBattlePassShopItems(shop.battlePassItems ?? [])
         setShopDiscountPercent(shop.shopDiscountPercent ?? pOffers.shopDiscountPercent ?? 0)
+        setShopEventDiscountPercent(
+          shop.shopEventDiscountPercent ?? pOffers.shopEventDiscountPercent ?? roles?.shopEventDiscountPercent ?? 10
+        )
         setCobbleBalance(
           currencies.currencies.find((c) => c.currency_type === 'cobbledollars')?.balance ?? 0
         )
@@ -569,6 +573,7 @@ export function Account() {
     const [offers, purchases] = await Promise.all([fetchPokemonShopOffers(), fetchPokemonShopPurchases(20)])
     setPokemonOffers(offers.offers ?? [])
     setShopDiscountPercent(offers.shopDiscountPercent ?? 0)
+    setShopEventDiscountPercent(offers.shopEventDiscountPercent ?? 10)
     setPokemonWindowEnd(offers.windowEnd ?? null)
     setPokemonPurchases(purchases.purchases ?? [])
   }
@@ -652,6 +657,7 @@ export function Account() {
       setShopItems(shopUp.items ?? [])
       setBattlePassShopItems(shopUp.battlePassItems ?? [])
       setShopDiscountPercent(shopUp.shopDiscountPercent ?? pOffersUp.shopDiscountPercent ?? 0)
+      setShopEventDiscountPercent(shopUp.shopEventDiscountPercent ?? pOffersUp.shopEventDiscountPercent ?? 10)
       setPokemonOffers(pOffersUp.offers ?? [])
       setPokemonWindowEnd(pOffersUp.windowEnd ?? null)
       if (rs) setRoleStatus(rs)
@@ -962,6 +968,13 @@ export function Account() {
           ) : null}
 
           <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-3">Shop</h2>
+          {shopEventDiscountPercent > 0 ? (
+            <p className="text-sm text-amber-200/95 m-0 mb-3 rounded-lg border border-amber-500/35 bg-amber-950/25 px-3 py-2">
+              Special event: <strong>-{shopEventDiscountPercent}%</strong> on item shop, battle pass, Pokémon shop, and
+              rank purchases
+              {shopDiscountPercent > 0 ? ` (stacks with your -${shopDiscountPercent}% rank discount on items & Pokémon)` : ''}.
+            </p>
+          ) : null}
           {shopDiscountPercent > 0 ? (
             <p className="text-sm text-emerald-300/95 m-0 mb-3">
               Rank discount: -{shopDiscountPercent}% on Cobble$ (item shop, battle pass, and Pokemon shop).
@@ -1072,7 +1085,7 @@ export function Account() {
                     </p>
                     <p className="text-xs text-muted m-0">
                       {formatPokemonShopCategory(offer.category)}  | {' '}
-                      {shopDiscountPercent > 0 && offer.price < offer.listPrice ? (
+                      {offer.price < offer.listPrice ? (
                         <>
                           <span className="line-through opacity-70">{offer.listPrice.toLocaleString()}</span>{' '}
                           <span className="text-[#fbbf24] tabular-nums">{offer.price.toLocaleString()} Cobble$</span>
@@ -1176,6 +1189,11 @@ export function Account() {
           ) : null}
 
           <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-3">Buy rank (Cobble$)</h2>
+          {shopEventDiscountPercent > 0 ? (
+            <p className="text-sm text-amber-200/95 m-0 mb-3">
+              Rank shop event: -{shopEventDiscountPercent}% on all purchasable ranks.
+            </p>
+          ) : null}
           <p className="text-xs text-muted m-0 mb-3">
             Below are perks for your current rank. Use the cards to view or purchase higher ranks.
           </p>
@@ -1211,7 +1229,16 @@ export function Account() {
                       <div className="min-w-0">
                         <p className="m-0 text-sm font-semibold text-[#e2e8f0]">{entry.label}</p>
                         <p className="m-0 mt-1 text-sm font-medium tabular-nums text-[#fbbf24]">
-                          {(entry.cost ?? 0).toLocaleString()} Cobble$
+                          {entry.listCost != null && entry.cost != null && entry.cost < entry.listCost ? (
+                            <>
+                              <span className="line-through opacity-70 text-muted mr-1.5">
+                                {entry.listCost.toLocaleString()}
+                              </span>
+                              {entry.cost.toLocaleString()} Cobble$
+                            </>
+                          ) : (
+                            <>{(entry.cost ?? 0).toLocaleString()} Cobble$</>
+                          )}
                         </p>
                       </div>
                     </div>

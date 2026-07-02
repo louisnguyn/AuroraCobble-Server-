@@ -14,6 +14,9 @@ export const CLAN_DONATE_MILESTONE = CLAN_TREASURY_MILESTONE;
 
 export const CLAN_DAILY_PER_MEMBER = 25_000;
 
+/** Max Cobble$ a leader can pay out from treasury to members (incl. self) per calendar day (Asia/Ho_Chi_Minh). */
+export const CLAN_TREASURY_DAILY_DISBURSE_MAX = 3_000_000;
+
 /** Daily treasury bonus for #1 on each clan leaderboard category (Asia/Ho_Chi_Minh). */
 export const CLAN_LEADERBOARD_DAILY_REWARD_TOP1 = 100_000;
 
@@ -144,6 +147,20 @@ export function nextMemberUnlockTreasury(treasury: number, currentMax: number): 
   if (currentMax >= CLAN_ABSOLUTE_MAX_MEMBERS) return null;
   const needed = (currentMax - CLAN_BASE_MAX_MEMBERS + 1) * CLAN_TREASURY_MILESTONE;
   return Math.max(0, needed - treasury);
+}
+
+export function clanTreasuryDisburseDailyMeta(disbursedToday: number): {
+  treasury_daily_disburse_max: number;
+  treasury_daily_disbursed_today: number;
+  treasury_daily_disburse_remaining: number;
+} {
+  const spent = Math.max(0, Math.floor(disbursedToday));
+  const max = CLAN_TREASURY_DAILY_DISBURSE_MAX;
+  return {
+    treasury_daily_disburse_max: max,
+    treasury_daily_disbursed_today: spent,
+    treasury_daily_disburse_remaining: Math.max(0, max - spent),
+  };
 }
 
 /** @deprecated Use {@link nextMemberUnlockTreasury}. */
