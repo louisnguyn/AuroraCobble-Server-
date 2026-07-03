@@ -8,7 +8,7 @@ export const HOLDEM_DEFAULT_BB = 500;
 export const HOLDEM_MIN_SB = 100;
 export const HOLDEM_MAX_SB = 2_500;
 export const HOLDEM_MIN_PLAYERS = 2;
-export const HOLDEM_MAX_PLAYERS = 3;
+export const HOLDEM_MAX_PLAYERS = 6;
 export const HOLDEM_ACTION_MS = 45_000;
 
 export type PokerWalletDeps = {

@@ -113,7 +113,7 @@ export function Poker() {
   const [createPassword, setCreatePassword] = useState('')
   const [raiseTo, setRaiseTo] = useState('')
 
-  const maxPlayers = config?.maxPlayers ?? 3
+  const maxPlayers = config?.maxPlayers ?? 6
   const minPlayers = config?.minPlayers ?? 2
   const canUsePoker = Boolean(user?.is_admin) || isAccountVerified(user)
 
