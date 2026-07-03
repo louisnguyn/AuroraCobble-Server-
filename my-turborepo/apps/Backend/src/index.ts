@@ -212,6 +212,8 @@ const BULK_ADMIN_TICKET_CURRENCIES: readonly string[] = [
   "shiny legendary tickets",
   "paradox tickets",
   "shiny paradox tickets",
+  "ultra beast tickets",
+  "shiny ultra beast tickets",
 ];
 
 /** Website ticket-family balances that append to `user_ticket_currency_ledger`. */
@@ -4949,6 +4951,8 @@ const EXCHANGE_RATES: { to_currency: string; cost_tickets: number; label: string
   { to_currency: "shiny legendary tickets", cost_tickets: 90, label: "Shiny Legend Tickets" },
   { to_currency: "paradox tickets", cost_tickets: 25, label: "Paradox Tickets" },
   { to_currency: "shiny paradox tickets", cost_tickets: 50, label: "Shiny Paradox Tickets" },
+  { to_currency: "ultra beast tickets", cost_tickets: 35, label: "Ultra Beast Tickets" },
+  { to_currency: "shiny ultra beast tickets", cost_tickets: 70, label: "Shiny Ultra Beast Tickets" },
 ];
 
 app.get("/user/exchange-rates", requireAuth, (_req, res) => {

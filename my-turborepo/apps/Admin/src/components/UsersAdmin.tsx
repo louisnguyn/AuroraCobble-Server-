@@ -878,6 +878,8 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
                     <option value="shiny legendary tickets">shiny legend tickets</option>
                     <option value="paradox tickets">paradox tickets</option>
                     <option value="shiny paradox tickets">shiny paradox tickets</option>
+                    <option value="ultra beast tickets">ultra beast tickets</option>
+                    <option value="shiny ultra beast tickets">shiny ultra beast tickets</option>
                   </select>
                 </div>
                 <div>
@@ -1248,6 +1250,8 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
                       <option value="shiny legendary tickets">shiny legend tickets</option>
                       <option value="paradox tickets">paradox tickets</option>
                       <option value="shiny paradox tickets">shiny paradox tickets</option>
+                      <option value="ultra beast tickets">ultra beast tickets</option>
+                      <option value="shiny ultra beast tickets">shiny ultra beast tickets</option>
                     </select>
                   </div>
                   <div>
