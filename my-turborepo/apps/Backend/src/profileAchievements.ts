@@ -17,6 +17,70 @@ export function normalizeAchievementSlug(raw: string): string {
   return s;
 }
 
+export type UserProfileBadgeCounts = {
+  crimson: number;
+  gold: number;
+  mythic: number;
+};
+
+async function loadUserGrantedBadgeDefinitionTiers(
+  supabase: SupabaseClient,
+  userId: number
+): Promise<string[]> {
+  const { data: grants, error } = await supabase
+    .from("profile_achievement_grants")
+    .select("achievement_id")
+    .eq("user_id", userId);
+  const missingGrants = Boolean(
+    error && /profile_achievement_grants|relation|does not exist|schema cache/i.test(error.message)
+  );
+  if (error && !missingGrants) {
+    console.warn("[profile] badge count grants:", error.message);
+    return [];
+  }
+  if (missingGrants || !grants?.length) return [];
+
+  const ids = [...new Set(grants.map((g) => (g as { achievement_id: number }).achievement_id))];
+  const { data: defs, error: defErr } = await supabase
+    .from("profile_achievement_definitions")
+    .select("tier")
+    .in("id", ids)
+    .in("tier", ["crimson", "gold", "mythic"])
+    .eq("active", true);
+  const missingDefs = Boolean(
+    defErr && /profile_achievement_definitions|relation|does not exist|schema cache/i.test(defErr.message)
+  );
+  if (defErr && !missingDefs) {
+    console.warn("[profile] badge count defs:", defErr.message);
+    return [];
+  }
+  return (defs ?? []).map((d) => (d as { tier: string }).tier);
+}
+
+export async function countUserProfileBadgesByTier(
+  supabase: SupabaseClient,
+  userId: number
+): Promise<UserProfileBadgeCounts> {
+  try {
+    const tiers = await loadUserGrantedBadgeDefinitionTiers(supabase, userId);
+    let crimson = 0;
+    let gold = 0;
+    let mythic = 0;
+    for (const tier of tiers) {
+      if (tier === "crimson") crimson += 1;
+      else if (tier === "gold") gold += 1;
+      else if (tier === "mythic") mythic += 1;
+    }
+    return { crimson, gold, mythic };
+  } catch {
+    return { crimson: 0, gold: 0, mythic: 0 };
+  }
+}
+
+export async function countUserCrimsonBadges(supabase: SupabaseClient, userId: number): Promise<number> {
+  const counts = await countUserProfileBadgesByTier(supabase, userId);
+  return counts.crimson;
+}
 /** Load granted + active achievements for public profile cards. */
 export async function fetchGrantedPublicAchievements(
   supabase: SupabaseClient,

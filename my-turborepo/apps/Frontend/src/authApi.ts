@@ -631,11 +631,30 @@ export type RoleCatalogEntry = {
   listCost?: number | null
   purchasable: boolean
   perks: RoleWebsitePerks
+  /** User already has this shop rank or higher. */
+  owned?: boolean
+  /** This is the only rank the user can buy next. */
+  canBuyNow?: boolean
+  /** Cannot buy yet — must upgrade previous tiers first. */
+  locked?: boolean
+  /** Human-readable profile badge requirement, if any. */
+  badgeRequirementLabel?: string | null
+  /** User meets badge requirements for this rank. */
+  meetsBadgeRequirement?: boolean
+  /** No Cobble$ cost — badge-gated claim only. */
+  freeRank?: boolean
 }
 
 export async function fetchRoleCatalog(): Promise<{
   currency: string
   shopEventDiscountPercent: number
+  currentRole: string
+  nextPurchasableRoleKey: string | null
+  crimsonBadgeCount: number
+  goldBadgeCount: number
+  mythicBadgeCount: number
+  profileBadgeCounts: { crimson: number; gold: number; mythic: number }
+  purchasableTierOrder: string[]
   defaultRole: string
   memberPerks: RoleWebsitePerks
   purchasable: RoleCatalogEntry[]
@@ -644,6 +663,13 @@ export async function fetchRoleCatalog(): Promise<{
   return fetchApi<{
     currency: string
     shopEventDiscountPercent: number
+    currentRole: string
+    nextPurchasableRoleKey: string | null
+    crimsonBadgeCount: number
+    goldBadgeCount: number
+    mythicBadgeCount: number
+    profileBadgeCounts: { crimson: number; gold: number; mythic: number }
+    purchasableTierOrder: string[]
     defaultRole: string
     memberPerks: RoleWebsitePerks
     purchasable: RoleCatalogEntry[]

@@ -10,8 +10,6 @@ export const GRANT_ONLY_ROLE_KEYS = new Set([
   "tiktok",
   "youtuber",
   "builder",
-  "legend",
-  "overlord",
   "god",
 ]);
 
@@ -35,9 +33,12 @@ export type RoleCatalogEntry = {
 const PURCHASABLE: { key: string; label: string; cost: number }[] = [
   { key: "noob", label: "NOOB", cost: 100_000 },
   { key: "elite", label: "ELITE", cost: 500_000 },
-  { key: "pro", label: "PRO", cost: 1_000_000 },
-  { key: "master", label: "MASTER", cost: 2_000_000 },
-  { key: "ultimate", label: "ULTIMATE", cost: 3_000_000 },
+  { key: "pro", label: "PRO", cost: 500_000 },
+  { key: "master", label: "MASTER", cost: 500_000 },
+  { key: "ultimate", label: "ULTIMATE", cost: 1_000_000 },
+  { key: "onichan", label: "ONIICHAN", cost: 0 },
+  { key: "legend", label: "LEGEND", cost: 1_000_000 },
+  { key: "overlord", label: "OVERLORD", cost: 1_000_000 },
 ];
 
 const GRANT_ONLY_LABELS: Record<string, string> = {
@@ -100,11 +101,174 @@ export function normalizeRoleKey(key: string): string {
 export function getPurchasableCost(roleKey: string): number | null {
   const k = normalizeRoleKey(roleKey);
   const row = PURCHASABLE.find((p) => p.key === k);
-  return row ? row.cost : null;
+  return row != null ? row.cost : null;
 }
 
-/** Limited-time percent off all website Cobble$ shops (items, Pokémon shop, battle pass, rank shop). */
-export const SHOP_EVENT_DISCOUNT_PERCENT = 10;
+export function isFreeShopRank(roleKey: string): boolean {
+  return getPurchasableCost(roleKey) === 0;
+}
+
+/** Shop rank ladder order (must buy step-by-step). */
+export const PURCHASABLE_ROLE_KEYS: readonly string[] = PURCHASABLE.map((p) => p.key);
+
+export function getPurchasableTierIndex(roleKey: string): number {
+  const k = normalizeRoleKey(roleKey);
+  if (k === DEFAULT_MINECRAFT_ROLE) return -1;
+  return PURCHASABLE_ROLE_KEYS.indexOf(k);
+}
+
+/** Next rank the user may buy on the website shop, or null if none. */
+export function getNextPurchasableRoleKey(currentRoleKey: string): string | null {
+  const k = normalizeRoleKey(currentRoleKey);
+  const idx = getPurchasableTierIndex(k);
+  if (idx >= 0) {
+    const nextIdx = idx + 1;
+    if (nextIdx >= PURCHASABLE_ROLE_KEYS.length) return null;
+    return PURCHASABLE_ROLE_KEYS[nextIdx] ?? null;
+  }
+  if (k === DEFAULT_MINECRAFT_ROLE) {
+    return PURCHASABLE_ROLE_KEYS[0] ?? null;
+  }
+  return null;
+}
+
+export function validatePurchasableRoleUpgrade(
+  currentRoleKey: string,
+  targetRoleKey: string
+): { ok: true } | { ok: false; error: string; nextRoleKey: string | null } {
+  const target = normalizeRoleKey(targetRoleKey);
+  const next = getNextPurchasableRoleKey(currentRoleKey);
+  if (next == null) {
+    return {
+      ok: false,
+      error: "Shop rank upgrades are not available for your current rank.",
+      nextRoleKey: null,
+    };
+  }
+  if (target === next) return { ok: true };
+
+  const targetIdx = getPurchasableTierIndex(target);
+  const currentIdx = getPurchasableTierIndex(currentRoleKey);
+  if (targetIdx >= 0 && currentIdx >= 0 && targetIdx <= currentIdx) {
+    return {
+      ok: false,
+      error: "You already have this rank or a higher shop rank.",
+      nextRoleKey: next,
+    };
+  }
+
+  const nextEntry = PURCHASABLE.find((p) => p.key === next);
+  return {
+    ok: false,
+    error: `You must buy ranks one step at a time. Next available: ${nextEntry?.label ?? next.toUpperCase()}.`,
+    nextRoleKey: next,
+  };
+}
+
+export type UserProfileBadgeCounts = {
+  crimson: number;
+  gold: number;
+  mythic: number;
+};
+
+export function meetsRolePurchaseBadgeRequirement(
+  badgeCounts: UserProfileBadgeCounts,
+  roleKey: string,
+  currentRoleKey?: string
+): boolean {
+  const k = normalizeRoleKey(roleKey);
+  if (k === "onichan") {
+    if (!currentRoleKey || normalizeRoleKey(currentRoleKey) !== "ultimate") return false;
+    return badgeCounts.crimson >= 1 || badgeCounts.gold >= 2;
+  }
+  if (k === "legend") return badgeCounts.crimson >= 3;
+  if (k === "overlord") return badgeCounts.crimson >= 5 || badgeCounts.mythic >= 2;
+  return true;
+}
+
+export function getRoleBadgeRequirementLabel(roleKey: string): string | null {
+  const k = normalizeRoleKey(roleKey);
+  if (k === "onichan") {
+    return "Requires Ultimate rank, plus 1 crimson badge or 2 gold badges (free rank)";
+  }
+  if (k === "legend") return "Requires 3 crimson profile badges";
+  if (k === "overlord") return "Requires 5 crimson badges, or 2 mythic badges";
+  return null;
+}
+
+export function purchasableRoleCatalogFlags(
+  currentRoleKey: string,
+  entryKey: string,
+  tierIndex: number,
+  badgeCounts: UserProfileBadgeCounts = { crimson: 0, gold: 0, mythic: 0 }
+): {
+  owned: boolean;
+  canBuyNow: boolean;
+  locked: boolean;
+  freeRank: boolean;
+  badgeRequirementLabel: string | null;
+  meetsBadgeRequirement: boolean;
+} {
+  const currentIdx = getPurchasableTierIndex(currentRoleKey);
+  const next = getNextPurchasableRoleKey(currentRoleKey);
+  const owned = currentIdx >= 0 && tierIndex <= currentIdx;
+  const meetsBadgeRequirement = meetsRolePurchaseBadgeRequirement(badgeCounts, entryKey, currentRoleKey);
+  const canBuyNow = entryKey === next && meetsBadgeRequirement;
+  return {
+    owned,
+    canBuyNow,
+    locked: !owned && !canBuyNow,
+    freeRank: isFreeShopRank(entryKey),
+    badgeRequirementLabel: getRoleBadgeRequirementLabel(entryKey),
+    meetsBadgeRequirement,
+  };
+}
+
+export function validateRolePurchaseBadgeRequirement(
+  badgeCounts: UserProfileBadgeCounts,
+  targetRoleKey: string,
+  currentRoleKey: string
+): { ok: true } | { ok: false; error: string; badgeCounts: UserProfileBadgeCounts } {
+  if (meetsRolePurchaseBadgeRequirement(badgeCounts, targetRoleKey, currentRoleKey)) return { ok: true };
+  const label = getRoleBadgeRequirementLabel(targetRoleKey);
+  const k = normalizeRoleKey(targetRoleKey);
+  if (k === "legend") {
+    return {
+      ok: false,
+      error: `This rank requires at least 3 crimson profile badge(s). You have ${badgeCounts.crimson}.`,
+      badgeCounts,
+    };
+  }
+  if (k === "onichan") {
+    if (normalizeRoleKey(currentRoleKey) !== "ultimate") {
+      return {
+        ok: false,
+        error: "OniiChan requires Ultimate rank first, then 1 crimson badge or 2 gold badges.",
+        badgeCounts,
+      };
+    }
+    return {
+      ok: false,
+      error: `OniiChan requires 1 crimson badge, or 2 gold badge(s). You have ${badgeCounts.crimson} crimson and ${badgeCounts.gold} gold.`,
+      badgeCounts,
+    };
+  }
+  if (k === "overlord") {
+    return {
+      ok: false,
+      error: `This rank requires 5 crimson badge(s), or 2 mythic badge(s). You have ${badgeCounts.crimson} crimson and ${badgeCounts.mythic} mythic.`,
+      badgeCounts,
+    };
+  }
+  return {
+    ok: false,
+    error: label ?? "Profile badge requirements not met.",
+    badgeCounts,
+  };
+}
+
+/** Limited-time percent off all website Cobble$ shops (items, Pokémon shop, battle pass, rank shop). Set to 0 when no event. */
+export const SHOP_EVENT_DISCOUNT_PERCENT = 0;
 
 /** Cobble$ after integer percent-off. */
 export function applyCobbleShopDiscount(baseCobble: number, discountPercent: number): number {
@@ -141,10 +305,11 @@ export function getWebsiteShopDiscountPercent(roleKey: string): number {
     noob: 5,
     elite: 8,
     pro: 10,
+    onichan: 20,
     master: 15,
-    legend: 21,
+    legend: 20,
     ultimate: 18,
-    overlord: 23,
+    overlord: 25,
     god: 25,
   };
   return byRole[k] ?? 0;
@@ -161,6 +326,7 @@ export function getDailyLoginFlatCobbleBonusPerClaim(roleKey: string): number {
     noob: 25_000,
     elite: 40_000,
     pro: 50_000,
+    onichan: 100_000,
     master: 75_000,
     helper: 90_000,
     mod: 100_000,
@@ -168,7 +334,7 @@ export function getDailyLoginFlatCobbleBonusPerClaim(roleKey: string): number {
     tiktok: 75_000,
     youtuber: 75_000,
     legend: 120_000,
-    ultimate: 100_000,
+    ultimate: 90_000,
     overlord: 150_000,
     god: 200_000,
   };
@@ -186,6 +352,7 @@ export function getDailyLoginTicketBonusPerClaim(roleKey: string): number {
     noob: 0,
     elite: 1,
     pro: 1,
+    onichan: 2,
     master: 2,
     legend: 2,
     ultimate: 2,

@@ -176,7 +176,7 @@ export function Account() {
   const [shopItems, setShopItems] = useState<ShopItem[]>([])
   const [battlePassShopItems, setBattlePassShopItems] = useState<BattlePassShopItem[]>([])
   const [shopDiscountPercent, setShopDiscountPercent] = useState(0)
-  const [shopEventDiscountPercent, setShopEventDiscountPercent] = useState(10)
+  const [shopEventDiscountPercent, setShopEventDiscountPercent] = useState(0)
   const [shopBusyItem, setShopBusyItem] = useState<string | null>(null)
   const [shopError, setShopError] = useState<string | null>(null)
   const [shopSuccess, setShopSuccess] = useState<string | null>(null)
@@ -206,6 +206,13 @@ export function Account() {
     memberPerks: RoleWebsitePerks
     purchasable: RoleCatalogEntry[]
     grantOnly: RoleCatalogEntry[]
+    currentRole?: string
+    nextPurchasableRoleKey?: string | null
+    crimsonBadgeCount?: number
+    goldBadgeCount?: number
+    mythicBadgeCount?: number
+    profileBadgeCounts?: { crimson: number; gold: number; mythic: number }
+    purchasableTierOrder?: string[]
   } | null>(null)
   const [roleStatus, setRoleStatus] = useState<Awaited<ReturnType<typeof fetchRoleRequestStatus>> | null>(null)
   const [rankBusyKey, setRankBusyKey] = useState<string | null>(null)
@@ -297,7 +304,7 @@ export function Account() {
         setBattlePassShopItems(shop.battlePassItems ?? [])
         setShopDiscountPercent(shop.shopDiscountPercent ?? pOffers.shopDiscountPercent ?? 0)
         setShopEventDiscountPercent(
-          shop.shopEventDiscountPercent ?? pOffers.shopEventDiscountPercent ?? roles?.shopEventDiscountPercent ?? 10
+          shop.shopEventDiscountPercent ?? pOffers.shopEventDiscountPercent ?? roles?.shopEventDiscountPercent ?? 0
         )
         setCobbleBalance(
           currencies.currencies.find((c) => c.currency_type === 'cobbledollars')?.balance ?? 0
@@ -312,6 +319,13 @@ export function Account() {
             memberPerks: roles.memberPerks,
             purchasable: roles.purchasable,
             grantOnly: roles.grantOnly,
+            currentRole: roles.currentRole,
+            nextPurchasableRoleKey: roles.nextPurchasableRoleKey,
+            crimsonBadgeCount: roles.crimsonBadgeCount,
+            goldBadgeCount: roles.goldBadgeCount,
+            mythicBadgeCount: roles.mythicBadgeCount,
+            profileBadgeCounts: roles.profileBadgeCounts,
+            purchasableTierOrder: roles.purchasableTierOrder,
           })
         }
         if (rStatus) setRoleStatus(rStatus)
@@ -573,7 +587,7 @@ export function Account() {
     const [offers, purchases] = await Promise.all([fetchPokemonShopOffers(), fetchPokemonShopPurchases(20)])
     setPokemonOffers(offers.offers ?? [])
     setShopDiscountPercent(offers.shopDiscountPercent ?? 0)
-    setShopEventDiscountPercent(offers.shopEventDiscountPercent ?? 10)
+    setShopEventDiscountPercent(offers.shopEventDiscountPercent ?? 0)
     setPokemonWindowEnd(offers.windowEnd ?? null)
     setPokemonPurchases(purchases.purchases ?? [])
   }
@@ -641,26 +655,56 @@ export function Account() {
       setRankError('Account verification required to buy ranks.')
       return
     }
+    if (!entry.canBuyNow) {
+      if (entry.meetsBadgeRequirement === false && entry.badgeRequirementLabel) {
+        setRankError(
+          `${entry.badgeRequirementLabel} (you have ${roleCat?.crimsonBadgeCount ?? 0} crimson, ${roleCat?.goldBadgeCount ?? 0} gold, ${roleCat?.mythicBadgeCount ?? 0} mythic).`
+        )
+      } else {
+        setRankError('You must buy ranks one step at a time, starting from the next tier.')
+      }
+      return
+    }
     setRankError(null)
     setRankSuccess(null)
     setRankBusyKey(entry.key)
     try {
       const out = await buyRank(entry.key)
-      setRankSuccess(`Purchased rank ${entry.label}. It should apply in-game within a few seconds.`)
+      setRankSuccess(
+        entry.freeRank
+          ? `Claimed rank ${entry.label}. It should apply in-game within a few seconds.`
+          : `Purchased rank ${entry.label}. It should apply in-game within a few seconds.`
+      )
       setCobbleBalance(out.newBalance)
       void refreshUser()
-      const [shopUp, pOffersUp, rs] = await Promise.all([
+      const [shopUp, pOffersUp, rs, rolesUp] = await Promise.all([
         fetchShopItems(),
         fetchPokemonShopOffers(),
         fetchRoleRequestStatus().catch(() => null),
+        fetchRoleCatalog().catch(() => null),
       ])
       setShopItems(shopUp.items ?? [])
       setBattlePassShopItems(shopUp.battlePassItems ?? [])
       setShopDiscountPercent(shopUp.shopDiscountPercent ?? pOffersUp.shopDiscountPercent ?? 0)
-      setShopEventDiscountPercent(shopUp.shopEventDiscountPercent ?? pOffersUp.shopEventDiscountPercent ?? 10)
+      setShopEventDiscountPercent(shopUp.shopEventDiscountPercent ?? pOffersUp.shopEventDiscountPercent ?? 0)
       setPokemonOffers(pOffersUp.offers ?? [])
       setPokemonWindowEnd(pOffersUp.windowEnd ?? null)
       if (rs) setRoleStatus(rs)
+      if (rolesUp) {
+        setRoleCat({
+          defaultRole: rolesUp.defaultRole,
+          memberPerks: rolesUp.memberPerks,
+          purchasable: rolesUp.purchasable,
+          grantOnly: rolesUp.grantOnly,
+          currentRole: rolesUp.currentRole,
+          nextPurchasableRoleKey: rolesUp.nextPurchasableRoleKey,
+          crimsonBadgeCount: rolesUp.crimsonBadgeCount,
+          goldBadgeCount: rolesUp.goldBadgeCount,
+          mythicBadgeCount: rolesUp.mythicBadgeCount,
+          profileBadgeCounts: rolesUp.profileBadgeCounts,
+          purchasableTierOrder: rolesUp.purchasableTierOrder,
+        })
+      }
     } catch (err) {
       setRankError(err instanceof Error ? err.message : 'Rank purchase failed')
     } finally {
@@ -1213,6 +1257,64 @@ export function Account() {
               />
             </div>
           ) : null}
+          {roleCat ? (
+            <div className="mb-4 overflow-hidden rounded-xl border border-sky-500/30 bg-gradient-to-br from-sky-950/40 via-[#0a0f18]/90 to-[#0a0f18]">
+              <div className="border-b border-sky-500/20 bg-sky-950/30 px-4 py-2">
+                <p className="m-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-300/90">
+                  Rank progression
+                </p>
+              </div>
+              <div className="grid grid-cols-1 gap-2.5 p-3 sm:grid-cols-3 sm:gap-3">
+                <div className="rounded-lg border border-white/[0.07] bg-black/25 px-3 py-2.5">
+                  <p className="m-0 mb-1 text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                    How it works
+                  </p>
+                  <p className="m-0 text-xs leading-relaxed text-slate-300">
+                    Purchase ranks one step at a time — only the next tier above your current shop rank can be bought.
+                  </p>
+                </div>
+                <div className="rounded-lg border border-white/[0.07] bg-black/25 px-3 py-2.5">
+                  <p className="m-0 mb-2 text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                    Your profile badges
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="inline-flex items-center gap-1.5 rounded-md border border-rose-500/40 bg-rose-950/45 px-2.5 py-1 text-xs shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                      <span className="font-bold tabular-nums text-rose-100">{roleCat.crimsonBadgeCount ?? 0}</span>
+                      <span className="text-rose-200/80">crimson</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 rounded-md border border-amber-500/40 bg-amber-950/45 px-2.5 py-1 text-xs shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                      <span className="font-bold tabular-nums text-amber-100">{roleCat.goldBadgeCount ?? 0}</span>
+                      <span className="text-amber-200/80">gold</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 rounded-md border border-violet-500/40 bg-violet-950/45 px-2.5 py-1 text-xs shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                      <span className="font-bold tabular-nums text-violet-100">{roleCat.mythicBadgeCount ?? 0}</span>
+                      <span className="text-violet-200/80">mythic</span>
+                    </span>
+                  </div>
+                </div>
+                <div className="rounded-lg border border-amber-500/35 bg-amber-950/30 px-3 py-2.5">
+                  <p className="m-0 mb-2 text-[10px] font-medium uppercase tracking-wide text-amber-200/75">
+                    Next for you
+                  </p>
+                  {roleCat.nextPurchasableRoleKey ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <RoleBadge roleKey={roleCat.nextPurchasableRoleKey} compact />
+                      <span className="text-sm font-semibold tracking-wide text-[#fbbf24]">
+                        {roleCat.purchasable.find((e) => e.key === roleCat.nextPurchasableRoleKey)?.label ??
+                          roleCat.nextPurchasableRoleKey.toUpperCase()}
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="m-0 text-xs leading-relaxed text-slate-400">
+                      {roleCat.currentRole && roleCat.currentRole !== 'member'
+                        ? 'You already have the highest shop rank (or a staff rank).'
+                        : 'No further shop upgrades available.'}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : null}
           <p className="text-xs text-muted m-0 mb-3">After payment, your rank updates in-game within a few seconds.</p>
           <div className="mb-6 pixel-well p-4 space-y-3">
             {roleCat?.purchasable?.length ? (
@@ -1229,7 +1331,9 @@ export function Account() {
                       <div className="min-w-0">
                         <p className="m-0 text-sm font-semibold text-[#e2e8f0]">{entry.label}</p>
                         <p className="m-0 mt-1 text-sm font-medium tabular-nums text-[#fbbf24]">
-                          {entry.listCost != null && entry.cost != null && entry.cost < entry.listCost ? (
+                          {entry.freeRank ? (
+                            <span className="text-emerald-300">Free</span>
+                          ) : entry.listCost != null && entry.cost != null && entry.cost < entry.listCost ? (
                             <>
                               <span className="line-through opacity-70 text-muted mr-1.5">
                                 {entry.listCost.toLocaleString()}
@@ -1240,17 +1344,42 @@ export function Account() {
                             <>{(entry.cost ?? 0).toLocaleString()} Cobble$</>
                           )}
                         </p>
+                        {entry.badgeRequirementLabel ? (
+                          <p className="m-0 mt-1 text-xs text-rose-200/90">
+                            {entry.badgeRequirementLabel}
+                            {entry.meetsBadgeRequirement === false ? (
+                              <span className="text-muted"> — not met yet</span>
+                            ) : entry.meetsBadgeRequirement ? (
+                              <span className="text-emerald-300/90"> — OK</span>
+                            ) : null}
+                          </p>
+                        ) : null}
                       </div>
                     </div>
                     <button
                       type="button"
                       onClick={() => handleBuyRank(entry)}
                       disabled={
-                        !canUseWebsiteShop || rankBusyKey === entry.key || cobbleBalance < (entry.cost ?? 0)
+                        !canUseWebsiteShop ||
+                        rankBusyKey === entry.key ||
+                        !entry.canBuyNow ||
+                        entry.owned ||
+                        entry.meetsBadgeRequirement === false ||
+                        (!entry.freeRank && cobbleBalance < (entry.cost ?? 0))
                       }
                       className="shrink-0 self-start px-4 py-2 text-base pixel-btn-primary disabled:opacity-50"
                     >
-                      {rankBusyKey === entry.key ? 'Buying...' : 'Buy'}
+                      {entry.owned
+                        ? 'Owned'
+                        : entry.locked || entry.meetsBadgeRequirement === false
+                          ? 'Locked'
+                          : rankBusyKey === entry.key
+                            ? entry.freeRank
+                              ? 'Claiming…'
+                              : 'Buying...'
+                            : entry.freeRank
+                              ? 'Claim'
+                              : 'Buy'}
                     </button>
                   </div>
                   <div className="w-full border-t border-border/45 pt-3">

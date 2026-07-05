@@ -39,6 +39,11 @@ import {
   getDailyLoginTicketBonusPerClaim,
   getPurchasableCost,
   getRoleCatalog,
+  getNextPurchasableRoleKey,
+  validatePurchasableRoleUpgrade,
+  validateRolePurchaseBadgeRequirement,
+  purchasableRoleCatalogFlags,
+  PURCHASABLE_ROLE_KEYS,
   getWebsiteShopDiscountPercent,
   applyWebsiteShopEventPrice,
   applyWebsiteShopPrice,
@@ -124,6 +129,8 @@ import {
   achievementTierRank,
   normalizeAchievementSlug,
   parseAchievementTier,
+  countUserCrimsonBadges,
+  countUserProfileBadgesByTier,
 } from "./profileAchievements.js";
 
 function readMinecraftRoleField(row: { minecraft_role?: string | null } | null | undefined): string {
@@ -2287,16 +2294,28 @@ app.post("/admin/verification-requests/:id/reject", requireAuth, requireAdmin, a
 });
 
 // --- Minecraft rank: catalog, Cobble$ purchase (RCON LuckPerms), grant-only requests ---
-app.get("/roles/catalog", requireAuth, (_req, res) => {
+app.get("/roles/catalog", requireAuth, async (_req, res) => {
+  const userId = res.locals.user!.userId;
+  const currentRole = await getUserMinecraftRoleForShop(userId);
+  const profileBadgeCounts = supabase ? await countUserProfileBadgesByTier(supabase, userId) : { crimson: 0, gold: 0, mythic: 0 };
   const catalog = getRoleCatalog();
+  const nextPurchasableRoleKey = getNextPurchasableRoleKey(currentRole);
   res.json({
     currency: COBBLEDOLLARS_CURRENCY,
     shopEventDiscountPercent: SHOP_EVENT_DISCOUNT_PERCENT,
+    currentRole,
+    nextPurchasableRoleKey,
+    crimsonBadgeCount: profileBadgeCounts.crimson,
+    goldBadgeCount: profileBadgeCounts.gold,
+    mythicBadgeCount: profileBadgeCounts.mythic,
+    profileBadgeCounts,
+    purchasableTierOrder: [...PURCHASABLE_ROLE_KEYS],
     ...catalog,
-    purchasable: catalog.purchasable.map((entry) => ({
+    purchasable: catalog.purchasable.map((entry, tierIndex) => ({
       ...entry,
       listCost: entry.cost ?? null,
       cost: entry.cost != null ? applyWebsiteShopEventPrice(entry.cost) : undefined,
+      ...purchasableRoleCatalogFlags(currentRole, entry.key, tierIndex, profileBadgeCounts),
     })),
   });
 });
@@ -2637,45 +2656,102 @@ app.post("/roles/buy", requireAuth, async (req, res) => {
     res.status(400).json({ error: "This rank cannot be purchased on the web shop." });
     return;
   }
-  const cost = applyWebsiteShopEventPrice(listCost);
 
-  const wallet = await ensureUserCobbledollarsRow(user.userId);
-  if (!wallet) {
-    res.status(500).json({ error: "Could not open Cobble$ wallet" });
-    return;
-  }
-  if (wallet.balance < cost) {
+  const currentRole = await getUserMinecraftRoleForShop(user.userId);
+  const upgradeCheck = validatePurchasableRoleUpgrade(currentRole, roleKey);
+  if (!upgradeCheck.ok) {
     res.status(400).json({
-      error: "Not enough Cobble$",
-      balance: wallet.balance,
-      required: cost,
+      error: upgradeCheck.error,
+      currentRole,
+      nextPurchasableRoleKey: upgradeCheck.nextRoleKey,
     });
     return;
   }
 
-  const newBalance = wallet.balance - cost;
-  const now = new Date().toISOString();
-  const { data: updated, error: updErr } = await supabase
-    .from("user_currency")
-    .update({ balance: newBalance, updated_at: now })
-    .eq("id", wallet.id)
-    .eq("balance", wallet.balance)
-    .select("balance");
-  if (updErr) {
-    res.status(500).json({ error: updErr.message });
-    return;
-  }
-  if (!updated?.length) {
-    res.status(409).json({ error: "Balance changed — try again" });
+  const profileBadgeCounts = await countUserProfileBadgesByTier(supabase, user.userId);
+  const badgeCheck = validateRolePurchaseBadgeRequirement(profileBadgeCounts, roleKey, currentRole);
+  if (!badgeCheck.ok) {
+    res.status(400).json({
+      error: badgeCheck.error,
+      profileBadgeCounts: badgeCheck.badgeCounts,
+    });
     return;
   }
 
+  const cost = applyWebsiteShopEventPrice(listCost);
+
+  let newBalance: number;
+  if (cost > 0) {
+    const wallet = await ensureUserCobbledollarsRow(user.userId);
+    if (!wallet) {
+      res.status(500).json({ error: "Could not open Cobble$ wallet" });
+      return;
+    }
+    if (wallet.balance < cost) {
+      res.status(400).json({
+        error: "Not enough Cobble$",
+        balance: wallet.balance,
+        required: cost,
+      });
+      return;
+    }
+
+    newBalance = wallet.balance - cost;
+    const now = new Date().toISOString();
+    const { data: updated, error: updErr } = await supabase
+      .from("user_currency")
+      .update({ balance: newBalance, updated_at: now })
+      .eq("id", wallet.id)
+      .eq("balance", wallet.balance)
+      .select("balance");
+    if (updErr) {
+      res.status(500).json({ error: updErr.message });
+      return;
+    }
+    if (!updated?.length) {
+      res.status(409).json({ error: "Balance changed — try again" });
+      return;
+    }
+
+    const lp = await runLuckpermsParentSet(user.username, roleKey);
+    if (!lp.ok) {
+      await supabase
+        .from("user_currency")
+        .update({ balance: wallet.balance, updated_at: new Date().toISOString() })
+        .eq("id", wallet.id);
+      res.status(502).json({ error: lp.error });
+      return;
+    }
+
+    const { error: roleErr } = await supabase
+      .from("users")
+      .update({ minecraft_role: roleKey, updated_at: now })
+      .eq("id", user.userId);
+    if (roleErr) {
+      console.error("[roles/buy] LuckPerms OK but users.minecraft_role update failed", roleErr);
+      res.status(500).json({
+        error:
+          "Rank was applied on the Minecraft server but the website failed to save it. Staff can fix your account — your Cobble$ was still charged.",
+      });
+      return;
+    }
+
+    await recordCobbledollarLedger(user.userId, -cost, newBalance, "role_shop", roleKey);
+    res.json({
+      ok: true,
+      roleKey,
+      cost,
+      listCost,
+      freeRank: false,
+      shopEventDiscountPercent: SHOP_EVENT_DISCOUNT_PERCENT,
+      newBalance,
+    });
+    return;
+  }
+
+  const now = new Date().toISOString();
   const lp = await runLuckpermsParentSet(user.username, roleKey);
   if (!lp.ok) {
-    await supabase
-      .from("user_currency")
-      .update({ balance: wallet.balance, updated_at: new Date().toISOString() })
-      .eq("id", wallet.id);
     res.status(502).json({ error: lp.error });
     return;
   }
@@ -2688,17 +2764,19 @@ app.post("/roles/buy", requireAuth, async (req, res) => {
     console.error("[roles/buy] LuckPerms OK but users.minecraft_role update failed", roleErr);
     res.status(500).json({
       error:
-        "Rank was applied on the Minecraft server but the website failed to save it. Staff can fix your account — your Cobble$ was still charged.",
+        "Rank was applied on the Minecraft server but the website failed to save it. Staff can fix your account.",
     });
     return;
   }
 
-  await recordCobbledollarLedger(user.userId, -cost, newBalance, "role_shop", roleKey);
+  const wallet = await ensureUserCobbledollarsRow(user.userId);
+  newBalance = wallet?.balance ?? 0;
   res.json({
     ok: true,
     roleKey,
-    cost,
-    listCost,
+    cost: 0,
+    listCost: 0,
+    freeRank: true,
     shopEventDiscountPercent: SHOP_EVENT_DISCOUNT_PERCENT,
     newBalance,
   });
@@ -3312,10 +3390,10 @@ const DAILY_STREAK_REWARDS = [
   { day: 7, kind: "cobbledollars", amount: 150_000, label: "Cobble$ +150,000" },
 ] as const;
 const SHOP_ITEMS = [
-  { itemKey: "exp_candy_xl", label: "EXP Candy XL", cost: 70_000 },
-  { itemKey: "silver_bottle_cap", label: "Silver Bottle Cap", cost: 500_000 },
-  { itemKey: "master_ball", label: "Master Ball", cost: 1_000_000 },
-  { itemKey: "ancient_origin_ball", label: "Ancient Origin Ball", cost: 1_250_000 },
+  { itemKey: "exp_candy_xl", label: "EXP Candy XL", cost: 90_000 },
+  { itemKey: "silver_bottle_cap", label: "Silver Bottle Cap", cost: 700_000 },
+  { itemKey: "master_ball", label: "Master Ball", cost: 2_000_000 },
+  { itemKey: "ancient_origin_ball", label: "Ancient Origin Ball", cost: 2_500_000 },
 ] as const;
 
 const BATTLEPASS_SHOP_ITEMS = [
@@ -3350,8 +3428,8 @@ const POKEMON_SHOP_OFFER_COUNT = 6;
 const POKEMON_SHOP_SHINY_CHANCE = 0.35;
 const POKEMON_SHOP_CATEGORIES = {
   mythic: {
-    priceShiny: 20_000_000,
-    priceNormal: 8_000_000,
+    priceShiny: 24_000_000,
+    priceNormal: 12_000_000,
     weight: 4,
     species: [
       "mew", "celebi", "jirachi", "deoxys", "manaphy", "phione", "darkrai", "shaymin",
@@ -3369,8 +3447,8 @@ const POKEMON_SHOP_CATEGORIES = {
     ],
   },
   paradox: {
-    priceShiny: 9_000_000,
-    priceNormal: 4_000_000,
+    priceShiny: 10_000_000,
+    priceNormal: 5_000_000,
     weight: 25,
     species: [
       "greattusk", "screamtail", "brutebonnet", "fluttermane", "slitherwing", "sandyshocks",
@@ -3380,8 +3458,8 @@ const POKEMON_SHOP_CATEGORIES = {
     ],
   },
   ultra_beast: {
-    priceShiny: 9_000_000,
-    priceNormal: 4_000_000,
+    priceShiny: 14_000_000,
+    priceNormal: 7_000_000,
     weight: 25,
     species: [
       "nihilego", "buzzwole", "pheromosa", "xurkitree", "celesteela", "kartana", "guzzlord",
@@ -3389,8 +3467,8 @@ const POKEMON_SHOP_CATEGORIES = {
     ],
   },
   legend_high: {
-    priceShiny: 35_000_000,
-    priceNormal: 15_000_000,
+    priceShiny: 36_000_000,
+    priceNormal: 18_000_000,
     weight: 2,
     species: [
       "mewtwo", "lugia", "hooh", "latias", "latios", "kyogre", "groudon", "rayquaza",
@@ -3402,8 +3480,8 @@ const POKEMON_SHOP_CATEGORIES = {
     ],
   },
   legend_low: {
-    priceShiny: 25_000_000,
-    priceNormal: 10_000_000,
+    priceShiny: 24_000_000,
+    priceNormal: 12_000_000,
     weight: 4,
     species: [
       "articuno", "zapdos", "moltres", "raikou", "entei", "suicune",
