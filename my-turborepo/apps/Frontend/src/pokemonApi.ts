@@ -99,6 +99,16 @@ const SHOWDOWN_SPRITE_SLUG_ALIASES: Record<string, string> = {
   'basculin-white-striped': 'basculin-whitestriped',
 }
 
+/** Local custom sprites (tournament / server-exclusive forms). Served from Frontend public/. */
+const CUSTOM_POKEMON_SPRITE_URLS: Record<string, string> = {
+  'floette-ange': '/sprites/pokemon/floette-ange.png',
+}
+
+function customPokemonSpriteUrl(speciesSlug: string): string | null {
+  const s = sanitizeShowdownSpeciesSlug(speciesSlug)
+  return CUSTOM_POKEMON_SPRITE_URLS[s] ?? null
+}
+
 /** Filename slug for Showdown sprite paths (not always == PokéAPI name). */
 function showdownSpriteSlug(speciesSlug: string): string {
   let s = sanitizeShowdownSpeciesSlug(speciesSlug)
@@ -141,6 +151,9 @@ export function showdownSpriteFallbackUrls(
   const shiny = opts?.shiny ?? false
   const slugs = showdownSpriteSlugCandidates(speciesSlug)
   const urls: string[] = []
+
+  const custom = customPokemonSpriteUrl(speciesSlug)
+  if (custom) urls.push(custom)
 
   const pixelFolders = shiny ? (['gen5-shiny'] as const) : (['gen5', 'gen6'] as const)
   for (const folder of pixelFolders) {
