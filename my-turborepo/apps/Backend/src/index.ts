@@ -107,6 +107,12 @@ import {
 } from "./cobbleRankedFeedAdmin.js";
 import { fetchReviewedKeySet, upsertFeedReview, upsertFeedReviewBundle } from "./cobbleRankedFeedReviewsDb.js";
 import { runRankedAdminEloRcon, type RankedFormatArg } from "./minecraftRankedAdminElo.js";
+import {
+  isValidMinecraftIgn,
+  normalizeFacilityAdminMode,
+  runFacilityForceWinRcon,
+  runFacilitySetStageRcon,
+} from "./minecraftFacilityAdmin.js";
 import { runBattlePassLuckpermsCommand } from "./minecraftBattlePassLp.js";
 import {
   getBattlePassOwnershipForUser,
@@ -5885,6 +5891,75 @@ app.post("/admin/minecraft/rankedadmin-elo", requireAuth, requireAdmin, async (r
   }
   console.warn(`[admin] ranked elo failed`, exec.error);
   res.json({ ok: false, error: exec.error ?? "Could not update ELO on the server." });
+});
+
+/**
+ * Battle Tower / SBF mod admin RCON:
+ * - force_win → `sbf admin forcewin <player>`
+ * - set_stage → `sbf admin setstage <player> <tower|classic> <stage>`
+ */
+app.post("/admin/minecraft/facility-admin", requireAuth, requireAdmin, async (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const actionRaw = typeof body.action === "string" ? body.action.trim().toLowerCase() : "";
+  const minecraftUsername =
+    typeof body.minecraft_username === "string" ? body.minecraft_username.trim() : "";
+
+  if (!minecraftUsername) {
+    res.status(400).json({ error: "minecraft_username required" });
+    return;
+  }
+  if (!isValidMinecraftIgn(minecraftUsername)) {
+    res.status(400).json({ error: "minecraft_username must be a valid Minecraft IGN (2–16 [A-Za-z0-9_])" });
+    return;
+  }
+
+  if (actionRaw === "force_win" || actionRaw === "forcewin" || actionRaw === "result_win") {
+    const exec = await runFacilityForceWinRcon(minecraftUsername);
+    if (exec.ok) {
+      console.info(`[admin] sbf forcewin ${minecraftUsername}: ok (${exec.command})`);
+      res.json({ ok: true, command: exec.command, output: exec.output });
+      return;
+    }
+    console.warn(`[admin] sbf forcewin failed`, exec.error);
+    res.json({ ok: false, error: exec.error ?? "Could not run sbf forcewin on the server.", command: exec.command });
+    return;
+  }
+
+  if (actionRaw === "set_stage" || actionRaw === "setstage") {
+    const stage = Number(body.stage);
+    const mode = normalizeFacilityAdminMode(typeof body.mode === "string" ? body.mode : "");
+    if (!Number.isFinite(stage) || !Number.isInteger(stage) || stage < 0) {
+      res.status(400).json({ error: "stage must be a whole number ≥ 0" });
+      return;
+    }
+    if (stage > 10_000) {
+      res.status(400).json({ error: "stage must be at most 10000" });
+      return;
+    }
+    if (!mode) {
+      res.status(400).json({ error: "mode must be tower or classic" });
+      return;
+    }
+    const exec = await runFacilitySetStageRcon(minecraftUsername, stage, mode);
+    if (exec.ok) {
+      console.info(
+        `[admin] sbf setstage ${minecraftUsername} ${mode} ${stage}: ok (${exec.command})`
+      );
+      res.json({ ok: true, command: exec.command, output: exec.output });
+      return;
+    }
+    console.warn(`[admin] sbf setstage failed`, exec.error);
+    res.json({
+      ok: false,
+      error: exec.error ?? "Could not run sbf setstage on the server.",
+      command: exec.command,
+    });
+    return;
+  }
+
+  res.status(400).json({
+    error: "action must be force_win or set_stage",
+  });
 });
 
 function parseBooleanGrant(body: Record<string, unknown>, field: "grant" | "enable"): boolean | null {

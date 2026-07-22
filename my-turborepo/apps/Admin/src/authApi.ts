@@ -687,6 +687,23 @@ export async function adminMinecraftRankedadminElo(body: {
   })
 }
 
+/** Battle Tower / SBF mod admin RCON (`sbf admin …`). */
+export async function adminMinecraftFacilityAdmin(
+  body:
+    | { action: 'force_win'; minecraft_username: string }
+    | {
+        action: 'set_stage'
+        minecraft_username: string
+        stage: number
+        mode: 'tower' | 'classic'
+      }
+): Promise<{ ok: boolean; error?: string; command?: string; output?: string }> {
+  return fetchJson(`/admin/minecraft/facility-admin`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
 export type RankedBattleStaffEvent = {
   id: number
   created_at: string

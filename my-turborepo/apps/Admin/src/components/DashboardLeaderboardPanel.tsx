@@ -21,6 +21,7 @@ import type {
   LeaderboardResponse,
 } from '../types'
 import { normalizePvpTierSlugForAssets, PvPTierBadge } from './PvPTierBadge.tsx'
+import { BattleTowerFacilityAdmin } from './BattleTowerFacilityAdmin.tsx'
 
 type MainSection = 'ranks' | 'economy' | 'battle'
 type RankFormatId = 'singles' | 'doubles'
@@ -770,6 +771,7 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
           <h3 id="dash-battle-heading" className="sr-only">
             Battle Tower
           </h3>
+          <BattleTowerFacilityAdmin />
           <div className="flex flex-wrap gap-2 items-center justify-between gap-y-3">
             <div className="flex flex-wrap gap-2" role="tablist" aria-label="Battle Tower mode">
               {BATTLE_MODES.map(({ id, label }) => (
