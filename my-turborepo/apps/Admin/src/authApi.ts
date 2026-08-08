@@ -704,6 +704,24 @@ export async function adminMinecraftFacilityAdmin(
   })
 }
 
+export async function adminMinecraftNightMarket(
+  body:
+    | { action: 'open'; minutes: number; location?: string }
+    | { action: 'close'; location?: string }
+): Promise<{
+  ok: boolean
+  error?: string
+  command?: string
+  output?: string
+  location?: string
+  minutes?: number
+}> {
+  return fetchJson(`/admin/minecraft/nightmarket`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
 export type RankedBattleStaffEvent = {
   id: number
   created_at: string

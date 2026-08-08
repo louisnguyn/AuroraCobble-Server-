@@ -1,13 +1,13 @@
-# Showing AuroraCobble in Google Search
+# Showing Asteryn Cobblemon SMP in Google Search
 
 Google’s small round icon beside a result (like YouTube’s) comes from your **favicon** (`logo_icon.png`). The Frontend `index.html` and `site.webmanifest` are set up for that. Google may take days or weeks to refresh the icon after deploy.
 
-## Why “auroracobble” might not show your website yet
+## Why “asteryn” might not show your website yet
 
 1. **Indexing** — Google must crawl and index your live site. A new or rarely linked site often does not appear immediately.
-2. **Brand competition** — Other results (e.g. YouTube channels mentioning “AuroraCobble Adventure”) can rank above you until your site has clear titles, descriptions, and backlinks.
+2. **Brand competition** — Other results (e.g. YouTube channels mentioning “Asteryn Cobblemon SMP”) can rank above you until your site has clear titles, descriptions, and backlinks.
 3. **Missing public URL** — Search needs a stable HTTPS URL. Set `VITE_SITE_URL` in `apps/Frontend/.env` to that URL before `npm run build` so canonical links and `sitemap.xml` are correct.
-4. **SPA / hash URLs** — The app uses hash routes (`#profile/...`). Google mainly indexes the homepage `/`; that is enough to appear for the brand if the homepage mentions **AuroraCobble** in the title and description (already in `index.html`).
+4. **SPA / hash URLs** — The app uses hash routes (`#profile/...`). Google mainly indexes the homepage `/`; that is enough to appear for the brand if the homepage mentions **Asteryn Cobblemon SMP** in the title and description (already in `index.html`).
 
 ## What to do (recommended)
 

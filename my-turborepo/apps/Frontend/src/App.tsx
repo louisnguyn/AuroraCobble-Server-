@@ -259,7 +259,7 @@ function AppContent() {
         >
           <img
             src="/logo_text.png"
-            alt="Aurora Cobble"
+            alt="Asteryn Cobblemon SMP"
             className="block h-24 w-auto max-w-[200px] sm:max-w-[280px] object-contain object-left shrink-0"
           />
         </button>

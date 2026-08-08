@@ -17,7 +17,7 @@ export async function createPokepasteShareUrl(opts: {
   }
 
   const title = (opts.title ?? "Team").trim().slice(0, 200) || "Team";
-  const author = (opts.author ?? "AuroraCobble").trim().slice(0, 100) || "AuroraCobble";
+  const author = (opts.author ?? "Asteryn Cobblemon SMP").trim().slice(0, 100) || "Asteryn Cobblemon SMP";
 
   const body = new URLSearchParams({ title, paste, author });
 
@@ -26,7 +26,7 @@ export async function createPokepasteShareUrl(opts: {
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
       Accept: "text/html,application/xhtml+xml",
-      "User-Agent": "AuroraCobble-TeamBuilder/1.0 (+https://github.com/smogon/pokemon-showdown pokepaste)",
+      "User-Agent": "AsterynCobblemonSMP-TeamBuilder/1.0 (+https://github.com/smogon/pokemon-showdown pokepaste)",
     },
     body: body.toString(),
     redirect: "manual",

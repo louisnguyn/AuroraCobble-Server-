@@ -11,6 +11,17 @@ export const GRANT_ONLY_ROLE_KEYS = new Set([
   "youtuber",
   "builder",
   "god",
+  "owner",
+  "admin",
+  "donator",
+  "vip",
+  "svip",
+  "mvip",
+  "uvip",
+  "knight",
+  "hero",
+  "titan",
+  "zeus",
 ]);
 
 /** Website perks tied to LuckPerms rank (shop discount, daily login streak extras). */
@@ -52,6 +63,17 @@ const GRANT_ONLY_LABELS: Record<string, string> = {
   ultimate: "ULTIMATE",
   overlord: "OVERLORD",
   god: "GOD",
+  owner: "OWNER",
+  admin: "ADMIN",
+  donator: "DONATOR",
+  vip: "VIP",
+  svip: "SVIP",
+  mvip: "MVIP",
+  uvip: "UVIP",
+  knight: "KNIGHT",
+  hero: "HERO",
+  titan: "TITAN",
+  zeus: "ZEUS",
 };
 
 /** Staff / partner grant-only ranks — same website shop discount as MASTER (15%). */
@@ -311,6 +333,20 @@ export function getWebsiteShopDiscountPercent(roleKey: string): number {
     ultimate: 18,
     overlord: 25,
     god: 25,
+    // Donation / VIP tiers (ascending)
+    donator: 10,
+    vip: 12,
+    svip: 15,
+    mvip: 18,
+    uvip: 22,
+    // Special / event ranks (ascending)
+    knight: 12,
+    hero: 16,
+    titan: 20,
+    zeus: 25,
+    // Staff
+    admin: 25,
+    owner: 30,
   };
   return byRole[k] ?? 0;
 }
@@ -337,6 +373,20 @@ export function getDailyLoginFlatCobbleBonusPerClaim(roleKey: string): number {
     ultimate: 90_000,
     overlord: 150_000,
     god: 200_000,
+    // Donation / VIP tiers (ascending)
+    donator: 50_000,
+    vip: 60_000,
+    svip: 80_000,
+    mvip: 100_000,
+    uvip: 130_000,
+    // Special / event ranks (ascending)
+    knight: 60_000,
+    hero: 85_000,
+    titan: 120_000,
+    zeus: 160_000,
+    // Staff
+    admin: 150_000,
+    owner: 250_000,
   };
   if (k in byRole) return byRole[k]!;
   if (GRANT_ONLY_FLAT_SHOP_DISCOUNT_15.has(k)) return 85_000;
@@ -358,6 +408,20 @@ export function getDailyLoginTicketBonusPerClaim(roleKey: string): number {
     ultimate: 2,
     overlord: 3,
     god: 3,
+    // Donation / VIP tiers (ascending)
+    donator: 1,
+    vip: 1,
+    svip: 2,
+    mvip: 2,
+    uvip: 3,
+    // Special / event ranks (ascending)
+    knight: 1,
+    hero: 2,
+    titan: 3,
+    zeus: 3,
+    // Staff
+    admin: 3,
+    owner: 5,
   };
   return byRole[k] ?? 0;
 }

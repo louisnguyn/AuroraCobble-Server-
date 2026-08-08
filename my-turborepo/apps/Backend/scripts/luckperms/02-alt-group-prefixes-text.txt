@@ -1,0 +1,56 @@
+# FALLBACK - plain coloured text prefixes, no resource pack needed.
+# Use this INSTEAD OF 02-group-prefixes-glyph.txt if the rank pack is not hosted yet.
+# Running both is fine; whichever runs last wins, since setprefix overwrites.
+#
+# Run: npx tsx scripts/rcon-batch.ts scripts/luckperms/02-alt-group-prefixes-text.txt
+
+# --- Default ---
+lp group member setweight 10
+lp group member meta setprefix 10 "&8[&7Member&8]&r "
+
+# --- Purchasable ladder ---
+lp group noob setweight 20
+lp group noob meta setprefix 20 "&8[&aNOOB&8]&r "
+
+lp group elite setweight 30
+lp group elite meta setprefix 30 "&8[&bELITE&8]&r "
+
+lp group pro setweight 40
+lp group pro meta setprefix 40 "&8[&9PRO&8]&r "
+
+lp group master setweight 50
+lp group master meta setprefix 50 "&8[&dMASTER&8]&r "
+
+lp group ultimate setweight 60
+lp group ultimate meta setprefix 60 "&8[&6ULTIMATE&8]&r "
+
+lp group onichan setweight 70
+lp group onichan meta setprefix 70 "&8[&dOniiChan&8]&r "
+
+lp group legend setweight 80
+lp group legend meta setprefix 80 "&8[&eLEGEND&8]&r "
+
+lp group overlord setweight 90
+lp group overlord meta setprefix 90 "&8[&4OVERLORD&8]&r "
+
+# --- Grant-only (partner / staff / special) ---
+lp group tiktok setweight 100
+lp group tiktok meta setprefix 100 "&8[&dTikTok&8]&r "
+
+lp group youtuber setweight 110
+lp group youtuber meta setprefix 110 "&8[&cYouTuber&8]&r "
+
+lp group builder setweight 120
+lp group builder meta setprefix 120 "&8[&2Builder&8]&r "
+
+lp group champion setweight 130
+lp group champion meta setprefix 130 "&8[&6Champion&8]&r "
+
+lp group helper setweight 140
+lp group helper meta setprefix 140 "&8[&aHelper&8]&r "
+
+lp group mod setweight 150
+lp group mod meta setprefix 150 "&8[&3Mod&8]&r "
+
+lp group god setweight 200
+lp group god meta setprefix 200 "&8[&5GOD&8]&r "

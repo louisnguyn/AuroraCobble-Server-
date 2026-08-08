@@ -553,7 +553,7 @@ export function Tournament({
           </div>
           <div className="tournament-panel-brand-mark site-brand-mark" aria-hidden>
             <img src="/logo_icon.png" alt="" draggable={false} />
-            <span>AuroraCobble</span>
+            <span>Asteryn Cobblemon SMP</span>
           </div>
           <div className="relative z-[1] space-y-6 w-full min-w-0 pb-10">
             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">

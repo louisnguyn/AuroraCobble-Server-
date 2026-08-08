@@ -136,7 +136,7 @@ export default function App() {
         <div className="md:pt-4">
           <img
             src="/logo_text.png"
-            alt="Aurora Cobble"
+            alt="Asteryn Cobblemon SMP"
             className="block w-full max-w-[180px] h-auto mx-auto mb-6 object-contain"
           />
           <div className="mb-4 mx-2 p-3 rounded-xl bg-surface-hover/80 border border-border/60">

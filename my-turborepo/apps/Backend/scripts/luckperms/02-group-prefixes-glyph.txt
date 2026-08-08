@@ -1,0 +1,56 @@
+# Rank prefixes using the Asteryn rank pack bitmap font.
+# Codepoints come from assets/minecraft/font/default.json in the pack.
+# `\uXXXX` is expanded by rcon-batch.ts before sending.
+#
+# &f before the glyph matters: colour codes tint bitmap glyphs, so white keeps the
+# icon's own colours. Trailing space separates the icon from the player name.
+#
+# All priorities are 100 and no weights are set: the website assigns ranks with
+# `lp user <name> parent set <role>`, so a player holds exactly one group and there
+# is never a tie to break.
+#
+# Requires the pack to be live via server.properties. Use the MERGED pack that also
+# contains the Battle Pass GUI (U+E001-E006) and Cobblemon models - the standalone
+# rank-icon pack would drop those.
+#   resource-pack=<direct download url>
+#   resource-pack-sha1=<sha1 of whichever zip you host>
+# Without it clients see a missing-glyph box instead of the icon.
+#
+# Run: npx tsx scripts/rcon-batch.ts scripts/luckperms/02-group-prefixes-glyph.txt
+
+# --- Default ---
+lp group member meta setprefix 100 "&f\uE008 "
+
+# --- Purchasable ladder (shop order) ---
+lp group noob meta setprefix 100 "&f\uE00A "
+lp group elite meta setprefix 100 "&f\uF103 "
+lp group pro meta setprefix 100 "&f\uE00E "
+lp group master meta setprefix 100 "&f\uE007 "
+lp group ultimate meta setprefix 100 "&f\uF110 "
+lp group onichan meta setprefix 100 "&f\uE013 "
+lp group legend meta setprefix 100 "&f\uF106 "
+lp group overlord meta setprefix 100 "&f\uE00B "
+
+# --- Grant-only: staff / partner ---
+lp group champion meta setprefix 100 "&f\uF102 "
+lp group helper meta setprefix 100 "&f\uF105 "
+lp group mod meta setprefix 100 "&f\uE009 "
+lp group tiktok meta setprefix 100 "&f\uE00F "
+lp group youtuber meta setprefix 100 "&f\uE011 "
+lp group builder meta setprefix 100 "&f\uF101 "
+lp group god meta setprefix 100 "&f\uF104 "
+lp group admin meta setprefix 100 "&f\uF124 "
+lp group owner meta setprefix 100 "&f\uE00C "
+
+# --- Grant-only: donation / VIP tiers ---
+lp group donator meta setprefix 100 "&f\uF125 "
+lp group vip meta setprefix 100 "&f\uF121 "
+lp group svip meta setprefix 100 "&f\uF122 "
+lp group mvip meta setprefix 100 "&f\uF123 "
+lp group uvip meta setprefix 100 "&f\uF120 "
+
+# --- Grant-only: special / event ---
+lp group knight meta setprefix 100 "&f\uF127 "
+lp group hero meta setprefix 100 "&f\uF126 "
+lp group titan meta setprefix 100 "&f\uF129 "
+lp group zeus meta setprefix 100 "&f\uF128 "

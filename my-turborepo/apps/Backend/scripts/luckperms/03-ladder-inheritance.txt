@@ -1,0 +1,17 @@
+# OPTIONAL — chain the purchasable ladder so each rank inherits the one below it.
+#
+# Why this matters: the website grants ranks with `lp user <name> parent set <role>`,
+# which REPLACES every parent with the single new group. Without this chain, a player
+# promoted to OVERLORD loses whatever NOOB..LEGEND granted. With it, one parent is enough.
+#
+# Skip this file if each rank should carry its own standalone permissions.
+# Run: npx tsx scripts/rcon-batch.ts scripts/luckperms/03-ladder-inheritance.txt
+
+lp group noob parent add member
+lp group elite parent add noob
+lp group pro parent add elite
+lp group master parent add pro
+lp group ultimate parent add master
+lp group onichan parent add ultimate
+lp group legend parent add onichan
+lp group overlord parent add legend

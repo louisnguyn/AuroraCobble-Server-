@@ -217,9 +217,9 @@ export function Profile({ slugFromHashOrNav }: ProfileProps) {
       <div className="profile-hero profile-ambient rounded-[2rem] overflow-hidden mb-10 border border-[#362f55]/90 profile-glass relative">
         <div className="profile-hero-grid-bg pointer-events-none" aria-hidden />
         <div className="profile-hero-inner relative z-[1] p-5 sm:p-10">
-          <a href="/" className="profile-hero-brand-mark site-brand-mark" aria-label="Aurora Cobble — home">
+          <a href="/" className="profile-hero-brand-mark site-brand-mark" aria-label="Asteryn Cobblemon SMP — home">
             <img src="/logo_icon.png" alt="" loading="lazy" decoding="async" draggable={false} />
-            <span>AuroraCobble</span>
+            <span>Asteryn Cobblemon SMP</span>
           </a>
           <div className="flex flex-row gap-4 sm:gap-8 items-start w-full min-w-0">
           <div className="profile-avatar-shell shrink-0">

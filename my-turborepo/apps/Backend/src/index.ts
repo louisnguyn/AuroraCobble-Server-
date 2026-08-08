@@ -113,6 +113,13 @@ import {
   runFacilityForceWinRcon,
   runFacilitySetStageRcon,
 } from "./minecraftFacilityAdmin.js";
+import {
+  DEFAULT_NIGHT_MARKET_LOCATION,
+  NIGHT_MARKET_MAX_MINUTES,
+  normalizeNightMarketLocation,
+  runNightMarketCloseRcon,
+  runNightMarketOpenRcon,
+} from "./minecraftNightMarket.js";
 import { runBattlePassLuckpermsCommand } from "./minecraftBattlePassLp.js";
 import {
   getBattlePassOwnershipForUser,
@@ -829,7 +836,7 @@ app.post("/team/pokepaste-link", async (req, res) => {
   const author =
     typeof body.author === "string" && body.author.trim()
       ? body.author.trim().slice(0, 100)
-      : "AuroraCobble";
+      : "Asteryn Cobblemon SMP";
   try {
     const url = await createPokepasteShareUrl({ paste, title: title || "Team", author });
     res.json({ url });
@@ -5960,6 +5967,67 @@ app.post("/admin/minecraft/facility-admin", requireAuth, requireAdmin, async (re
   res.status(400).json({
     error: "action must be force_win or set_stage",
   });
+});
+
+/**
+ * Night Market admin RCON:
+ * - open  → `nightmarket admin open <location> <minutes>`
+ * - close → `nightmarket admin close <location>`
+ */
+app.post("/admin/minecraft/nightmarket", requireAuth, requireAdmin, async (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const actionRaw = typeof body.action === "string" ? body.action.trim().toLowerCase() : "";
+  const location = normalizeNightMarketLocation(
+    typeof body.location === "string" ? body.location : DEFAULT_NIGHT_MARKET_LOCATION
+  );
+
+  if (!location) {
+    res.status(400).json({ error: "location must be 1–32 characters of [a-z0-9_]" });
+    return;
+  }
+
+  if (actionRaw === "open") {
+    const minutes = Number(body.minutes);
+    if (!Number.isFinite(minutes) || !Number.isInteger(minutes) || minutes < 1) {
+      res.status(400).json({ error: "minutes must be a whole number ≥ 1" });
+      return;
+    }
+    if (minutes > NIGHT_MARKET_MAX_MINUTES) {
+      res.status(400).json({ error: `minutes must be at most ${NIGHT_MARKET_MAX_MINUTES}` });
+      return;
+    }
+    const exec = await runNightMarketOpenRcon(location, minutes);
+    if (exec.ok) {
+      console.info(`[admin] nightmarket open ${location} ${minutes}m: ok (${exec.command})`);
+      res.json({ ok: true, command: exec.command, output: exec.output, location, minutes });
+      return;
+    }
+    console.warn(`[admin] nightmarket open failed`, exec.error);
+    res.json({
+      ok: false,
+      error: exec.error ?? "Could not open the Night Market on the server.",
+      command: exec.command,
+    });
+    return;
+  }
+
+  if (actionRaw === "close") {
+    const exec = await runNightMarketCloseRcon(location);
+    if (exec.ok) {
+      console.info(`[admin] nightmarket close ${location}: ok (${exec.command})`);
+      res.json({ ok: true, command: exec.command, output: exec.output, location });
+      return;
+    }
+    console.warn(`[admin] nightmarket close failed`, exec.error);
+    res.json({
+      ok: false,
+      error: exec.error ?? "Could not close the Night Market on the server.",
+      command: exec.command,
+    });
+    return;
+  }
+
+  res.status(400).json({ error: "action must be open or close" });
 });
 
 function parseBooleanGrant(body: Record<string, unknown>, field: "grant" | "enable"): boolean | null {

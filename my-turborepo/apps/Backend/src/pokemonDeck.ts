@@ -1,5 +1,5 @@
 /**
- * AuroraCobble Pokémon deck — 52 cards mapped to ranks/regions for Texas Hold'em.
+ * Asteryn Cobblemon SMP Pokémon deck — 52 cards mapped to ranks/regions for Texas Hold'em.
  */
 
 export type Suit = "spades" | "hearts" | "diamonds" | "clubs";

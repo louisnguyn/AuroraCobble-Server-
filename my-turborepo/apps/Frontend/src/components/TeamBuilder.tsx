@@ -671,7 +671,7 @@ export function TeamBuilder() {
       setPokepasteUrl(null)
       setSaveError(null)
       try {
-        const author = user?.username?.trim() || 'AuroraCobble'
+        const author = user?.username?.trim() || 'Asteryn Cobblemon SMP'
         const { url } = await createTeamPokepasteLink({
           paste,
           title: title.trim() || 'Team',

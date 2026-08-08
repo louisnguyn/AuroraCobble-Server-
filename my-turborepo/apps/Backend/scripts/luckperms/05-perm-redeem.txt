@@ -1,0 +1,49 @@
+# Grant redeemed.command.redeem to every rank group.
+#
+# Set per-group on purpose: the website assigns ranks with
+# `lp user <name> parent set <role>`, which replaces all parents, so a ranked
+# player no longer inherits LuckPerms' `default` group. Granting only on
+# `default` would miss everyone who owns a rank.
+#
+# `default` is included anyway so players with no group still get it.
+#
+# Run: npx tsx scripts/rcon-batch.ts scripts/luckperms/05-perm-redeem.txt
+
+lp group default permission set redeemed.command.redeem true
+
+# --- Default role ---
+lp group member permission set redeemed.command.redeem true
+
+# --- Purchasable ladder ---
+lp group noob permission set redeemed.command.redeem true
+lp group elite permission set redeemed.command.redeem true
+lp group pro permission set redeemed.command.redeem true
+lp group master permission set redeemed.command.redeem true
+lp group ultimate permission set redeemed.command.redeem true
+lp group onichan permission set redeemed.command.redeem true
+lp group legend permission set redeemed.command.redeem true
+lp group overlord permission set redeemed.command.redeem true
+
+# --- Grant-only: staff / partner ---
+lp group champion permission set redeemed.command.redeem true
+lp group helper permission set redeemed.command.redeem true
+lp group mod permission set redeemed.command.redeem true
+lp group tiktok permission set redeemed.command.redeem true
+lp group youtuber permission set redeemed.command.redeem true
+lp group builder permission set redeemed.command.redeem true
+lp group god permission set redeemed.command.redeem true
+lp group admin permission set redeemed.command.redeem true
+lp group owner permission set redeemed.command.redeem true
+
+# --- Grant-only: donation / VIP tiers ---
+lp group donator permission set redeemed.command.redeem true
+lp group vip permission set redeemed.command.redeem true
+lp group svip permission set redeemed.command.redeem true
+lp group mvip permission set redeemed.command.redeem true
+lp group uvip permission set redeemed.command.redeem true
+
+# --- Grant-only: special / event ---
+lp group knight permission set redeemed.command.redeem true
+lp group hero permission set redeemed.command.redeem true
+lp group titan permission set redeemed.command.redeem true
+lp group zeus permission set redeemed.command.redeem true

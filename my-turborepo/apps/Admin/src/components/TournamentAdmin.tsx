@@ -170,7 +170,7 @@ export function TournamentAdmin() {
   const [adminTab, setAdminTab] = useState<AdminTab>('bracket')
 
   const [newSlug, setNewSlug] = useState('championship-s1')
-  const [newTitle, setNewTitle] = useState('AuroraCobble Championship Season 1')
+  const [newTitle, setNewTitle] = useState('Asteryn Cobblemon SMP Championship Season 1')
   const [newSubtitle, setNewSubtitle] = useState('National Dex OU Singles — Bo3')
   /** Bracket layout for newly created tournaments. */
   const [newBracketSize, setNewBracketSize] = useState<8 | 12 | 16>(12)
@@ -970,7 +970,7 @@ export function TournamentAdmin() {
                   className={fieldClass}
                   value={editTitle}
                   onChange={(e) => setEditTitle(e.target.value)}
-                  placeholder="AuroraCobble Championship Season 1"
+                  placeholder="Asteryn Cobblemon SMP Championship Season 1"
                 />
               </label>
               <label className="block space-y-1">

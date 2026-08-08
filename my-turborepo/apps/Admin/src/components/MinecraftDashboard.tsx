@@ -6,6 +6,7 @@ import {
   type MinecraftDashboardResponse,
 } from '../authApi'
 import { DashboardLeaderboardPanel } from './DashboardLeaderboardPanel.tsx'
+import { NightMarketAdmin } from './NightMarketAdmin.tsx'
 
 function StatCard({
   label,
@@ -228,6 +229,8 @@ export function MinecraftDashboard({ viewerUsername }: { viewerUsername?: string
         </div>
       )}
 
+      <NightMarketAdmin />
+
       {loading && !data && (
         <div className="rounded-2xl border border-white/10 bg-surface/50 p-16 text-center text-slate-400 animate-pulse">
           Connecting to your server…
@@ -252,7 +255,7 @@ export function MinecraftDashboard({ viewerUsername }: { viewerUsername?: string
                 <div className="shrink-0 rounded-2xl border border-white/20 bg-black/30 p-2 shadow-inner">
                   <img
                     src="/logo_icon.png"
-                    alt="AuroraCobble"
+                    alt="Asteryn Cobblemon SMP"
                     width={72}
                     height={72}
                     className="block rounded-xl w-[72px] h-[72px] object-contain [image-rendering:pixelated]"

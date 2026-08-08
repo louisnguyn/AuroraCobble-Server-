@@ -77,14 +77,14 @@ export function Home({ onNavigate }: HomeProps) {
           </div>
           <img
             src="/logo_text.png"
-            alt="Aurora Cobble"
+            alt="Asteryn Cobblemon SMP"
             className="hero-logo-motion block w-full max-w-[min(500px,90vw)] h-auto mx-auto mb-6 object-contain drop-shadow-[0_0_45px_rgba(34,211,238,0.18)]"
           />
           <p className="text-xl sm:text-2xl text-[#ecebff] font-semibold tracking-wide m-0">
-            Competitive Hub for AuroraCobble Adventure Server
+            Competitive Hub for Asteryn Cobblemon SMP
           </p>
           <p className="text-base sm:text-lg text-muted/90 mt-3 m-0 max-w-3xl mx-auto leading-relaxed">
-            A web platform for the AuroraCobble competitive community: team building, live leaderboards,
+            A web platform for the Asteryn Cobblemon SMP competitive community: team building, live leaderboards,
             tournament brackets, economy tools, usage analytics, and account management in one place.
           </p>
         </div>
