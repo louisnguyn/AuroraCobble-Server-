@@ -11,6 +11,16 @@ async function get<T>(path: string): Promise<T> {
   return res.json() as Promise<T>
 }
 
+export type SiteMaintenance = {
+  enabled: boolean
+  message: string
+  updatedAt: string | null
+}
+
+export async function fetchSiteMaintenance() {
+  return get<SiteMaintenance>('/site-maintenance')
+}
+
 export async function fetchUsageStats() {
   const raw = await get<unknown>('/usage-stats')
   return normalizeUsageStatsResponse(raw)

@@ -6,7 +6,9 @@ import {
   type MinecraftDashboardResponse,
 } from '../authApi'
 import { DashboardLeaderboardPanel } from './DashboardLeaderboardPanel.tsx'
+import { MaintenanceAdmin } from './MaintenanceAdmin.tsx'
 import { NightMarketAdmin } from './NightMarketAdmin.tsx'
+import { SiteMaintenanceAdmin } from './SiteMaintenanceAdmin.tsx'
 
 function StatCard({
   label,
@@ -228,6 +230,16 @@ export function MinecraftDashboard({ viewerUsername }: { viewerUsername?: string
           {bossRunMessage}
         </div>
       )}
+
+      <section className="space-y-3">
+        <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400 m-0">
+          Maintenance
+        </h3>
+        <div className="grid gap-4 xl:grid-cols-2 xl:items-start">
+          <SiteMaintenanceAdmin />
+          <MaintenanceAdmin />
+        </div>
+      </section>
 
       <NightMarketAdmin />
 

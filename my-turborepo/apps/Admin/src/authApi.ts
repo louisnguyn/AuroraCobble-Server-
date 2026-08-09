@@ -722,6 +722,52 @@ export async function adminMinecraftNightMarket(
   })
 }
 
+export type SiteMaintenance = {
+  enabled: boolean
+  message: string
+  updatedAt: string | null
+}
+
+export async function adminFetchSiteMaintenance(): Promise<SiteMaintenance> {
+  return fetchJson(`/admin/site-maintenance`)
+}
+
+export async function adminUpdateSiteMaintenance(
+  body: { enabled: boolean; message: string }
+): Promise<SiteMaintenance> {
+  return fetchJson(`/admin/site-maintenance`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  })
+}
+
+export type MaintenanceState = {
+  ok: boolean
+  error?: string
+  command?: string
+  output?: string
+  /** null when the mod's status output could not be parsed. */
+  enabled?: boolean | null
+  statusRaw?: string
+  allowedRaw?: string
+}
+
+export async function adminFetchMaintenance(): Promise<MaintenanceState> {
+  return fetchJson(`/admin/minecraft/maintenance`)
+}
+
+export async function adminSetMaintenance(
+  body:
+    | { action: 'on' | 'off' }
+    | { action: 'allow_add' | 'allow_remove'; player: string }
+    | { action: 'set_message'; message: string }
+): Promise<MaintenanceState> {
+  return fetchJson(`/admin/minecraft/maintenance`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
 export type RankedBattleStaffEvent = {
   id: number
   created_at: string

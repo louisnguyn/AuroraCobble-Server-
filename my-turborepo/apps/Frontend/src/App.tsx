@@ -9,6 +9,7 @@ import { Restrictions } from './components/Restrictions.tsx'
 import { Gacha } from './components/Gacha.tsx'
 import { Poker } from './components/Poker.tsx'
 import { AuthModal } from './components/AuthModal.tsx'
+import { MaintenanceGate } from './components/MaintenanceGate.tsx'
 import { Account } from './components/Account.tsx'
 import { Spawn } from './components/Spawn.tsx'
 import { Tournament } from './components/Tournament.tsx'
@@ -416,6 +417,7 @@ function AppContent() {
 function App() {
   return (
     <AuthProvider>
+      <MaintenanceGate />
       <AppContent />
     </AuthProvider>
   )

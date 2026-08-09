@@ -120,6 +120,21 @@ import {
   runNightMarketCloseRcon,
   runNightMarketOpenRcon,
 } from "./minecraftNightMarket.js";
+import {
+  addMaintenanceAllowedRcon,
+  isValidMaintenanceTarget,
+  readMaintenanceState,
+  removeMaintenanceAllowedRcon,
+  sanitizeMaintenanceMessage,
+  setMaintenanceEnabledRcon,
+  setMaintenanceMessageRcon,
+} from "./minecraftMaintenance.js";
+import {
+  getSiteMaintenance,
+  hydrateSiteMaintenance,
+  parseSiteMaintenanceInput,
+  setSiteMaintenance,
+} from "./siteMaintenance.js";
 import { runBattlePassLuckpermsCommand } from "./minecraftBattlePassLp.js";
 import {
   getBattlePassOwnershipForUser,
@@ -6030,6 +6045,121 @@ app.post("/admin/minecraft/nightmarket", requireAuth, requireAdmin, async (req, 
   res.status(400).json({ error: "action must be open or close" });
 });
 
+/**
+ * Website maintenance notice. Separate from the in-game maintenance mod:
+ * this only gates the site, the Minecraft server keeps running.
+ */
+const readSiteMaintenance = (_req: express.Request, res: express.Response) => {
+  res.json(getSiteMaintenance());
+};
+
+const putSiteMaintenance = async (req: express.Request, res: express.Response) => {
+  const parsed = parseSiteMaintenanceInput(req.body);
+  if (!parsed) {
+    res.status(400).json({ error: "enabled must be a boolean" });
+    return;
+  }
+  try {
+    const saved = await setSiteMaintenance(parsed);
+    console.info(`[site-maintenance] ${saved.enabled ? "ON" : "OFF"}`);
+    res.json(saved);
+  } catch (e) {
+    console.error("[site-maintenance] persist:", e);
+    res.status(500).json({ error: "Failed to save website maintenance setting" });
+  }
+};
+
+app.get("/site-maintenance", readSiteMaintenance);
+app.get("/admin/site-maintenance", requireAuth, requireAdmin, readSiteMaintenance);
+app.put("/admin/site-maintenance", requireAuth, requireAdmin, putSiteMaintenance);
+
+const siteMaintenanceApiRouter = express.Router();
+siteMaintenanceApiRouter.get("/site-maintenance", readSiteMaintenance);
+siteMaintenanceApiRouter.get("/admin/site-maintenance", requireAuth, requireAdmin, readSiteMaintenance);
+siteMaintenanceApiRouter.put("/admin/site-maintenance", requireAuth, requireAdmin, putSiteMaintenance);
+app.use("/api", siteMaintenanceApiRouter);
+
+/**
+ * Maintenance mode admin RCON. While enabled the mod refuses logins for
+ * everyone outside the allow list, so the allow list is editable here too.
+ */
+app.get("/admin/minecraft/maintenance", requireAuth, requireAdmin, async (_req, res) => {
+  const read = await readMaintenanceState();
+  if (!read.ok) {
+    res.json({ ok: false, error: read.error });
+    return;
+  }
+  res.json({ ok: true, ...read.state });
+});
+
+app.post("/admin/minecraft/maintenance", requireAuth, requireAdmin, async (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const action = typeof body.action === "string" ? body.action.trim().toLowerCase() : "";
+
+  const respond = async (
+    exec: { ok: true; output: string; command: string } | { ok: false; error: string; command: string },
+    failure: string
+  ) => {
+    if (!exec.ok) {
+      console.warn(`[admin] maintenance failed`, exec.error);
+      res.json({ ok: false, error: exec.error ?? failure, command: exec.command });
+      return;
+    }
+    console.info(`[admin] maintenance: ok (${exec.command})`);
+    const read = await readMaintenanceState();
+    res.json({
+      ok: true,
+      command: exec.command,
+      output: exec.output,
+      ...(read.ok ? read.state : {}),
+    });
+  };
+
+  if (action === "on" || action === "off") {
+    await respond(
+      await setMaintenanceEnabledRcon(action === "on"),
+      "Could not change maintenance mode on the server."
+    );
+    return;
+  }
+
+  if (action === "allow_add" || action === "allow_remove") {
+    const player = typeof body.player === "string" ? body.player.trim() : "";
+    if (!isValidMaintenanceTarget(player)) {
+      res.status(400).json({ error: "player must be a valid Minecraft IGN (2–16 [A-Za-z0-9_])" });
+      return;
+    }
+    await respond(
+      action === "allow_add"
+        ? await addMaintenanceAllowedRcon(player)
+        : await removeMaintenanceAllowedRcon(player),
+      "Could not update the maintenance allow list."
+    );
+    return;
+  }
+
+  if (action === "set_message") {
+    const message = sanitizeMaintenanceMessage(
+      typeof body.message === "string" ? body.message : ""
+    );
+    if (!message) {
+      res.status(400).json({ error: "message required" });
+      return;
+    }
+    if (message.length > 200) {
+      res.status(400).json({ error: "message must be at most 200 characters" });
+      return;
+    }
+    await respond(
+      await setMaintenanceMessageRcon(message),
+      "Could not set the maintenance kick message."
+    );
+    return;
+  }
+
+  res.status(400).json({ error: "action must be on, off, allow_add, allow_remove or set_message" });
+});
+
 function parseBooleanGrant(body: Record<string, unknown>, field: "grant" | "enable"): boolean | null {
   const v = body[field];
   if (v === true || v === "true") return true;
@@ -7407,6 +7537,7 @@ httpServer.listen(port, () => {
     void Promise.all([
       hydrateCobbleRankedStore(cobbleStore as CobbleRankedMemoryStore, COBBLE_RANKED_FEED_MAX),
       hydrateLeaderboardDisplaySettings(),
+      hydrateSiteMaintenance(),
     ]).then(() => {
       if (cobbleStore.leaderboard) void syncWebsitePvpRanksFromLeaderboard(cobbleStore.leaderboard);
     });
