@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { fetchUserCurrencies } from '../authApi'
+import { websitePointsBalance } from '../currencyLabel'
 import { useAuth } from '../contexts/AuthContext'
 import { AuthModal } from './AuthModal'
 import { PageHeader, PageShell } from './PageLayout.tsx'
@@ -24,9 +25,7 @@ export function TournamentPredictionsPage({
     }
     fetchUserCurrencies()
       .then(({ currencies }) => {
-        setCobbleBalance(
-          currencies.find((c) => c.currency_type === 'cobbledollars')?.balance ?? 0
-        )
+        setCobbleBalance(websitePointsBalance(currencies))
       })
       .catch(() => setCobbleBalance(0))
   }, [isAuthenticated])
@@ -43,7 +42,7 @@ export function TournamentPredictionsPage({
         accent="violet"
         eyebrow={eventTitle ? 'Placing predictions for' : 'Tournament predictions'}
         title={eventTitle ?? 'Predictions'}
-        description="Bet website Cobble$ on who wins champion and runner-up. Results settle when the final is decided in the bracket."
+        description="Bet website Asteryn Point on who wins champion and runner-up. Results settle when the final is decided in the bracket."
       />
 
       {!isAuthenticated ? (

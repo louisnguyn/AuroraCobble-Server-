@@ -452,23 +452,23 @@
     background-position: 0% 0%, 15% 8%, 50% 0%;
     opacity: 0.2;
   }
-  .admin-ac-crimson {
+  .admin-ac-mythic {
     position: relative;
     isolation: isolate;
     overflow: visible;
-    background: linear-gradient(145deg, rgba(40, 6, 12, 0.92) 0%, rgba(28, 8, 12, 0.88) 40%, rgba(20, 10, 40, 0.35) 100%);
-    border: 2px solid rgba(88, 7, 18, 0.65);
+    background: linear-gradient(145deg, rgba(36, 12, 52, 0.94) 0%, rgba(24, 10, 42, 0.9) 40%, rgba(16, 8, 36, 0.4) 100%);
+    border: 2px solid rgba(126, 34, 206, 0.55);
     box-shadow:
-      0 0 0 1px rgba(30, 27, 75, 0.45),
-      0 0 8px rgba(88, 28, 135, 0.1),
-      inset 0 0 0 1px rgba(127, 29, 29, 0.25),
+      0 0 0 1px rgba(46, 16, 84, 0.5),
+      0 0 8px rgba(124, 58, 237, 0.14),
+      inset 0 0 0 1px rgba(147, 51, 234, 0.22),
       inset 0 -10px 24px rgba(15, 23, 42, 0.35);
   }
-  .admin-ac-crimson > * {
+  .admin-ac-mythic > * {
     position: relative;
     z-index: 1;
   }
-  .admin-ac-crimson::before {
+  .admin-ac-mythic::before {
     content: "";
     position: absolute;
     left: 50%;
@@ -480,22 +480,22 @@
     border-radius: 48%;
     background: conic-gradient(
       from 0deg at 50% 50%,
-      rgba(18, 4, 14, 0.98) 0deg,
-      rgba(90, 8, 32, 0.9) 38deg,
-      rgba(255, 45, 90, 0.55) 68deg,
-      rgba(160, 60, 255, 0.58) 118deg,
-      rgba(30, 200, 255, 0.52) 168deg,
-      rgba(255, 252, 255, 0.72) 198deg,
-      rgba(40, 190, 255, 0.48) 228deg,
-      rgba(110, 20, 160, 0.62) 288deg,
-      rgba(180, 15, 40, 0.82) 338deg,
-      rgba(18, 4, 14, 0.98) 360deg
+      rgba(20, 8, 40, 0.98) 0deg,
+      rgba(76, 29, 149, 0.9) 38deg,
+      rgba(168, 85, 247, 0.58) 68deg,
+      rgba(192, 132, 252, 0.62) 118deg,
+      rgba(99, 102, 241, 0.5) 168deg,
+      rgba(250, 245, 255, 0.72) 198deg,
+      rgba(139, 92, 246, 0.5) 228deg,
+      rgba(91, 33, 182, 0.65) 288deg,
+      rgba(124, 58, 237, 0.82) 338deg,
+      rgba(20, 8, 40, 0.98) 360deg
     );
     transform: translate(-50%, -50%);
     opacity: 0.32;
     filter: blur(6px) contrast(1.08) saturate(1.22);
   }
-  .admin-ac-crimson::after {
+  .admin-ac-mythic::after {
     content: "";
     position: absolute;
     inset: 0;
@@ -507,29 +507,29 @@
       repeating-linear-gradient(
         122deg,
         transparent 0 20px,
-        rgba(230, 242, 255, 0.65) 20px 21px,
+        rgba(237, 233, 254, 0.65) 20px 21px,
         transparent 21px 56px
       ),
       repeating-linear-gradient(
         -48deg,
         transparent 0 26px,
-        rgba(255, 130, 200, 0.5) 26px 27px,
+        rgba(192, 132, 252, 0.5) 26px 27px,
         transparent 27px 72px
       ),
       repeating-linear-gradient(
         9deg,
         transparent 0 33px,
-        rgba(56, 189, 248, 0.55) 33px 34px,
+        rgba(167, 139, 250, 0.55) 33px 34px,
         transparent 34px 92px
       ),
-      radial-gradient(ellipse 85% 50% at 50% 108%, rgba(255, 25, 70, 0.2), transparent 58%);
+      radial-gradient(ellipse 85% 50% at 50% 108%, rgba(147, 51, 234, 0.22), transparent 58%);
     background-size: 300% 300%, 240% 240%, 280% 280%, 100% 100%;
     background-position: 0% 0%, 20% 10%, 5% 15%, 50% 100%;
     opacity: 0.24;
   }
 
-  /* Mythic preview — fire motion; core uses glow pulse only (no rotation) */
-  @keyframes admin-ac-mythic-spark-scan {
+  /* Legend preview — fire motion; core uses glow pulse only (no rotation) */
+  @keyframes admin-ac-legend-spark-scan {
     0% {
       background-position: 0% 0%, 12% 8%, 50% 0%;
       opacity: 0.1;
@@ -548,7 +548,7 @@
     }
   }
 
-  @keyframes admin-ac-mythic-corona {
+  @keyframes admin-ac-legend-corona {
     0% {
       opacity: 0.38;
       transform: scale(0.96);
@@ -561,7 +561,7 @@
     }
   }
 
-  @keyframes admin-ac-mythic-core-glow {
+  @keyframes admin-ac-legend-core-glow {
     0%,
     100% {
       opacity: 0.18;
@@ -575,7 +575,7 @@
     }
   }
 
-  @keyframes admin-ac-mythic-ember-below {
+  @keyframes admin-ac-legend-ember-below {
     0% {
       opacity: 0.32;
       transform: translateX(-50%) scale(0.96, 0.9) translateY(4px);
@@ -772,7 +772,7 @@
     }
   }
 
-  .admin-ac-mythic {
+  .admin-ac-legend {
     position: relative;
     isolation: isolate;
     overflow: visible;
@@ -781,7 +781,7 @@
     background: transparent !important;
     box-shadow: none !important;
   }
-  .admin-ac-mythic::before {
+  .admin-ac-legend::before {
     content: "";
     position: absolute;
     left: 50%;
@@ -795,9 +795,9 @@
       radial-gradient(ellipse 74% 100% at 50% 100%, rgba(255, 110, 0, 0.55), rgba(255, 45, 0, 0.28) 42%, rgba(160, 25, 5, 0.12) 58%, transparent 74%),
       radial-gradient(ellipse 36% 72% at 22% 94%, rgba(255, 230, 140, 0.4), transparent 56%),
       radial-gradient(ellipse 36% 72% at 78% 94%, rgba(255, 170, 70, 0.35), transparent 56%);
-    animation: admin-ac-mythic-ember-below 0.9s ease-in-out infinite alternate;
+    animation: admin-ac-legend-ember-below 0.9s ease-in-out infinite alternate;
   }
-  .admin-ac-mythic > .admin-ac-mythic-ring {
+  .admin-ac-legend > .admin-ac-legend-ring {
     position: absolute;
     inset: -3px;
     border-radius: 14px;
@@ -813,7 +813,7 @@
     filter: blur(0.35px);
     animation: admin-ac-fire-edge 1.05s linear infinite;
   }
-  .admin-ac-mythic > .admin-ac-mythic-ring::before {
+  .admin-ac-legend > .admin-ac-legend-ring::before {
     content: "";
     position: absolute;
     inset: -6px;
@@ -825,19 +825,19 @@
       radial-gradient(ellipse 55% 50% at 8% 95%, rgba(255, 60, 30, 0.32), transparent 52%),
       radial-gradient(ellipse 55% 50% at 92% 93%, rgba(239, 68, 68, 0.28), transparent 52%);
     filter: blur(6px);
-    animation: admin-ac-mythic-corona 1.15s ease-in-out infinite alternate;
+    animation: admin-ac-legend-corona 1.15s ease-in-out infinite alternate;
   }
-  .admin-ac-mythic > div.relative {
+  .admin-ac-legend > div.relative {
     position: relative;
     z-index: 2;
     isolation: isolate;
     animation: admin-ac-fire-hearth 1.15s linear infinite;
   }
-  .admin-ac-mythic > div.relative > * {
+  .admin-ac-legend > div.relative > * {
     position: relative;
     z-index: 1;
   }
-  .admin-ac-mythic > div.relative::before {
+  .admin-ac-legend > div.relative::before {
     content: "";
     position: absolute;
     left: 50%;
@@ -858,9 +858,9 @@
       rgba(12, 4, 6, 0) 360deg
     );
     mix-blend-mode: overlay;
-    animation: admin-ac-mythic-core-glow 4.5s ease-in-out infinite alternate;
+    animation: admin-ac-legend-core-glow 4.5s ease-in-out infinite alternate;
   }
-  .admin-ac-mythic > div.relative::after {
+  .admin-ac-legend > div.relative::after {
     content: "";
     position: absolute;
     inset: 0;
@@ -883,6 +883,6 @@
       ),
       radial-gradient(ellipse 65% 50% at 25% 0%, rgba(255, 255, 250, 0.14), transparent 55%);
     background-size: 240% 240%, 190% 190%, 100% 100%;
-    animation: admin-ac-mythic-spark-scan 2.2s linear infinite;
+    animation: admin-ac-legend-spark-scan 2.2s linear infinite;
   }
 }

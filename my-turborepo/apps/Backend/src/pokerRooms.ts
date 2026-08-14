@@ -346,7 +346,7 @@ async function runOutBoardIfNeeded(room: Room): Promise<void> {
 
 async function awardPotToSingle(room: Room, winner: Seat): Promise<void> {
   winner.chips += room.pot;
-  room.lastResults = [`${winner.username} wins ${room.pot.toLocaleString()} Cobble$ (everyone else folded)`];
+  room.lastResults = [`${winner.username} wins ${room.pot.toLocaleString()} Asteryn Point (everyone else folded)`];
   room.pot = 0;
   room.phase = "hand_over";
   room.message = `${winner.username} wins the pot!`;
@@ -379,7 +379,7 @@ async function runShowdown(room: Room): Promise<void> {
     if (seat) {
       seat.chips += amount;
       room.lastResults.push(
-        `${seat.username}: ${hand.themeLabel} — wins ${amount.toLocaleString()} Cobble$`
+        `${seat.username}: ${hand.themeLabel} — wins ${amount.toLocaleString()} Asteryn Point`
       );
     }
   }
@@ -639,7 +639,7 @@ async function cashOutAndLeave(userId: number, room: Room): Promise<boolean> {
         seat.chips,
         err instanceof Error ? err.message : err
       );
-      sendError(userId, "Could not credit Cobble$ to your wallet — try leaving again or contact staff.");
+      sendError(userId, "Could not credit Asteryn Point to your wallet — try leaving again or contact staff.");
       return false;
     }
   }

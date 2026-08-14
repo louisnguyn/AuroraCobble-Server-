@@ -1,0 +1,5 @@
+# Set LuckPerms `default` group prefix to the player bitmap glyph.
+# Run: npx tsx scripts/rcon-batch.ts scripts/luckperms/09-default-player-prefix.txt
+
+lp group default meta setprefix 100 "&f\uE00D "
+lp group player meta setprefix 100 "&f\uE00D "

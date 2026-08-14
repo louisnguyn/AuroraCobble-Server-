@@ -1,4 +1,5 @@
 import { formatWalletLedgerDetail } from '../inventoryLabels'
+import { websitePointsBalance } from '../currencyLabel'
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import {
@@ -6,7 +7,6 @@ import {
   fetchCobbledollarsLedger,
   fetchTicketsLedger,
   fetchUserCurrencies,
-  transferCobbledollars,
   type CobbledollarLedgerRow,
   type TicketCurrencyLedgerRow,
 } from '../authApi'
@@ -44,7 +44,7 @@ function ticketCurrencyLabel(currencyType: string): string {
   return currencyType
 }
 
-/** Website Cobble$ balance and history. */
+/** Website AsterynPoints balance and history. */
 export function CobbleWebsiteWallet({ onBalanceUpdated }: { onBalanceUpdated?: () => void }) {
   const { isAuthenticated } = useAuth()
   const [walletBalance, setWalletBalance] = useState<number | null>(null)
@@ -52,11 +52,6 @@ export function CobbleWebsiteWallet({ onBalanceUpdated }: { onBalanceUpdated?: (
   const [depositAmount, setDepositAmount] = useState('')
   const [depositBusy, setDepositBusy] = useState(false)
   const [depositError, setDepositError] = useState<string | null>(null)
-  const [transferToUsername, setTransferToUsername] = useState('')
-  const [transferAmount, setTransferAmount] = useState('')
-  const [transferBusy, setTransferBusy] = useState(false)
-  const [transferError, setTransferError] = useState<string | null>(null)
-  const [transferSuccess, setTransferSuccess] = useState<string | null>(null)
   const [ledger, setLedger] = useState<CobbledollarLedgerRow[]>([])
   const [ledgerLoading, setLedgerLoading] = useState(false)
   const [ledgerError, setLedgerError] = useState<string | null>(null)
@@ -72,8 +67,7 @@ export function CobbleWebsiteWallet({ onBalanceUpdated }: { onBalanceUpdated?: (
     setWalletLoading(true)
     fetchUserCurrencies()
       .then(({ currencies }) => {
-        const row = currencies.find((c) => c.currency_type === 'cobbledollars')
-        setWalletBalance(row?.balance ?? 0)
+        setWalletBalance(websitePointsBalance(currencies))
       })
       .catch(() => setWalletBalance(null))
       .finally(() => setWalletLoading(false))
@@ -145,44 +139,14 @@ export function CobbleWebsiteWallet({ onBalanceUpdated }: { onBalanceUpdated?: (
     }
   }
 
-  const handleTransfer = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setTransferError(null)
-    setTransferSuccess(null)
-    const toUsername = transferToUsername.trim()
-    const n = parseInt(transferAmount.replace(/,/g, ''), 10)
-    if (!toUsername) {
-      setTransferError('Enter recipient username.')
-      return
-    }
-    if (!Number.isFinite(n) || n < 1) {
-      setTransferError('Enter a whole number >= 1.')
-      return
-    }
-    setTransferBusy(true)
-    try {
-      const out = await transferCobbledollars(toUsername, n)
-      setWalletBalance(out.newBalance)
-      setTransferToUsername('')
-      setTransferAmount('')
-      setTransferSuccess(`Sent ${out.amount.toLocaleString()} Cobble$ to ${out.toUsername}.`)
-      void loadLedger()
-      onBalanceUpdated?.()
-    } catch (err) {
-      setTransferError(err instanceof Error ? err.message : 'Transfer failed')
-    } finally {
-      setTransferBusy(false)
-    }
-  }
-
   if (!isAuthenticated) return null
 
   return (
     <section className="pixel-well p-5 sm:p-6 text-left">
-      <h2 className="text-lg font-semibold m-0 mb-1 text-[#e2e8f0]">Website wallet</h2>
+      <h2 className="text-lg font-semibold m-0 mb-1 text-[#e2e8f0]">AsterynPoints wallet</h2>
       <p className="text-sm text-muted m-0 mb-4">
-        Cobble$ earned on this site can be deposited to your in-game balance. Your account username must match your
-        in-game name.
+        AsterynPoints earned on this site can be deposited to your in-game Cobble$ balance. Your account username must
+        match your in-game name.
       </p>
       {walletLoading ? (
         <p className="text-sm text-muted m-0">Loading balance…</p>
@@ -215,48 +179,9 @@ export function CobbleWebsiteWallet({ onBalanceUpdated }: { onBalanceUpdated?: (
           </form>
           {depositError && <p className="text-sm text-error m-0 mt-3">{depositError}</p>}
 
-          <form
-            onSubmit={handleTransfer}
-            className="mt-4 grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 items-stretch sm:items-end"
-          >
-            <label className="min-w-0">
-              <span className="block text-xs text-muted mb-1">Send to username</span>
-              <input
-                type="text"
-                value={transferToUsername}
-                onChange={(ev) => setTransferToUsername(ev.target.value)}
-                placeholder="Exact website username"
-                className="w-full pixel-field px-3 py-2.5 text-[#e2e8f0] text-base"
-                disabled={transferBusy}
-              />
-            </label>
-            <label className="min-w-0">
-              <span className="block text-xs text-muted mb-1">Transfer amount</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9,]*"
-                value={transferAmount}
-                onChange={(ev) => setTransferAmount(ev.target.value)}
-                placeholder="e.g. 2500"
-                className="w-full pixel-field px-3 py-2.5 text-[#e2e8f0] text-base"
-                disabled={transferBusy}
-              />
-            </label>
-            <button
-              type="submit"
-              disabled={transferBusy || walletBalance == null || walletBalance < 1}
-              className="shrink-0 px-4 py-2.5 pixel-btn-primary text-base disabled:opacity-50"
-            >
-              {transferBusy ? 'Sending…' : 'Send to player'}
-            </button>
-          </form>
-          {transferError && <p className="text-sm text-error m-0 mt-3">{transferError}</p>}
-          {transferSuccess && <p className="text-sm text-emerald-300 m-0 mt-3">{transferSuccess}</p>}
-
           <div className="mt-6 pt-5 border-t border-border/80">
             <h3 className="text-sm font-semibold text-[#e2e8f0] m-0 mb-2">Recent activity</h3>
-            <p className="text-xs text-muted m-0 mb-3">Last 10 website Cobble$ changes (newest first).</p>
+            <p className="text-xs text-muted m-0 mb-3">Last 10 website AsterynPoints changes (newest first).</p>
             {ledgerLoading ? (
               <p className="text-xs text-muted m-0">Loading history…</p>
             ) : ledgerError ? (

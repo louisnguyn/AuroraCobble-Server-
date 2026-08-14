@@ -7,14 +7,11 @@ import {
   fetchGachaHistory,
   gachaPull,
   claimGachaPull,
-  fetchExchangeRates,
-  exchangeTickets,
   fetchUserCurrencies,
   type GachaPool,
   type GachaRewardResult,
   type PoolReward,
   type GachaHistoryEntry,
-  type ExchangeRate,
 } from '../authApi'
 import { AuthModal } from './AuthModal'
 import { isAccountVerified, VerifiedAccountBadge } from './VerifiedAccountBadge.tsx'
@@ -39,7 +36,7 @@ function stripMinecraftFormatting(value: string): string {
 }
 
 function parseCobbledollarsRewardLabel(label: string): number | null {
-  const m = /^cobbledollars\s*:\s*([0-9]{1,13})$/i.exec(stripMinecraftFormatting(label))
+  const m = /^(?:asterynpoints|cobbledollars)\s*:\s*([0-9]{1,13})$/i.exec(stripMinecraftFormatting(label))
   if (!m) return null
   const amount = parseInt(m[1] ?? '', 10)
   if (!Number.isInteger(amount) || amount < 1) return null
@@ -52,7 +49,7 @@ function parseCobbledollarsRewardLabel(label: string): number | null {
  */
 function gachaShowdownSpriteUrls(rawLabel: string): GachaSpeciesSpriteUrls | null {
   const label = stripMinecraftFormatting(rawLabel).trim()
-  if (!label) return null
+  if (!label || label.startsWith('item|') || label.startsWith('currency|')) return null
   const shiny = /\bshiny\b/i.test(label)
   const base = label.replace(/\bshiny\b/gi, ' ').replace(/\s+/g, ' ').trim()
   if (!base) return null
@@ -84,7 +81,7 @@ function GachaStripSprite({
   urls: GachaSpeciesSpriteUrls | null
   imgClassName?: string
 }) {
-  const display = stripMinecraftFormatting(label)
+  const display = formatGachaRewardLabel(label)
   const [showText, setShowText] = useState(!urls)
   const { src, onError } = usePokemonSpriteSrc(urls?.slug ?? '', {
     urls: urls?.urls,
@@ -125,17 +122,48 @@ function buildLootStrip(winType: string, pool: PoolReward[]): { items: string[];
 }
 
 function stripRarityClass(label: string, pool: PoolReward[], totalWeight: number): string {
-  const row = pool.find((r) => r.reward_type === label || stripMinecraftFormatting(r.reward_type) === stripMinecraftFormatting(label))
+  const key = gachaMatchKey(label)
+  const row = pool.find((r) => gachaMatchKey(r.reward_type) === key)
   const w = row?.weight ?? Math.max(1, Math.floor(totalWeight / 10))
   return getRarity(w, totalWeight).className
 }
 
+function formatGachaRewardLabel(raw: string): string {
+  const t = stripMinecraftFormatting(raw)
+  const parts = t.split('|')
+  if (parts[0] === 'item' && parts.length >= 3) {
+    const label = (parts[3] ?? parts[1] ?? 'Item').trim()
+    const n = (parts[2] ?? '1').trim()
+    return `${label} ×${n}`
+  }
+  if (parts[0] === 'currency' && parts.length >= 3) {
+    const label = (parts[3] ?? parts[1] ?? 'Ticket').trim()
+    const n = (parts[2] ?? '1').trim()
+    return `${label} ×${n}`
+  }
+  const cobble = parseCobbledollarsRewardLabel(t)
+  if (cobble != null) return `Asteryn Point +${cobble.toLocaleString()}`
+  return t
+}
+
+function gachaMatchKey(raw: string): string {
+  const parts = stripMinecraftFormatting(raw).split('|')
+  if (parts[0] === 'item' && parts[1]) return `item|${parts[1]}`
+  if (parts[0] === 'currency' && parts[1]) return `currency|${parts[1]}`
+  return stripMinecraftFormatting(raw).toLowerCase()
+}
+
+function isAutoCreditReward(raw: string): boolean {
+  const t = stripMinecraftFormatting(raw)
+  return parseCobbledollarsRewardLabel(t) != null || t.startsWith('currency|')
+}
+
 function getRarity(weight: number, totalWeight: number): { label: string; className: string } {
   const pct = totalWeight > 0 ? (weight / totalWeight) * 100 : 0
-  if (pct < 1) return { label: 'Super Rare', className: 'bg-red-500/25 text-red-300 border-red-400/50' }
-  if (weight <= 2) return { label: 'Very Rare', className: 'bg-netherite/30 text-netherite border-netherite/50' }
-  if (weight <= 5) return { label: 'Rare', className: 'bg-gold/20 text-gold border-gold/50' }
-  if (weight <= 10) return { label: 'Uncommon', className: 'bg-emerald/20 text-emerald border-emerald/50' }
+  if (pct < 0.002) return { label: 'Super Rare', className: 'bg-red-500/25 text-red-300 border-red-400/50' }
+  if (pct < 0.1) return { label: 'Very Rare', className: 'bg-netherite/30 text-netherite border-netherite/50' }
+  if (pct < 0.5) return { label: 'Rare', className: 'bg-gold/20 text-gold border-gold/50' }
+  if (pct < 2) return { label: 'Uncommon', className: 'bg-emerald/20 text-emerald border-emerald/50' }
   return { label: 'Common', className: 'bg-muted/20 text-muted border-border' }
 }
 
@@ -160,12 +188,10 @@ export function Gacha() {
   >({})
   const [poolRewards, setPoolRewards] = useState<PoolReward[]>([])
   const [history, setHistory] = useState<GachaHistoryEntry[]>([])
-  const [exchangeRates, setExchangeRates] = useState<ExchangeRate[]>([])
   const [currencies, setCurrencies] = useState<{ currency_type: string; balance: number }[]>([])
-  const [exchanging, setExchanging] = useState<string | null>(null)
   const [claimingId, setClaimingId] = useState<number | null>(null)
   const [claimPending, setClaimPending] = useState<{ pullId: number; rewardLabel: string } | null>(null)
-  const [historyTab, setHistoryTab] = useState<'pokemon' | 'money'>('pokemon')
+  const [historyTab, setHistoryTab] = useState<'claim' | 'auto'>('claim')
   const [pullCooldownUntilMs, setPullCooldownUntilMs] = useState(0)
   const [nowMs, setNowMs] = useState(Date.now())
   const pendingRewardRef = useRef<GachaRewardResult | null>(null)
@@ -229,7 +255,6 @@ export function Gacha() {
 
   useEffect(() => {
     if (!isAuthenticated) return
-    fetchExchangeRates().then(({ rates }) => setExchangeRates(rates)).catch(() => setExchangeRates([]))
     fetchUserCurrencies().then(({ currencies: c }) => setCurrencies(c)).catch(() => setCurrencies([]))
   }, [isAuthenticated])
 
@@ -259,24 +284,6 @@ export function Gacha() {
       setError(e instanceof Error ? e.message : 'Claim failed')
     } finally {
       setClaimingId(null)
-    }
-  }
-
-  const handleExchange = async (toCurrency: string) => {
-    if (exchanging) return
-    if (!canUseGacha) {
-      setError('Account verification required to exchange tickets.')
-      return
-    }
-    setExchanging(toCurrency)
-    setError(null)
-    try {
-      await exchangeTickets(toCurrency)
-      refetchCurrencies()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Exchange failed')
-    } finally {
-      setExchanging(null)
     }
   }
 
@@ -392,14 +399,14 @@ export function Gacha() {
   )
   const currencyType = (selectedPool?.config as { currency_type?: string } | undefined)?.currency_type ?? 'gems'
 
-  const historyMoneyCount = useMemo(
-    () => history.filter((e) => parseCobbledollarsRewardLabel(e.rewardType) != null).length,
+  const historyAutoCount = useMemo(
+    () => history.filter((e) => isAutoCreditReward(e.rewardType)).length,
     [history],
   )
-  const historyPokemonCount = history.length - historyMoneyCount
+  const historyClaimCount = history.length - historyAutoCount
   const filteredHistory = useMemo(() => {
-    const isMoney = (e: GachaHistoryEntry) => parseCobbledollarsRewardLabel(e.rewardType) != null
-    return historyTab === 'money' ? history.filter(isMoney) : history.filter((e) => !isMoney(e))
+    const isAuto = (e: GachaHistoryEntry) => isAutoCreditReward(e.rewardType)
+    return historyTab === 'auto' ? history.filter(isAuto) : history.filter((e) => !isAuto(e))
   }, [history, historyTab])
 
   if (!isAuthenticated) {
@@ -410,7 +417,7 @@ export function Gacha() {
             accent="gold"
             eyebrow="Rewards"
             title="Gacha"
-            description="Sign in to open loot pools, exchange tickets, and claim rewards."
+            description="Sign in to spin the ticket wheel and claim items in-game."
           />
           <div className="pixel-panel-soft p-8 sm:p-10 text-center text-base">
             <button
@@ -433,7 +440,7 @@ export function Gacha() {
         accent="gold"
         eyebrow="Rewards"
         title="Gacha"
-        description="Open loot pools, exchange tickets, and claim rewards in-game."
+        description="Spend tickets on the wheel. Rare tickets only drop from pulls — they cannot be exchanged."
       />
       {!canUseGacha ? (
         <div
@@ -442,7 +449,7 @@ export function Gacha() {
         >
           <p className="m-0 font-medium">Gacha requires a verified account</p>
           <p className="m-0 mt-1 text-xs text-amber-100/90">
-            Verify your account under Account to pull, exchange tickets, and claim rewards in-game. You can still browse
+            Verify your account under Account to pull and claim rewards in-game. You can still browse
             pools and history.
           </p>
         </div>
@@ -465,49 +472,20 @@ export function Gacha() {
 
       {!loading && pools.length > 0 && (
         <div className="space-y-6">
-          {exchangeRates.length > 0 && (
+          {currencies.length > 0 && (
             <div className="pixel-panel-soft p-4 sm:p-6">
-              <h3 className="text-sm font-semibold text-muted uppercase tracking-wider mb-3">Exchange tickets</h3>
-              <div className="mb-4">
-                <p className="text-xs text-muted uppercase tracking-wider mb-2">Your currencies</p>
-                <div className="flex flex-wrap gap-2">
-                  {currencies.length === 0 ? (
-                    <span className="text-sm text-muted">No currency yet</span>
-                  ) : (
-                    currencies.map((c) => (
-                      <span
-                        key={c.currency_type}
-                        className="inline-flex items-center px-3 py-1.5 pixel-well text-base"
-                      >
-                        <span className="text-muted">{c.currency_type.replace(/_/g, ' ')}:</span>
-                        <span className="ml-1.5 font-medium text-[#f5efe6]">{c.balance}</span>
-                      </span>
-                    ))
-                  )}
-                </div>
+              <p className="text-xs text-muted uppercase tracking-wider mb-2">Your currencies</p>
+              <div className="flex flex-wrap gap-2">
+                {currencies.map((c) => (
+                  <span
+                    key={c.currency_type}
+                    className="inline-flex items-center px-3 py-1.5 pixel-well text-base"
+                  >
+                    <span className="text-muted">{c.currency_type.replace(/_/g, ' ')}:</span>
+                    <span className="ml-1.5 font-medium text-[#f5efe6]">{c.balance}</span>
+                  </span>
+                ))}
               </div>
-              <ul className="space-y-2">
-                {exchangeRates.map((rate) => {
-                  const ticketsBalance = currencies.find((c) => c.currency_type === 'tickets')?.balance ?? 0
-                  const canAfford = ticketsBalance >= rate.cost_tickets
-                  const busy = exchanging === rate.to_currency
-                  return (
-                    <li key={rate.to_currency} className="flex flex-wrap items-center justify-between gap-3 py-2 px-3 pixel-well">
-                      <span className="text-[#f5efe6] text-sm">
-                        {rate.cost_tickets} tickets → <span className="font-medium text-accent">{rate.label}</span>
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleExchange(rate.to_currency)}
-                        disabled={!canUseGacha || !canAfford || !!exchanging}
-                        className="px-3 py-2 pixel-btn-primary text-base disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {busy ? '…' : 'Exchange'}
-                      </button>
-                    </li>
-                  )
-                })}
-              </ul>
             </div>
           )}
 
@@ -567,7 +545,7 @@ export function Gacha() {
                       const { label, className } = getRarity(r.weight, totalWeight)
                       return (
                         <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-2 px-3 pixel-well">
-                          <span className="text-[#f5efe6] text-sm">{r.reward_type}</span>
+                          <span className="text-[#f5efe6] text-sm">{formatGachaRewardLabel(r.reward_type)}</span>
                           <span className={`text-xs font-medium px-2 py-0.5 rounded border ${className}`}>{label}</span>
                         </li>
                       )
@@ -621,7 +599,7 @@ export function Gacha() {
                         </p>
                         {lastReward.cobbledollarsReward && (
                           <p className="text-sm m-0 text-emerald-300">
-                            Auto credited +{lastReward.cobbledollarsReward.amount.toLocaleString()} Cobble$
+                            Auto credited +{lastReward.cobbledollarsReward.amount.toLocaleString()} Asteryn Point
                             {lastReward.cobbledollarsReward.newBalance != null ? (
                               <>
                                 {' '}
@@ -683,7 +661,7 @@ export function Gacha() {
                             const totalW = poolRewards.reduce((s, r) => s + r.weight, 0) || 1
                             return stripItems.map((label, i) => {
                               const sprite = stripSpriteUrls[label]
-                              const display = stripMinecraftFormatting(label)
+                              const display = formatGachaRewardLabel(label)
                               return (
                                 <div
                                   key={`${i}-${label}`}
@@ -713,7 +691,9 @@ export function Gacha() {
                 <div className="mt-6 p-4 pixel-panel-soft ring-2 ring-accent/35">
                   <p className="text-sm text-muted mb-2">You got:</p>
                   <div className="flex flex-wrap items-center gap-4">
-                    <span className="text-[#f5efe6] font-medium">{lastReward.reward.reward_type}</span>
+                    <span className="text-[#f5efe6] font-medium">
+                      {lastReward.reward.label ?? formatGachaRewardLabel(lastReward.reward.reward_type)}
+                    </span>
                     <span className="text-muted text-sm">New balance: {lastReward.newBalance} {currencyType}</span>
                   </div>
                 </div>
@@ -727,10 +707,9 @@ export function Gacha() {
               {history.length === 0 ? (
                 <>
                   <p className="text-xs text-muted mb-3 m-0">
-                    Claim sends the Pokémon to your in-game party via the server when you pull a Pokémon
-                    reward. You must be <strong className="text-[#f5efe6]">online</strong> on the server, and
-                    your <strong className="text-[#f5efe6]">Minecraft name must match</strong> your website
-                    username. Cobble$ drops credit your website wallet automatically.
+                    Claim sends items to your in-game inventory. You must be{' '}
+                    <strong className="text-[#f5efe6]">online</strong>, and your Minecraft name must match your website
+                    username. Rare tickets credit your wallet automatically.
                   </p>
                   <p className="text-muted text-sm m-0">No pulls yet. Open loot to see your rewards here.</p>
                 </>
@@ -740,44 +719,40 @@ export function Gacha() {
                     <button
                       type="button"
                       role="tab"
-                      aria-selected={historyTab === 'pokemon'}
-                      onClick={() => setHistoryTab('pokemon')}
+                      aria-selected={historyTab === 'claim'}
+                      onClick={() => setHistoryTab('claim')}
                       className={`py-2.5 px-4 text-base font-semibold transition-[filter] duration-150 ${
-                        historyTab === 'pokemon' ? 'pixel-pill pixel-pill-active-accent' : 'pixel-pill'
+                        historyTab === 'claim' ? 'pixel-pill pixel-pill-active-accent' : 'pixel-pill'
                       }`}
                     >
-                      Pokémon ({historyPokemonCount})
+                      Items ({historyClaimCount})
                     </button>
                     <button
                       type="button"
                       role="tab"
-                      aria-selected={historyTab === 'money'}
-                      onClick={() => setHistoryTab('money')}
+                      aria-selected={historyTab === 'auto'}
+                      onClick={() => setHistoryTab('auto')}
                       className={`py-2.5 px-4 text-base font-semibold transition-[filter] duration-150 ${
-                        historyTab === 'money' ? 'pixel-pill pixel-pill-active-accent' : 'pixel-pill'
+                        historyTab === 'auto' ? 'pixel-pill pixel-pill-active-accent' : 'pixel-pill'
                       }`}
                     >
-                      Money ({historyMoneyCount})
+                      Tickets ({historyAutoCount})
                     </button>
                   </div>
-                  {historyTab === 'pokemon' ? (
+                  {historyTab === 'claim' ? (
                     <p className="text-xs text-muted mb-3 m-0">
-                      Claim sends the Pokémon to your in-game party via the server. You must be{' '}
-                      <strong className="text-[#f5efe6]">online</strong> on the server, and your{' '}
-                      <strong className="text-[#f5efe6]">Minecraft name must match</strong> your website username.
+                      Claim sends the item to your in-game inventory. You must be{' '}
+                      <strong className="text-[#f5efe6]">online</strong>, and your Minecraft name must match your website
+                      username.
                     </p>
                   ) : (
                     <p className="text-xs text-muted mb-3 m-0">
-                      These pulls are Cobble dollars (
-                      <code className="text-[11px] text-[#f5efe6]/90">cobbledollars: …</code>) credited automatically
-                      to your website wallet — no in-game claim.
+                      Ticket and Point drops credit your website wallet automatically — no in-game claim.
                     </p>
                   )}
                   {filteredHistory.length === 0 ? (
                     <p className="text-muted text-sm m-0">
-                      {historyTab === 'money'
-                        ? 'No Cobble$ drops in recent pulls.'
-                        : 'No Pokémon rewards in recent pulls.'}
+                      {historyTab === 'auto' ? 'No ticket drops in recent pulls.' : 'No item rewards in recent pulls.'}
                     </p>
                   ) : (
                     <ul className="space-y-2 max-h-64 overflow-y-auto">
@@ -787,7 +762,9 @@ export function Gacha() {
                           className="flex flex-wrap items-center justify-between gap-2 py-2 px-3 pixel-well text-base"
                         >
                           <div className="min-w-0 flex-1">
-                            <span className="text-[#f5efe6] block">{entry.rewardType}</span>
+                            <span className="text-[#f5efe6] block">
+                              {entry.rewardLabel ?? formatGachaRewardLabel(entry.rewardType)}
+                            </span>
                             <span className="text-muted text-xs">
                               {entry.poolName} ·{' '}
                               {new Date(entry.pulledAt).toLocaleDateString(undefined, {
@@ -799,7 +776,7 @@ export function Gacha() {
                             </span>
                             {entry.fulfilledAt && (
                               <span className="block text-xs text-emerald-400/90 mt-1">
-                                {parseCobbledollarsRewardLabel(entry.rewardType) != null
+                                {isAutoCreditReward(entry.rewardType)
                                   ? 'Auto credited to website wallet'
                                   : 'Claimed in-game'}
                               </span>
@@ -847,8 +824,8 @@ export function Gacha() {
                 Claim in-game?
               </h2>
               <p className="text-sm text-[#f5efe6] m-0 mb-4">
-                Send <span className="font-semibold text-amber-200/95">“{claimPending.rewardLabel}”</span> to your
-                party on the Minecraft server.
+                Send <span className="font-semibold text-amber-200/95">“{formatGachaRewardLabel(claimPending.rewardLabel)}”</span> to your
+                inventory on the Minecraft server.
               </p>
               <div className="pixel-panel-soft ring-2 ring-amber-500/30 px-4 py-3 mb-6">
                 <p className="text-sm text-amber-100/90 m-0 leading-relaxed">

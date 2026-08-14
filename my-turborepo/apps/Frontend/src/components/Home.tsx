@@ -8,16 +8,17 @@ type Page =
   | 'restrictions'
   | 'teambuilder'
   | 'gacha'
+  | 'poker'
   | 'spawn'
   | 'tournament'
   | 'account'
   | 'clan'
 
-const QUICK_LINKS: { id: Exclude<Page, 'main'>; label: string; description: string }[] = [
+const QUICK_LINKS: { id: Exclude<Page, 'main'>; label: string; description: string; adminOnly?: boolean }[] = [
   {
     id: 'leaderboard',
     label: 'Leaderboard',
-    description: 'PvP ladder, economy leaderboards, and Battle Tower rankings',
+    description: 'PvP ladder, economy boards, and achievement badges',
   },
   { id: 'usage', label: 'Usage Stats', description: 'Meta usage by tier and competitive format' },
   { id: 'wiki', label: 'Wiki', description: 'Pokédex data, moves, evolutions, and forms' },
@@ -27,7 +28,8 @@ const QUICK_LINKS: { id: Exclude<Page, 'main'>; label: string; description: stri
     label: 'Team Builder',
     description: 'Build Showdown teams with sprites and export',
   },
-  { id: 'gacha', label: 'Gacha', description: 'Reward pools and ticket exchange' },
+  { id: 'gacha', label: 'Gacha', description: 'Ticket wheel — items and rare tickets' },
+  { id: 'poker', label: 'Pokémon Poker', description: 'Hold’em tables with Pokémon cards', adminOnly: true },
   { id: 'spawn', label: 'Spawn', description: 'Spawn locations and encounter conditions' },
   {
     id: 'tournament',
@@ -38,6 +40,7 @@ const QUICK_LINKS: { id: Exclude<Page, 'main'>; label: string; description: stri
     id: 'clan',
     label: 'Clan',
     description: 'Create a clan, request to join, donate, and grow your fund',
+    adminOnly: true,
   },
   {
     id: 'account',
@@ -48,9 +51,11 @@ const QUICK_LINKS: { id: Exclude<Page, 'main'>; label: string; description: stri
 
 interface HomeProps {
   onNavigate?: (page: Page) => void
+  showAdminOnlyLinks?: boolean
 }
 
-export function Home({ onNavigate }: HomeProps) {
+export function Home({ onNavigate, showAdminOnlyLinks = false }: HomeProps) {
+  const links = QUICK_LINKS.filter((l) => !l.adminOnly || showAdminOnlyLinks)
   return (
     <div className="w-full py-8 sm:py-12">
       <section className="hero-wide-shell relative text-center mb-12 sm:mb-16 -mx-4 sm:-mx-6 px-4 sm:px-6 py-10 sm:py-14">
@@ -92,7 +97,7 @@ export function Home({ onNavigate }: HomeProps) {
 
       <PageShell max="5xl" className="space-y-4 pb-0">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 px-1">
-          {QUICK_LINKS.map(({ id, label, description }) => (
+          {links.map(({ id, label, description }) => (
             <PageLinkCard
               key={id}
               label={label}

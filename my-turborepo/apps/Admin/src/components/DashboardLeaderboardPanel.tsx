@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
+﻿import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
-  fetchBattleTowerLeaderboard,
+  fetchAchievementLeaderboard,
   fetchCobbleDollarsLeaderboard,
   fetchPcoLeaderboard,
   fetchWebsiteCobbledollarsLeaderboard,
@@ -13,8 +13,7 @@ import {
 } from '../authApi'
 import { ignNamesMatch, scrollElementIntoViewCentered } from '../ignMatch'
 import type {
-  BattleTowerLeaderboardResponse,
-  BattleTowerLeaderboardRow,
+  AchievementLeaderboardResponse,
   CobbleDollarsLeaderboardResponse,
   LeaderboardFormat,
   LeaderboardPlayer,
@@ -23,27 +22,19 @@ import type {
 import { normalizePvpTierSlugForAssets, PvPTierBadge } from './PvPTierBadge.tsx'
 import { BattleTowerFacilityAdmin } from './BattleTowerFacilityAdmin.tsx'
 
-type MainSection = 'ranks' | 'economy' | 'battle'
+type MainSection = 'ranks' | 'economy' | 'achievements'
 type RankFormatId = 'singles' | 'doubles'
-type BattleModeId = 'singles' | 'doubles' | 'co-op' | 'boss'
 type EconomyKind = 'cobble' | 'website_cobble' | 'pco'
 
 const MAIN_SECTIONS: { id: MainSection; label: string; description: string }[] = [
   { id: 'ranks', label: 'Ranks', description: 'PvP ELO & tiers' },
-  { id: 'economy', label: 'Economy', description: 'Website or in-game Cobble$, or PCO top 10' },
-  { id: 'battle', label: 'Battle Tower', description: 'Floors & streaks' },
+  { id: 'economy', label: 'Economy', description: 'Website Asteryn Point, in-game Cobble$, or PCO top 10' },
+  { id: 'achievements', label: 'Achievements', description: 'Profile badges ranked by tier score' },
 ]
 
 const RANK_FORMATS: { id: RankFormatId; label: string }[] = [
   { id: 'singles', label: 'Singles' },
   { id: 'doubles', label: 'Doubles' },
-]
-
-const BATTLE_MODES: { id: BattleModeId; label: string; apiMode: string }[] = [
-  { id: 'singles', label: 'Singles', apiMode: 'singles' },
-  { id: 'doubles', label: 'Doubles', apiMode: 'doubles' },
-  { id: 'co-op', label: 'Co-op', apiMode: 'coop' },
-  { id: 'boss', label: 'Boss', apiMode: 'boss' },
 ]
 
 const TIER_COLOR_CLASS: Record<string, string> = {
@@ -130,124 +121,15 @@ function SubTab({
   )
 }
 
-function BattleTowerMetricColumn({
-  title,
-  rows,
-  fallbackLines,
-  metric,
-  viewerIgn,
-  youRowRef,
-}: {
-  title: string
-  rows: BattleTowerLeaderboardRow[]
-  fallbackLines: string[]
-  metric: 'floor' | 'streak'
-  viewerIgn?: string | null
-  youRowRef?: RefObject<HTMLLIElement | null>
-}) {
-  const hasParsed = rows.length > 0
-  const hasFallback = fallbackLines.length > 0
-
-  const firstYouKey = useMemo(() => {
-    if (!viewerIgn?.trim() || !rows.length) return null
-    const row = rows.find((r) => ignNamesMatch(viewerIgn, r.name))
-    return row ? `${metric}-${row.rank}-${row.name}` : null
-  }, [rows, viewerIgn, metric])
-
-  const metricLabel = (row: BattleTowerLeaderboardRow) => {
-    if (metric === 'floor') {
-      if (row.floor != null) return <span className="text-white">Floor {row.floor}</span>
-      if (row.detail) {
-        return (
-          <span className="block text-sm text-slate-200/90 truncate font-normal" title={row.detail}>
-            {row.detail}
-          </span>
-        )
-      }
-      return null
-    }
-    if (row.streak != null) return <span className="text-white">Streak {row.streak}</span>
-    if (row.detail) {
-      return (
-        <span className="block text-sm text-slate-200/90 truncate font-normal" title={row.detail}>
-          {row.detail}
-        </span>
-      )
-    }
-    return null
-  }
-
-  return (
-    <div className="space-y-3 min-w-0">
-      <h4 className="text-sm font-semibold m-0 text-slate-100">{title}</h4>
-      {hasParsed ? (
-        <ol className="list-none m-0 p-0 space-y-2">
-          {rows.map((row) => {
-            const rowKey = `${metric}-${row.rank}-${row.name}`
-            const isYou = firstYouKey === rowKey
-            return (
-            <li
-              key={rowKey}
-              ref={isYou ? youRowRef : undefined}
-              className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 transition-shadow duration-300 scroll-mt-24 ${
-                isYou
-                  ? 'border-amber-400/50 bg-amber-500/10 ring-2 ring-amber-400/35 shadow-[0_0_20px_rgba(232,168,56,0.2)]'
-                  : 'border-white/5 bg-black/25'
-              }`}
-            >
-              <span className="flex min-w-0 items-center gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-500/15 text-sm font-bold tabular-nums text-sky-300">
-                  {row.rank}
-                </span>
-                <span className="font-mono text-sm text-white truncate" title={row.name}>
-                  {row.name}
-                  {row.legendary ? (
-                    <span className="ml-1 text-amber-300 font-semibold" title="Used legendary">
-                      (L)
-                    </span>
-                  ) : null}
-                </span>
-              </span>
-              <span className="shrink-0 text-sm text-slate-400 tabular-nums text-right max-w-[min(100%,16rem)]">
-                {metricLabel(row)}
-              </span>
-            </li>
-            )
-          })}
-        </ol>
-      ) : null}
-      {!hasParsed && hasFallback ? (
-        <ol className="list-none m-0 p-0 space-y-2">
-          {fallbackLines.map((line, idx) => (
-            <li
-              key={`${metric}-fb-${idx}-${line.slice(0, 24)}`}
-              className="flex items-start gap-3 rounded-xl border border-white/5 bg-black/25 px-4 py-3"
-            >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-500/15 text-sm font-bold tabular-nums text-sky-300">
-                {idx + 1}
-              </span>
-              <span className="text-sm text-slate-200/95 leading-snug break-words min-w-0 pt-0.5">{line}</span>
-            </li>
-          ))}
-        </ol>
-      ) : null}
-      {!hasParsed && !hasFallback ? (
-        <p className="text-sm text-slate-500 m-0">No entries for this list.</p>
-      ) : null}
-    </div>
-  )
-}
-
 /**
- * Same structure as the public site Leaderboard (Ranks / Economy / Battle Tower), themed for Server Dashboard.
+ * Same structure as the public site Leaderboard (Ranks / Economy / Achievements), themed for Server Dashboard.
  */
 export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?: string }) {
   const viewerIgn = viewerUsername?.trim() ?? null
 
   const rankYouRef = useRef<HTMLTableRowElement>(null)
   const cdYouRef = useRef<HTMLLIElement>(null)
-  const battleFloorYouRef = useRef<HTMLLIElement>(null)
-  const battleStreakYouRef = useRef<HTMLLIElement>(null)
+  const achYouRef = useRef<HTMLLIElement>(null)
 
   const [mainSection, setMainSection] = useState<MainSection>('ranks')
   const [economyKind, setEconomyKind] = useState<EconomyKind>('website_cobble')
@@ -257,7 +139,6 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
   })
   const [displaySettingsSaving, setDisplaySettingsSaving] = useState<RankFormatId | null>(null)
   const [displaySettingsErr, setDisplaySettingsErr] = useState<string | null>(null)
-  const [battleMode, setBattleMode] = useState<BattleModeId>('singles')
 
   const [lbData, setLbData] = useState<LeaderboardResponse | null>(null)
   const [lbLoading, setLbLoading] = useState(true)
@@ -267,9 +148,9 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
   const [cdLoading, setCdLoading] = useState(false)
   const [cdError, setCdError] = useState<string | null>(null)
 
-  const [btData, setBtData] = useState<BattleTowerLeaderboardResponse | null>(null)
-  const [btLoading, setBtLoading] = useState(false)
-  const [btError, setBtError] = useState<string | null>(null)
+  const [achData, setAchData] = useState<AchievementLeaderboardResponse | null>(null)
+  const [achLoading, setAchLoading] = useState(false)
+  const [achError, setAchError] = useState<string | null>(null)
 
   useEffect(() => {
     setLbLoading(true)
@@ -334,24 +215,18 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
     }
   }, [mainSection, economyKind])
 
-  const battleApiMode = BATTLE_MODES.find((m) => m.id === battleMode)?.apiMode ?? 'singles'
-
-  const loadBattleTower = useCallback(() => {
-    setBtLoading(true)
-    setBtError(null)
-    fetchBattleTowerLeaderboard({ mode: battleApiMode, top: 10 })
-      .then(setBtData)
-      .catch((e) => {
-        setBtData(null)
-        setBtError(e instanceof Error ? e.message : 'Failed to load')
-      })
-      .finally(() => setBtLoading(false))
-  }, [battleApiMode])
-
   useEffect(() => {
-    if (mainSection !== 'battle') return
-    loadBattleTower()
-  }, [mainSection, loadBattleTower])
+    if (mainSection !== 'achievements') return
+    setAchLoading(true)
+    setAchError(null)
+    fetchAchievementLeaderboard()
+      .then(setAchData)
+      .catch((e) => {
+        setAchData(null)
+        setAchError(e instanceof Error ? e.message : 'Failed to load')
+      })
+      .finally(() => setAchLoading(false))
+  }, [mainSection])
 
   const panelClass =
     'p-8 text-center rounded-2xl border border-white/10 bg-surface/40 text-slate-400'
@@ -395,21 +270,15 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
     scrollElementIntoViewCentered(cdYouRef.current)
   }, [mainSection, cdYourIndex, cdData?.top10])
 
-  const battleFloorYou = useMemo(() => {
-    if (!viewerIgn || !btData) return undefined
-    return btData.floorRows.find((r) => ignNamesMatch(viewerIgn, r.name))
-  }, [btData, viewerIgn])
-
-  const battleStreakYou = useMemo(() => {
-    if (!viewerIgn || !btData) return undefined
-    return btData.streakRows.find((r) => ignNamesMatch(viewerIgn, r.name))
-  }, [btData, viewerIgn])
+  const yourAchRow = useMemo(() => {
+    if (!viewerIgn || !achData?.rows?.length) return undefined
+    return achData.rows.find((r) => ignNamesMatch(viewerIgn, r.username))
+  }, [achData, viewerIgn])
 
   useEffect(() => {
-    if (mainSection !== 'battle' || !btData) return
-    const el = battleFloorYouRef.current ?? battleStreakYouRef.current
-    scrollElementIntoViewCentered(el)
-  }, [mainSection, btData, battleApiMode, battleFloorYou, battleStreakYou])
+    if (mainSection !== 'achievements' || !yourAchRow) return
+    scrollElementIntoViewCentered(achYouRef.current)
+  }, [mainSection, yourAchRow?.userId])
 
   const mainDescription = MAIN_SECTIONS.find((s) => s.id === mainSection)?.description ?? ''
 
@@ -419,14 +288,14 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
     return {
       isPco,
       isWebsite,
-      loadKind: isPco ? 'PCO' : isWebsite ? 'website Cobble$' : 'in-game Cobble$',
-      title: isPco ? 'In-game PCO (top 10)' : isWebsite ? 'Website Cobble$ (top 10)' : 'In-game Cobble$ (top 10)',
+      loadKind: isPco ? 'PCO' : isWebsite ? 'website Asteryn Point' : 'in-game Cobble$',
+      title: isPco ? 'In-game PCO (top 10)' : isWebsite ? 'Website Asteryn Point (top 10)' : 'In-game Cobble$ (top 10)',
       blurb: isWebsite
-        ? 'Top 10 site wallet balances (GET /leaderboard/website-cobbledollars — same as public Leaderboard).'
+        ? 'Top 10 site wallet balances (GET /leaderboard/website-asterynpoints â€” same as public Leaderboard).'
         : isPco
-          ? 'PCO top 10 from pco top (RCON). Separate from website Cobble$.'
+          ? 'PCO top 10 from pco top (RCON). Separate from website Asteryn Point.'
           : 'In-game Cobble$ top 10 (RCON; same public endpoint as the website).',
-      balanceUnit: isPco ? 'PCO' : 'Cobble$',
+      balanceUnit: isPco ? 'PCO' : isWebsite ? 'Asteryn Point' : 'Cobble$',
     }
   }, [economyKind])
 
@@ -439,8 +308,8 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
             Leaderboards
           </h2>
           <p className="text-xs text-slate-500 m-0 mt-1">
-            Same views as the public site — PvP ranks, Cobble$ or PCO economy top 10, Battle Tower (public API, ~90s
-            cache). Your admin username highlights matching in-game names.
+            Same views as the public site — PvP ranks, Asteryn Point / Cobble$ or PCO economy top 10, and achievement
+            badges. Your admin username highlights matching in-game names.
           </p>
         </div>
       </div>
@@ -465,7 +334,7 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
             </p>
           )}
           {lbLoading ? (
-            <div className={panelClass}>Loading ranks…</div>
+            <div className={panelClass}>Loading ranksâ€¦</div>
           ) : lbError ? (
             <div className={`${panelClass} text-red-300`}>Error: {lbError}</div>
           ) : !lbData || Object.keys(lbData).length === 0 ? (
@@ -502,7 +371,7 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
                       }
                     >
                       {saving
-                        ? `${label}: saving…`
+                        ? `${label}: savingâ€¦`
                         : hiding
                           ? `${label}: hide 0-match`
                           : `${label}: show all`}
@@ -514,7 +383,7 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
                 <p className="text-xs text-red-300 m-0">{displaySettingsErr}</p>
               ) : (
                 <p className="text-xs text-slate-500 m-0">
-                  Each format controls the public Leaderboard → Ranks table independently. Preview below matches the
+                  Each format controls the public Leaderboard â†’ Ranks table independently. Preview below matches the
                   selected tab.
                 </p>
               )}
@@ -525,7 +394,7 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
               {rankPlayers.length === 0 ? (
                 <div className={panelClass}>
                   {rankPlayersAll.length > 0 && hideZeroMatchPlayers
-                    ? `Everyone on ${getFormatDisplayName(rankFormatId)} has 0 matches. Use “${getFormatDisplayName(rankFormatId)}: show all” to list them on the public site.`
+                    ? `Everyone on ${getFormatDisplayName(rankFormatId)} has 0 matches. Use â€œ${getFormatDisplayName(rankFormatId)}: show allâ€ to list them on the public site.`
                     : `No entries for ${getFormatDisplayName(rankFormatId)} yet.`}
                 </div>
               ) : (
@@ -539,11 +408,11 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
                         Your current rank
                       </p>
                       <p className="text-sm text-slate-100 m-0">
-                        <span className="font-mono font-semibold">{yourRankPlayer.playerName}</span> —{' '}
+                        <span className="font-mono font-semibold">{yourRankPlayer.playerName}</span> â€”{' '}
                         <strong className="text-amber-200 tabular-nums">
                           #{yourRankInTable?.rank ?? yourRankPlayer.rank}
                         </strong>{' '}
-                        in {getFormatDisplayName(rankFormatId)} · {yourRankPlayer.elo} ELO ·{' '}
+                        in {getFormatDisplayName(rankFormatId)} Â· {yourRankPlayer.elo} ELO Â·{' '}
                         {yourRankTier ? (
                           <PvPTierBadge
                             slug={normalizePvpTierSlugForAssets(yourRankTier.slug)}
@@ -554,7 +423,7 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
                           />
                         ) : null}
                         {hideZeroMatchPlayers && yourRankPlayer.matches === 0 ? (
-                          <span className="text-amber-300/90"> · 0 matches (hidden on public site)</span>
+                          <span className="text-amber-300/90"> Â· 0 matches (hidden on public site)</span>
                         ) : null}
                       </p>
                     </div>
@@ -651,7 +520,7 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
           </h3>
           <div className="flex flex-wrap gap-2" role="tablist" aria-label="Economy currency">
             <SubTab active={economyKind === 'website_cobble'} onClick={() => setEconomyKind('website_cobble')}>
-              Website C$
+              AsterynPoints
             </SubTab>
             <SubTab active={economyKind === 'cobble'} onClick={() => setEconomyKind('cobble')}>
               In-game C$
@@ -662,14 +531,14 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
           </div>
           <p className="text-sm text-slate-500 m-0">{econTab.blurb}</p>
           {cdLoading ? (
-            <div className={panelClass}>Loading {econTab.loadKind} leaderboard…</div>
+            <div className={panelClass}>Loading {econTab.loadKind} leaderboardâ€¦</div>
           ) : cdError ? (
             <div className={`${panelClass} text-red-300`}>Error: {cdError}</div>
           ) : !cdData ? (
             <div className={panelClass}>No data.</div>
           ) : cdData.disabled ? (
             <div className={panelClass}>
-              {econTab.isPco ? 'PCO' : econTab.isWebsite ? 'Website Cobble$' : 'In-game Cobble$'} leaderboard is
+              {econTab.isPco ? 'PCO' : econTab.isWebsite ? 'Website Asteryn Point' : 'In-game Cobble$'} leaderboard is
               disabled on this deployment.
             </div>
           ) : cdData.error ? (
@@ -679,7 +548,7 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
             </div>
           ) : cdData.top10.length === 0 ? (
             <div className={panelClass}>
-              No {econTab.isPco ? 'PCO' : 'Cobble$'} balances returned yet.
+              No {econTab.isPco ? 'PCO' : econTab.isWebsite ? 'Asteryn Point' : 'Cobble$'} balances returned yet.
             </div>
           ) : (
             <>
@@ -687,7 +556,7 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
                 <h4 className="text-sm font-semibold m-0 mb-1 text-slate-100">{econTab.title}</h4>
                 {cdData.updatedAt && (
                   <p className="text-xs text-slate-500 m-0">
-                    Last refreshed: {new Date(cdData.updatedAt).toLocaleString()} · ~90s cache
+                    Last refreshed: {new Date(cdData.updatedAt).toLocaleString()} Â· ~90s cache
                   </p>
                 )}
               </header>
@@ -708,7 +577,7 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
                     Your position
                   </p>
                   <p className="text-sm text-slate-100 m-0">
-                    <span className="font-mono font-semibold">{cdData.top10[cdYourIndex].name}</span> — rank{' '}
+                    <span className="font-mono font-semibold">{cdData.top10[cdYourIndex].name}</span> â€” rank{' '}
                     <strong
                       className={`tabular-nums ${econTab.isPco ? 'text-cyan-200' : 'text-amber-200'}`}
                     >
@@ -766,130 +635,84 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
         </section>
       )}
 
-      {mainSection === 'battle' && (
-        <section className="space-y-5" aria-labelledby="dash-battle-heading">
-          <h3 id="dash-battle-heading" className="sr-only">
-            Battle Tower
+      {mainSection === 'achievements' && (
+        <section className="space-y-5" aria-labelledby="dash-achievements-heading">
+          <h3 id="dash-achievements-heading" className="text-lg font-semibold m-0 text-white">
+            Top achievements
           </h3>
-          <BattleTowerFacilityAdmin />
-          <div className="flex flex-wrap gap-2 items-center justify-between gap-y-3">
-            <div className="flex flex-wrap gap-2" role="tablist" aria-label="Battle Tower mode">
-              {BATTLE_MODES.map(({ id, label }) => (
-                <SubTab key={id} active={battleMode === id} onClick={() => setBattleMode(id)}>
-                  {label}
-                </SubTab>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={loadBattleTower}
-              disabled={btLoading}
-              className="py-2 px-4 rounded-xl text-sm font-medium border border-white/15 text-slate-400 hover:text-white hover:bg-white/5 disabled:opacity-50"
-            >
-              {btLoading ? 'Refreshing…' : 'Refresh'}
-            </button>
-          </div>
-          <p className="text-xs text-slate-500 m-0">
-            Top 10 per mode · <code className="text-sky-300/90">bt leaderboard</code> (RCON) · cached ~90s
+          <p className="text-sm text-slate-400 m-0 max-w-3xl">
+            Ranked by profile badge score (higher tiers count more: silver 1 â†’ legend 8). Top 50 with at least one
+            active badge.
           </p>
-          {btLoading && !btData ? (
-            <div className={panelClass}>Loading Battle Tower…</div>
-          ) : btError && !btData ? (
-            <div className={`${panelClass} text-red-300`}>Error: {btError}</div>
-          ) : !btData ? (
-            <div className={panelClass}>No data.</div>
-          ) : btData.disabled ? (
-            <div className={panelClass}>
-              Battle Tower disabled (<code className="text-xs text-slate-400">MC_BT_DISABLE</code>).
-            </div>
-          ) : btData.error ? (
-            <div className={`${panelClass} text-red-300 text-sm`}>Could not load: {btData.error}</div>
-          ) : btData.floorRows.length +
-              btData.streakRows.length +
-              btData.fallbackFloorLines.length +
-              btData.fallbackStreakLines.length >
-            0 ? (
-            <>
-              {btData.updatedAt && (
-                <p className="text-xs text-slate-500 m-0">
-                  Last refreshed: {new Date(btData.updatedAt).toLocaleString()}
-                </p>
-              )}
-              <header>
-                <h4 className="text-base font-semibold m-0 mb-1 text-white">Battle Tower (top 10)</h4>
-                <p className="text-sm text-slate-500 m-0">
-                  Highest floor and highest win streak per mode (from server output).
-                </p>
-              </header>
-              {(battleFloorYou || battleStreakYou) && (
-                <div
-                  className="rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-3"
-                  role="status"
-                >
-                  <p className="text-xs font-semibold uppercase tracking-wide text-amber-200 m-0 mb-1.5">
-                    Your entries
-                  </p>
-                  <ul className="m-0 pl-4 text-sm text-slate-100 space-y-1 list-disc marker:text-amber-400/80">
-                    {battleFloorYou ? (
-                      <li>
-                        <span className="font-mono">{battleFloorYou.name}</span> — floor list #
-                        <strong className="tabular-nums">{battleFloorYou.rank}</strong>
-                        {battleFloorYou.floor != null ? <> · floor {battleFloorYou.floor}</> : null}
-                        {battleFloorYou.floor == null && battleFloorYou.detail ? <> · {battleFloorYou.detail}</> : null}
-                      </li>
-                    ) : null}
-                    {battleStreakYou ? (
-                      <li>
-                        <span className="font-mono">{battleStreakYou.name}</span> — streak list #
-                        <strong className="tabular-nums">{battleStreakYou.rank}</strong>
-                        {battleStreakYou.streak != null ? <> · streak {battleStreakYou.streak}</> : null}
-                        {battleStreakYou.streak == null && battleStreakYou.detail ? (
-                          <> · {battleStreakYou.detail}</>
-                        ) : null}
-                      </li>
-                    ) : null}
-                  </ul>
-                </div>
-              )}
-              {viewerIgn &&
-              !battleFloorYou &&
-              !battleStreakYou &&
-              btData.floorRows.length + btData.streakRows.length > 0 ? (
-                <p className="text-xs text-slate-500 m-0 rounded-lg border border-white/10 bg-black/20 px-3 py-2">
-                  No match for <span className="font-mono text-slate-300">{viewerIgn}</span> in this mode.
-                </p>
-              ) : null}
-              <div className="grid gap-8 md:grid-cols-2">
-                <BattleTowerMetricColumn
-                  title="Highest floor"
-                  rows={btData.floorRows}
-                  fallbackLines={btData.fallbackFloorLines}
-                  metric="floor"
-                  viewerIgn={viewerIgn}
-                  youRowRef={battleFloorYouRef}
-                />
-                <BattleTowerMetricColumn
-                  title="Highest win streak"
-                  rows={btData.streakRows}
-                  fallbackLines={btData.fallbackStreakLines}
-                  metric="streak"
-                  viewerIgn={viewerIgn}
-                  youRowRef={battleStreakYouRef}
-                />
-              </div>
-              {btData.floorRows.length === 0 &&
-              btData.streakRows.length === 0 &&
-              (btData.fallbackFloorLines.length > 0 || btData.fallbackStreakLines.length > 0) ? (
-                <p className="text-xs text-slate-500 m-0">
-                  Raw server lines — parser could not split players; update parser if stats look wrong.
-                </p>
-              ) : null}
-            </>
+          {achLoading && !achData ? (
+            <div className={panelClass}>Loading achievementsâ€¦</div>
+          ) : achError && !achData ? (
+            <div className={`${panelClass} text-red-300`}>Error: {achError}</div>
+          ) : !achData?.rows?.length ? (
+            <div className={panelClass}>No achievement badges granted yet.</div>
           ) : (
-            <div className={`${panelClass} text-sm`}>No entries returned.</div>
+            <>
+              {yourAchRow ? (
+                <div className="rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-3" role="status">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-amber-200 m-0 mb-1.5">Your place</p>
+                  <p className="text-sm text-slate-100 m-0">
+                    #{yourAchRow.rank} Â· {yourAchRow.badgeCount} badges Â· score {yourAchRow.score.toLocaleString()}
+                    {yourAchRow.legend + yourAchRow.mythic + yourAchRow.gold > 0
+                      ? ` Â· legend ${yourAchRow.legend} Â· mythic ${yourAchRow.mythic} Â· gold ${yourAchRow.gold}`
+                      : ''}
+                  </p>
+                </div>
+              ) : viewerIgn ? (
+                <p className="text-xs text-slate-500 m-0 rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                  No badges listed for <span className="font-mono text-slate-300">{viewerIgn}</span> yet.
+                </p>
+              ) : null}
+              <ol className="list-none m-0 p-0 space-y-2 max-w-3xl">
+                {achData.rows.map((row) => {
+                  const isYou = yourAchRow?.userId === row.userId
+                  return (
+                    <li
+                      key={row.userId}
+                      ref={isYou ? achYouRef : undefined}
+                      className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 scroll-mt-24 ${
+                        isYou
+                          ? 'border-amber-400/50 bg-amber-500/10 ring-2 ring-amber-400/35'
+                          : 'border-white/5 bg-black/25'
+                      }`}
+                    >
+                      <span className="flex min-w-0 items-center gap-3">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-500/15 text-sm font-bold tabular-nums text-sky-300">
+                          {row.rank}
+                        </span>
+                        <span className="font-mono text-sm text-white truncate" title={row.username}>
+                          {row.username}
+                        </span>
+                      </span>
+                      <span className="text-sm text-slate-400 tabular-nums text-right">
+                        <span className="text-white font-semibold">{row.badgeCount}</span> badges
+                        <span> Â· score {row.score}</span>
+                        {row.legend > 0 || row.mythic > 0 || row.gold > 0 ? (
+                          <span className="block text-xs mt-0.5">
+                            {row.legend > 0 ? `Legend ${row.legend}` : null}
+                            {row.legend > 0 && (row.mythic > 0 || row.gold > 0) ? ' Â· ' : null}
+                            {row.mythic > 0 ? `Mythic ${row.mythic}` : null}
+                            {row.mythic > 0 && row.gold > 0 ? ' Â· ' : null}
+                            {row.gold > 0 ? `Gold ${row.gold}` : null}
+                          </span>
+                        ) : null}
+                      </span>
+                    </li>
+                  )
+                })}
+              </ol>
+            </>
           )}
         </section>
       )}
+
+      <div className="mt-8 pt-6 border-t border-white/10">
+        <BattleTowerFacilityAdmin />
+      </div>
     </div>
   )
 }

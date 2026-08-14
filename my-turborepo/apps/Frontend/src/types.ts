@@ -156,7 +156,8 @@ export interface SpawnPokemonRow {
   generation_number: number | null
   dex_number: number | null
   pokemon: string
-  source: string | null
+  /** Removed from CSV import; kept optional for older API responses. */
+  source?: string | null
   spawn: string | null
   rarity: string | null
   condition: string | null
@@ -185,7 +186,7 @@ export interface SpawnBossResponse {
   rows: SpawnBossRow[]
 }
 
-/** GET /minecraft/cobbledollars-leaderboard, GET /minecraft/pco-leaderboard, GET /leaderboard/website-cobbledollars */
+/** GET /minecraft/cobbledollars-leaderboard, GET /minecraft/pco-leaderboard, GET /leaderboard/website-asterynpoints */
 export interface CobbleDollarsLeaderboardResponse {
   ok: boolean
   disabled?: boolean
@@ -215,4 +216,22 @@ export interface BattleTowerLeaderboardResponse {
   fallbackStreakLines: string[]
   error: string | null
   updatedAt: string | null
+}
+
+/** GET /leaderboard/achievements */
+export interface AchievementLeaderboardRow {
+  rank: number
+  userId: number
+  username: string
+  badgeCount: number
+  score: number
+  legend: number
+  mythic: number
+  gold: number
+}
+
+export interface AchievementLeaderboardResponse {
+  ok: boolean
+  rows: AchievementLeaderboardRow[]
+  error: string | null
 }

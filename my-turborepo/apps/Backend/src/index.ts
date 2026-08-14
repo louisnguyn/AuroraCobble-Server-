@@ -33,31 +33,68 @@ import {
 } from "./minecraftRconBattleTower.js";
 import { executeMinecraftRconCommand } from "./minecraftRconExecute.js";
 import {
+  ASTERYN_POINTS_CURRENCY,
+  isAsterynPointsCurrency,
+  LEGACY_COBBLEDOLLARS_CURRENCY,
+} from "./websiteCurrency.js";
+import {
   DEFAULT_MINECRAFT_ROLE,
+  DEFAULT_VIP_TIER,
   GRANT_ONLY_ROLE_KEYS,
   getDailyLoginFlatCobbleBonusPerClaim,
+  getDailyLoginRankItemGrants,
   getDailyLoginTicketBonusPerClaim,
+  getDailyLoginVipItemGrants,
+  mergeDailyItemGrants,
   getPurchasableCost,
+  getPurchasableTierIndex,
   getRoleCatalog,
-  getNextPurchasableRoleKey,
   validatePurchasableRoleUpgrade,
-  validateRolePurchaseBadgeRequirement,
   purchasableRoleCatalogFlags,
   PURCHASABLE_ROLE_KEYS,
   getWebsiteShopDiscountPercent,
+  getVipTierIndex,
   applyWebsiteShopEventPrice,
   applyWebsiteShopPrice,
   isKnownRoleKey,
+  isVipTierKey,
   listAllKnownRoleKeys,
   normalizeRoleKey,
+  normalizeVipTierKey,
   runLuckpermsParentSet,
+  resolveLuckpermsGroupForDisplay,
   SHOP_EVENT_DISCOUNT_PERCENT,
+  VIP_TIER_KEYS,
+  VIP_TIER_LABELS,
 } from "./minecraftRoles.js";
 import {
+  buildOwnedInventoryEntries,
+  buildVipCatalogEntries,
+  getNextVipClaimKey,
+  getShopProgressRoleKey,
+  getVipClaimBadgeRequirementLabel,
+  isActivatableOwnedRole,
+  listOwnedRoleKeys,
+  meetsVipClaimBadgeRequirement,
+  nextShopBuyKey,
+  readWebsiteVipTier,
+  setWebsiteVipTier,
+  userOwnsRole,
+  addOwnedShopProgress,
+  addOwnedRole,
+  removeOwnedRole,
+  highestOwnedVipTier,
+} from "./userOwnedRoles.js";
+import {
+  buildGiveItemCommand,
   buildGivePokemonOtherCommand,
+  formatGachaRewardLabel,
   isGachaClaimEnabled,
   isLikelyMinecraftUsername,
+  materializeGachaRewardType,
   parseCobbledollarsReward,
+  parseGachaCurrencyReward,
+  parseGachaItemReward,
   parseRewardForGivePokemon,
 } from "./gachaRewardClaim.js";
 import {
@@ -157,8 +194,8 @@ import {
   achievementTierRank,
   normalizeAchievementSlug,
   parseAchievementTier,
-  countUserCrimsonBadges,
   countUserProfileBadgesByTier,
+  fetchAchievementLeaderboard,
 } from "./profileAchievements.js";
 
 function readMinecraftRoleField(row: { minecraft_role?: string | null } | null | undefined): string {
@@ -208,17 +245,13 @@ function parseRankedFeedLimit(raw: unknown): number {
 }
 
 const COBBLEDOLLARS_PUBLIC_CACHE_TTL_MS = 90_000;
-/** PVP daily payout: only top 3 on the synced leaderboard (website usernames matched). */
+/** PVP daily payout: #1 only on the synced leaderboard (website usernames matched). */
 const PVP_DAILY_REWARDS: Record<number, number> = {
-  1: 100_000,
-  2: 75_000,
-  3: 50_000,
+  1: 1,
 };
 /** Bonus website normal tickets (`user_currency` `tickets`) per rank each daily payout. */
 const PVP_DAILY_TICKETS_BY_RANK: Record<number, number> = {
-  1: 2,
-  2: 1,
-  3: 1,
+  1: 1,
 };
 
 function getPvpRankDailyRewardsMeta() {
@@ -276,7 +309,7 @@ let pcoPublicCache: {
   };
 } | null = null;
 
-/** Website wallet Cobble$ (`user_currency` + `users`) — same JSON shape as in-game economy leaderboards. */
+/** Website wallet Asteryn Point (`user_currency` + `users`) — same JSON shape as in-game economy leaderboards. */
 let websiteCobbledollarsPublicCache: {
   at: number;
   body: {
@@ -459,12 +492,12 @@ async function notifyDiscordTournamentPredictionStake(params: {
     { name: "Tournament", value: clampDiscordText(params.tournamentTitle, 256), inline: true },
     {
       name: "Total staked",
-      value: `${params.totalStake.toLocaleString()} Cobble$`,
+      value: `${params.totalStake.toLocaleString()} Asteryn Point`,
       inline: true,
     },
     {
       name: "Balance",
-      value: `${params.newBalance.toLocaleString()} Cobble$`,
+      value: `${params.newBalance.toLocaleString()} Asteryn Point`,
       inline: true,
     },
   ];
@@ -472,7 +505,7 @@ async function notifyDiscordTournamentPredictionStake(params: {
     fields.push({
       name: "Champion pick",
       value: clampDiscordText(
-        `${params.pickChampionLabel ?? "—"} · ${params.stakeChampion.toLocaleString()} CD`,
+        `${params.pickChampionLabel ?? "—"} · ${params.stakeChampion.toLocaleString()} AsterynPoints`,
         1024
       ),
       inline: false,
@@ -482,7 +515,7 @@ async function notifyDiscordTournamentPredictionStake(params: {
     fields.push({
       name: "Runner-up pick",
       value: clampDiscordText(
-        `${params.pickRunnerUpLabel ?? "—"} · ${params.stakeRunnerUp.toLocaleString()} CD`,
+        `${params.pickRunnerUpLabel ?? "—"} · ${params.stakeRunnerUp.toLocaleString()} AsterynPoints`,
         1024
       ),
       inline: false,
@@ -671,24 +704,24 @@ async function notifyDiscordCobbleLedger(
   let content: string | null = null;
   switch (kind) {
     case "deposit_to_server": {
-      content = `${username} deposited ${amountStr} Cobble$ to the server (new balance ${balanceAfterStr})`;
+      content = `${username} deposited ${amountStr} Asteryn Point to the server (new balance ${balanceAfterStr})`;
       break;
     }
     case "shop": {
       // detail like: `${item.label} ×${quantity}`
-      content = `${username} bought ${detail ?? "item"} for ${amountStr} Cobble$ (new balance ${balanceAfterStr})`;
+      content = `${username} bought ${detail ?? "item"} for ${amountStr} Asteryn Point (new balance ${balanceAfterStr})`;
       break;
     }
     case "pokemon_shop": {
-      content = `${username} bought ${detail ?? "pokemon"} for ${amountStr} Cobble$ (new balance ${balanceAfterStr})`;
+      content = `${username} bought ${detail ?? "pokemon"} for ${amountStr} Asteryn Point (new balance ${balanceAfterStr})`;
       void notifyDiscordEmbed(
         {
           title: "Pokémon Shop Purchase",
           color: 0xa855f7,
           fields: [
             { name: "Player", value: clampDiscordText(username, 128), inline: true },
-            { name: "Paid", value: `${amountStr} Cobble$`, inline: true },
-            { name: "Balance", value: `${balanceAfterStr} Cobble$`, inline: true },
+            { name: "Paid", value: `${amountStr} Asteryn Point`, inline: true },
+            { name: "Balance", value: `${balanceAfterStr} Asteryn Point`, inline: true },
             {
               name: "Pokémon",
               value: clampDiscordText(detail ?? "—", 1024),
@@ -702,15 +735,15 @@ async function notifyDiscordCobbleLedger(
       return;
     }
     case "role_shop": {
-      content = `${username} bought rank ${detail ?? "role"} for ${amountStr} Cobble$ (new balance ${balanceAfterStr})`;
+      content = `${username} bought rank ${detail ?? "role"} for ${amountStr} Asteryn Point (new balance ${balanceAfterStr})`;
       break;
     }
     case "tournament_prediction_stake": {
-      content = `${username} staked ${amountStr} Cobble$ on tournament predictions (balance ${balanceAfterStr})`;
+      content = `${username} staked ${amountStr} Asteryn Point on tournament predictions (balance ${balanceAfterStr})`;
       break;
     }
     case "tournament_prediction_win": {
-      content = `${username} won ${amountStr} Cobble$ from tournament predictions (balance ${balanceAfterStr})`;
+      content = `${username} won ${amountStr} Asteryn Point from tournament predictions (balance ${balanceAfterStr})`;
       break;
     }
   }
@@ -722,8 +755,8 @@ async function notifyDiscordCobbleLedger(
     fields: [
       { name: "Player", value: clampDiscordText(username, 128), inline: true },
       { name: "Type", value: clampDiscordText(kind.replace(/_/g, " "), 128), inline: true },
-      { name: "Amount", value: `${amountStr} Cobble$`, inline: true },
-      { name: "Balance", value: `${balanceAfterStr} Cobble$`, inline: true },
+      { name: "Amount", value: `${amountStr} Asteryn Point`, inline: true },
+      { name: "Balance", value: `${balanceAfterStr} Asteryn Point`, inline: true },
       {
         name: "Detail",
         value: clampDiscordText(detail ?? content, 1024),
@@ -1032,7 +1065,7 @@ cobbleRankedSyncRouter.post("/v4/match-result", requireCobbleAuth, (req, res) =>
 app.use(cobbleRankedSyncRouter);
 app.use("/api", cobbleRankedSyncRouter);
 
-/** Public Cobble$ top 10 from Minecraft RCON (cached ~90s). No auth. */
+/** Public in-game Cobble$ top 10 from Minecraft RCON (cached ~90s). No auth. */
 app.get("/minecraft/cobbledollars-leaderboard", async (_req, res) => {
   if (process.env.MC_COBBLEDOLLARS_DISABLE === "true") {
     res.json({
@@ -1076,8 +1109,8 @@ app.get("/minecraft/cobbledollars-leaderboard", async (_req, res) => {
   }
 });
 
-/** Public website Cobble$ top 10 (`user_currency` cobbledollars + `users.username`). Cached ~90s. No auth. */
-app.get("/leaderboard/website-cobbledollars", async (_req, res) => {
+/** Public website Asteryn Point top 10 (`user_currency` cobbledollars + `users.username`). Cached ~90s. No auth. */
+app.get(["/leaderboard/website-cobbledollars", "/leaderboard/website-asterynpoints"], async (_req, res) => {
   if (process.env.WEBSITE_COBBLEDOLLARS_LEADERBOARD_DISABLE === "true") {
     res.json({
       ok: false,
@@ -1162,6 +1195,21 @@ app.get("/leaderboard/website-cobbledollars", async (_req, res) => {
     };
     websiteCobbledollarsPublicCache = { at: now, body };
     res.json(body);
+  }
+});
+
+/** Public profile-badge ranking (no auth). */
+app.get("/leaderboard/achievements", async (_req, res) => {
+  if (!supabase) {
+    res.status(503).json({ ok: false, rows: [], error: "Database not configured" });
+    return;
+  }
+  try {
+    const rows = await fetchAchievementLeaderboard(supabase, 50);
+    res.json({ ok: true, rows, error: null });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Failed to load achievement leaderboard";
+    res.status(500).json({ ok: false, rows: [], error: msg });
   }
 });
 
@@ -1320,32 +1368,55 @@ app.get("/spawn/pokemon", async (req, res) => {
   }
   const q = String(req.query.q ?? "").trim();
   const generation = String(req.query.generation ?? "").trim();
-  const source = String(req.query.source ?? "").trim();
-  const limit = Math.min(Math.max(Number(req.query.limit) || 500, 1), 2000);
+  // Supabase/PostgREST caps a single response at 1000 rows by default, so we
+  // page with .range() until we have everything (or hit this soft ceiling).
+  const maxRows = Math.min(Math.max(Number(req.query.limit) || 5000, 1), 10000);
+  const pageSize = 1000;
 
-  let query = supabase
-    .from("pokemon_spawn")
-    .select("id, generation, generation_number, dex_number, pokemon, source, spawn, rarity, condition, forms")
-    .order("generation_number", { ascending: true })
-    .order("dex_number", { ascending: true })
-    .order("pokemon", { ascending: true })
-    .limit(limit);
+  type SpawnRow = {
+    id: number;
+    generation: string | null;
+    generation_number: number | null;
+    dex_number: number | null;
+    pokemon: string;
+    spawn: string | null;
+    rarity: string | null;
+    condition: string | null;
+    forms: string | null;
+  };
 
-  if (q) query = query.ilike("pokemon", `%${q}%`);
-  if (generation) query = query.eq("generation", generation);
-  if (source) query = query.eq("source", source);
+  const rows: SpawnRow[] = [];
+  for (let from = 0; from < maxRows; from += pageSize) {
+    const to = Math.min(from + pageSize - 1, maxRows - 1);
+    let pageQuery = supabase
+      .from("pokemon_spawn")
+      .select(
+        "id, generation, generation_number, dex_number, pokemon, spawn, rarity, condition, forms"
+      )
+      .order("generation_number", { ascending: true })
+      .order("dex_number", { ascending: true })
+      .order("pokemon", { ascending: true })
+      .range(from, to);
 
-  const { data, error } = await query;
-  if (error) {
-    res.status(500).json({ error: error.message });
-    return;
+    if (q) pageQuery = pageQuery.ilike("pokemon", `%${q}%`);
+    if (generation) pageQuery = pageQuery.eq("generation", generation);
+
+    const { data, error } = await pageQuery;
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+    const batch = (data ?? []) as SpawnRow[];
+    rows.push(...batch);
+    if (batch.length < pageSize) break;
   }
-  const rows = (data ?? []) as { generation: string | null; source: string | null }[];
-  const generations = Array.from(new Set(rows.map((r) => r.generation).filter(Boolean))) as string[];
-  const sources = Array.from(new Set(rows.map((r) => r.source).filter(Boolean))) as string[];
+
+  const generations = Array.from(
+    new Set(rows.map((r) => r.generation).filter(Boolean))
+  ) as string[];
   res.json({
-    rows: data ?? [],
-    filters: { generations, sources },
+    rows,
+    filters: { generations, sources: [] as string[] },
   });
 });
 
@@ -1398,11 +1469,11 @@ app.post("/auth/signup", async (req, res) => {
     res.status(400).json({ error: result.error });
     return;
   }
-  // Grant starter currency for gacha + website Cobble$ wallet (ignore errors so signup still succeeds)
+  // Grant starter currency for gacha + website Asteryn Point wallet (ignore errors so signup still succeeds)
   if (supabase) {
     void supabase.from("user_currency").insert([
+      { user_id: result.id, currency_type: ASTERYN_POINTS_CURRENCY, balance: 0 },
       { user_id: result.id, currency_type: "tickets", balance: 0 },
-      { user_id: result.id, currency_type: "cobbledollars", balance: 0 },
     ]);
   }
   const isAdmin = !!(result as { is_admin?: boolean }).is_admin;
@@ -2321,30 +2392,176 @@ app.post("/admin/verification-requests/:id/reject", requireAuth, requireAdmin, a
   res.json({ ok: true, request: updatedReq });
 });
 
-// --- Minecraft rank: catalog, Cobble$ purchase (RCON LuckPerms), grant-only requests ---
+// --- Minecraft rank: catalog, Asteryn Point purchase (RCON LuckPerms), grant-only requests ---
 app.get("/roles/catalog", requireAuth, async (_req, res) => {
   const userId = res.locals.user!.userId;
   const currentRole = await getUserMinecraftRoleForShop(userId);
-  const profileBadgeCounts = supabase ? await countUserProfileBadgesByTier(supabase, userId) : { crimson: 0, gold: 0, mythic: 0 };
+  const ownedList = supabase ? await listOwnedRoleKeys(supabase, userId) : [];
+  const ownedSet = new Set(ownedList);
+  if (currentRole && currentRole !== DEFAULT_MINECRAFT_ROLE) ownedSet.add(normalizeRoleKey(currentRole));
+  const shopProgressRoleKey = getShopProgressRoleKey([...ownedSet], currentRole);
+  const nextPurchasableRoleKey = nextShopBuyKey([...ownedSet], currentRole);
+  const websiteVipTier = supabase ? await readWebsiteVipTier(supabase, userId) : DEFAULT_VIP_TIER;
+  const profileBadgeCounts = supabase
+    ? await countUserProfileBadgesByTier(supabase, userId)
+    : { mythic: 0, gold: 0, legend: 0 };
   const catalog = getRoleCatalog();
-  const nextPurchasableRoleKey = getNextPurchasableRoleKey(currentRole);
+  const vip = buildVipCatalogEntries(websiteVipTier, ownedSet, profileBadgeCounts, currentRole);
+  const ownedInventory = buildOwnedInventoryEntries([...ownedSet], currentRole);
   res.json({
     currency: COBBLEDOLLARS_CURRENCY,
     shopEventDiscountPercent: SHOP_EVENT_DISCOUNT_PERCENT,
+    /** Currently displayed in-game (LuckPerms parent). */
     currentRole,
+    activeDisplayRole: currentRole,
+    /** Highest shop ladder tier owned (progress), not necessarily active. */
+    highestShopRank: shopProgressRoleKey,
+    shopProgressRoleKey,
+    /** Highest VIP claimed. */
+    highestVip: websiteVipTier,
     nextPurchasableRoleKey,
-    crimsonBadgeCount: profileBadgeCounts.crimson,
-    goldBadgeCount: profileBadgeCounts.gold,
+    ownedRoles: [...ownedSet],
+    ownedInventory,
+    websiteVipTier,
+    nextVipClaimKey: getNextVipClaimKey(websiteVipTier),
     mythicBadgeCount: profileBadgeCounts.mythic,
+    goldBadgeCount: profileBadgeCounts.gold,
+    legendBadgeCount: profileBadgeCounts.legend,
     profileBadgeCounts,
     purchasableTierOrder: [...PURCHASABLE_ROLE_KEYS],
+    vipTierOrder: [...VIP_TIER_KEYS],
     ...catalog,
     purchasable: catalog.purchasable.map((entry, tierIndex) => ({
       ...entry,
       listCost: entry.cost ?? null,
       cost: entry.cost != null ? applyWebsiteShopEventPrice(entry.cost) : undefined,
-      ...purchasableRoleCatalogFlags(currentRole, entry.key, tierIndex, profileBadgeCounts),
+      ...purchasableRoleCatalogFlags(shopProgressRoleKey, entry.key, tierIndex, ownedSet),
+      active: normalizeRoleKey(entry.key) === normalizeRoleKey(currentRole),
     })),
+    vip,
+    grantOnly: catalog.grantOnly.map((entry) => ({
+      ...entry,
+      owned: ownedSet.has(normalizeRoleKey(entry.key)),
+      active: normalizeRoleKey(entry.key) === normalizeRoleKey(currentRole),
+      canActivate: ownedSet.has(normalizeRoleKey(entry.key)),
+    })),
+  });
+});
+
+app.post("/roles/activate", requireAuth, async (req, res) => {
+  const user = res.locals.user!;
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const roleKey = normalizeRoleKey(String((req.body as { roleKey?: unknown })?.roleKey ?? ""));
+  if (!roleKey || !isActivatableOwnedRole(roleKey)) {
+    res.status(400).json({ error: "Invalid rank to activate." });
+    return;
+  }
+  if (roleKey !== DEFAULT_MINECRAFT_ROLE && roleKey !== DEFAULT_VIP_TIER) {
+    let owns = await userOwnsRole(supabase, user.userId, roleKey);
+    if (!owns && isVipTierKey(roleKey)) {
+      const vip = await readWebsiteVipTier(supabase, user.userId);
+      owns = getVipTierIndex(roleKey) <= getVipTierIndex(vip);
+    }
+    if (!owns) {
+      res.status(403).json({ error: "You do not own this rank." });
+      return;
+    }
+  }
+  const current = await getUserMinecraftRoleForShop(user.userId);
+  if (normalizeRoleKey(current) === roleKey) {
+    res.json({
+      ok: true,
+      roleKey,
+      alreadyActive: true,
+      lpGroup: resolveLuckpermsGroupForDisplay(roleKey),
+    });
+    return;
+  }
+  const lp = await runLuckpermsParentSet(user.username, roleKey);
+  if (!lp.ok) {
+    res.status(502).json({
+      error: lp.error,
+      hint:
+        roleKey === DEFAULT_VIP_TIER
+          ? "Create LuckPerms group `player` and set prefix from the Asteryn pack (U+E00D). Run 01-create-groups + 02-group-prefixes-glyph."
+          : `LuckPerms group "${resolveLuckpermsGroupForDisplay(roleKey)}" may be missing on the Minecraft server.`,
+    });
+    return;
+  }
+  const now = new Date().toISOString();
+  const { error: roleErr } = await supabase
+    .from("users")
+    .update({ minecraft_role: roleKey, updated_at: now })
+    .eq("id", user.userId);
+  if (roleErr) {
+    res.status(500).json({
+      error:
+        "Rank was applied on the Minecraft server but the website failed to save it. Staff can fix your account.",
+    });
+    return;
+  }
+  res.json({
+    ok: true,
+    roleKey,
+    alreadyActive: false,
+    lpGroup: lp.lpGroup,
+  });
+});
+
+app.post("/roles/vip/claim", requireAuth, async (req, res) => {
+  const user = res.locals.user!;
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  if (!(await userMayUseTeamAiFeatures(user.userId))) {
+    res.status(403).json({
+      code: "shop_verification_required",
+      error: "A verified account is required to claim VIP tiers.",
+    });
+    return;
+  }
+  const requested = normalizeVipTierKey(String((req.body as { tierKey?: unknown })?.tierKey ?? ""));
+  const currentVip = await readWebsiteVipTier(supabase, user.userId);
+  const next = getNextVipClaimKey(currentVip);
+  if (!next || requested !== next) {
+    res.status(400).json({
+      error: next
+        ? `You must claim VIP tiers one step at a time. Next: ${VIP_TIER_LABELS[next]}.`
+        : "You already have the highest VIP tier.",
+      nextVipClaimKey: next,
+      websiteVipTier: currentVip,
+    });
+    return;
+  }
+  const badges = await countUserProfileBadgesByTier(supabase, user.userId);
+  if (!meetsVipClaimBadgeRequirement(next, badges)) {
+    res.status(400).json({
+      error: getVipClaimBadgeRequirementLabel(next) ?? "Profile badge requirements not met.",
+      profileBadgeCounts: badges,
+    });
+    return;
+  }
+  await addOwnedRole(supabase, user.userId, next, "vip_claim");
+  const nextIdx = getVipTierIndex(next);
+  for (let i = 1; i <= nextIdx; i++) {
+    const k = VIP_TIER_KEYS[i];
+    if (k) await addOwnedRole(supabase, user.userId, k, "vip_claim");
+  }
+  const setVip = await setWebsiteVipTier(supabase, user.userId, next);
+  if (!setVip.ok) {
+    res.status(500).json({ error: setVip.error });
+    return;
+  }
+  res.json({
+    ok: true,
+    tierKey: next,
+    websiteVipTier: next,
+    owned: true,
+    profileBadgeCounts: badges,
   });
 });
 
@@ -2562,30 +2779,9 @@ app.post("/admin/role-requests/:id/approve", requireAuth, requireAdmin, async (r
     res.status(400).json({ error: "Invalid grant-only role on this request." });
     return;
   }
-  const { data: urow, error: uerr } = await supabase
-    .from("users")
-    .select("username")
-    .eq("id", r.user_id)
-    .maybeSingle();
-  if (uerr || !urow) {
-    res.status(uerr ? 500 : 404).json({ error: uerr?.message ?? "User not found" });
-    return;
-  }
-  const username = (urow as { username: string }).username.trim();
-  const lp = await runLuckpermsParentSet(username, roleKey);
-  if (!lp.ok) {
-    res.status(502).json({ error: lp.error });
-    return;
-  }
+  // Grant into inventory only — player activates display themselves.
+  await addOwnedRole(supabase, r.user_id, roleKey, "grant");
   const now = new Date().toISOString();
-  const { error: userUpErr } = await supabase
-    .from("users")
-    .update({ minecraft_role: roleKey, updated_at: now })
-    .eq("id", r.user_id);
-  if (userUpErr) {
-    res.status(500).json({ error: userUpErr.message });
-    return;
-  }
   const { data: updatedReq, error: upReqErr } = await supabase
     .from("user_role_grant_requests")
     .update({
@@ -2606,7 +2802,7 @@ app.post("/admin/role-requests/:id/approve", requireAuth, requireAdmin, async (r
     res.status(409).json({ error: "Request was updated by another action." });
     return;
   }
-  res.json({ ok: true, request: updatedReq });
+  res.json({ ok: true, request: updatedReq, grantedToInventory: roleKey });
 });
 
 app.post("/admin/role-requests/:id/reject", requireAuth, requireAdmin, async (req, res) => {
@@ -2686,22 +2882,15 @@ app.post("/roles/buy", requireAuth, async (req, res) => {
   }
 
   const currentRole = await getUserMinecraftRoleForShop(user.userId);
-  const upgradeCheck = validatePurchasableRoleUpgrade(currentRole, roleKey);
+  const ownedList = await listOwnedRoleKeys(supabase, user.userId);
+  const shopProgressRoleKey = getShopProgressRoleKey(ownedList, currentRole);
+  const upgradeCheck = validatePurchasableRoleUpgrade(shopProgressRoleKey, roleKey);
   if (!upgradeCheck.ok) {
     res.status(400).json({
       error: upgradeCheck.error,
       currentRole,
+      shopProgressRoleKey,
       nextPurchasableRoleKey: upgradeCheck.nextRoleKey,
-    });
-    return;
-  }
-
-  const profileBadgeCounts = await countUserProfileBadgesByTier(supabase, user.userId);
-  const badgeCheck = validateRolePurchaseBadgeRequirement(profileBadgeCounts, roleKey, currentRole);
-  if (!badgeCheck.ok) {
-    res.status(400).json({
-      error: badgeCheck.error,
-      profileBadgeCounts: badgeCheck.badgeCounts,
     });
     return;
   }
@@ -2712,12 +2901,12 @@ app.post("/roles/buy", requireAuth, async (req, res) => {
   if (cost > 0) {
     const wallet = await ensureUserCobbledollarsRow(user.userId);
     if (!wallet) {
-      res.status(500).json({ error: "Could not open Cobble$ wallet" });
+      res.status(500).json({ error: "Could not open Asteryn Point wallet" });
       return;
     }
     if (wallet.balance < cost) {
       res.status(400).json({
-        error: "Not enough Cobble$",
+        error: "Not enough Asteryn Point",
         balance: wallet.balance,
         required: cost,
       });
@@ -2741,29 +2930,7 @@ app.post("/roles/buy", requireAuth, async (req, res) => {
       return;
     }
 
-    const lp = await runLuckpermsParentSet(user.username, roleKey);
-    if (!lp.ok) {
-      await supabase
-        .from("user_currency")
-        .update({ balance: wallet.balance, updated_at: new Date().toISOString() })
-        .eq("id", wallet.id);
-      res.status(502).json({ error: lp.error });
-      return;
-    }
-
-    const { error: roleErr } = await supabase
-      .from("users")
-      .update({ minecraft_role: roleKey, updated_at: now })
-      .eq("id", user.userId);
-    if (roleErr) {
-      console.error("[roles/buy] LuckPerms OK but users.minecraft_role update failed", roleErr);
-      res.status(500).json({
-        error:
-          "Rank was applied on the Minecraft server but the website failed to save it. Staff can fix your account — your Cobble$ was still charged.",
-      });
-      return;
-    }
-
+    await addOwnedShopProgress(supabase, user.userId, roleKey);
     await recordCobbledollarLedger(user.userId, -cost, newBalance, "role_shop", roleKey);
     res.json({
       ok: true,
@@ -2771,32 +2938,14 @@ app.post("/roles/buy", requireAuth, async (req, res) => {
       cost,
       listCost,
       freeRank: false,
+      addedToInventory: true,
       shopEventDiscountPercent: SHOP_EVENT_DISCOUNT_PERCENT,
       newBalance,
     });
     return;
   }
 
-  const now = new Date().toISOString();
-  const lp = await runLuckpermsParentSet(user.username, roleKey);
-  if (!lp.ok) {
-    res.status(502).json({ error: lp.error });
-    return;
-  }
-
-  const { error: roleErr } = await supabase
-    .from("users")
-    .update({ minecraft_role: roleKey, updated_at: now })
-    .eq("id", user.userId);
-  if (roleErr) {
-    console.error("[roles/buy] LuckPerms OK but users.minecraft_role update failed", roleErr);
-    res.status(500).json({
-      error:
-        "Rank was applied on the Minecraft server but the website failed to save it. Staff can fix your account.",
-    });
-    return;
-  }
-
+  await addOwnedShopProgress(supabase, user.userId, roleKey);
   const wallet = await ensureUserCobbledollarsRow(user.userId);
   newBalance = wallet?.balance ?? 0;
   res.json({
@@ -2805,6 +2954,7 @@ app.post("/roles/buy", requireAuth, async (req, res) => {
     cost: 0,
     listCost: 0,
     freeRank: true,
+    addedToInventory: true,
     shopEventDiscountPercent: SHOP_EVENT_DISCOUNT_PERCENT,
     newBalance,
   });
@@ -2866,6 +3016,7 @@ app.get("/gacha/pools/:poolId/rewards", requireAuth, async (req, res) => {
     .from("gacha_rewards")
     .select("id, reward_type, weight")
     .eq("pool_id", poolId)
+    .gt("weight", 0)
     .order("weight", { ascending: true });
   if (error) {
     res.status(500).json({ error: error.message });
@@ -2934,12 +3085,14 @@ app.post("/gacha/pull", requireAuth, async (req, res) => {
     .from("gacha_rewards")
     .select("id, reward_type, weight")
     .eq("pool_id", id);
-  const list = (rewards ?? []) as { id: number; reward_type: string; weight: number }[];
+  const list = ((rewards ?? []) as { id: number; reward_type: string; weight: number }[]).filter(
+    (r) => Number(r.weight) > 0
+  );
   if (list.length === 0) {
     res.status(400).json({ error: "Pool has no rewards configured" });
     return;
   }
-  const totalWeight = list.reduce((s, r) => s + r.weight, 0);
+  const totalWeight = list.reduce((s, r) => s + Number(r.weight), 0);
   let r = Math.random() * totalWeight;
   let chosen = list[0]!;
   for (const reward of list) {
@@ -2965,9 +3118,12 @@ app.post("/gacha/pull", requireAuth, async (req, res) => {
     });
   }
 
+  const storedRewardType = materializeGachaRewardType(chosen.reward_type);
+
   let cobbledollarsRewardAmount = 0;
   let cobbledollarsRewardNewBalance: number | null = null;
-  const cobbleReward = parseCobbledollarsReward(chosen.reward_type);
+  const cobbleReward = parseCobbledollarsReward(storedRewardType);
+  const ticketReward = parseGachaCurrencyReward(storedRewardType);
   if (cobbleReward) {
     cobbledollarsRewardAmount = cobbleReward.amount;
     cobbledollarsRewardNewBalance = await incrementUserCurrency(
@@ -2976,16 +3132,21 @@ app.post("/gacha/pull", requireAuth, async (req, res) => {
       cobbledollarsRewardAmount,
       {
         kind: "gacha_reward",
-        detail: `${poolName} — ${chosen.reward_type}`,
+        detail: `${poolName} — ${storedRewardType}`,
       }
     );
+  } else if (ticketReward) {
+    await incrementUserCurrency(user.userId, ticketReward.currencyType, ticketReward.amount, {
+      kind: "gacha_reward",
+      detail: `${poolName} — ${ticketReward.label}`,
+    });
   }
 
-  const fulfilledAt = cobbleReward ? new Date().toISOString() : null;
+  const fulfilledAt = cobbleReward || ticketReward ? new Date().toISOString() : null;
   const historyBase = {
     user_id: user.userId,
     pool_id: id,
-    reward_type: chosen.reward_type,
+    reward_type: storedRewardType,
     pull_at: new Date().toISOString(),
   };
   const withFulfilled = await supabase.from("user_gacha_pulls").insert({
@@ -2998,7 +3159,7 @@ app.post("/gacha/pull", requireAuth, async (req, res) => {
 
   // Do not await: a slow/hanging Discord webhook fetch would block the response and leave the
   // client stuck on "Fetching your drop from the server…" forever.
-  void notifyDiscordPull(user.username, poolName, chosen.reward_type).catch((err) =>
+  void notifyDiscordPull(user.username, poolName, storedRewardType).catch((err) =>
     console.warn("[gacha/pull] Discord notify failed:", err)
   );
 
@@ -3007,7 +3168,8 @@ app.post("/gacha/pull", requireAuth, async (req, res) => {
   res.json({
     reward: {
       id: chosen.id,
-      reward_type: chosen.reward_type,
+      reward_type: storedRewardType,
+      label: formatGachaRewardLabel(storedRewardType),
     },
     newBalance,
     ...(cobbledollarsRewardAmount > 0
@@ -3078,8 +3240,9 @@ app.post("/gacha/pulls/:pullId/claim", requireAuth, async (req, res) => {
     return;
   }
 
-  const parsed = parseRewardForGivePokemon(r.reward_type);
-  if (!parsed) {
+  const itemReward = parseGachaItemReward(r.reward_type);
+  const parsedPokemon = itemReward ? null : parseRewardForGivePokemon(r.reward_type);
+  if (!itemReward && !parsedPokemon) {
     res.status(400).json({
       error:
         "This reward type cannot be sent automatically. Ask staff to fulfill it, or use a reward name like “shiny mesprit”.",
@@ -3087,7 +3250,9 @@ app.post("/gacha/pulls/:pullId/claim", requireAuth, async (req, res) => {
     return;
   }
 
-  const cmd = buildGivePokemonOtherCommand(user.username, parsed.species, parsed.shiny);
+  const cmd = itemReward
+    ? buildGiveItemCommand(user.username, itemReward.itemId, itemReward.min)
+    : buildGivePokemonOtherCommand(user.username, parsedPokemon!.species, parsedPokemon!.shiny);
   const exec = await executeMinecraftRconCommand(cmd);
   if (!exec.ok) {
     res.status(502).json({
@@ -3116,7 +3281,12 @@ app.post("/gacha/pulls/:pullId/claim", requireAuth, async (req, res) => {
     return;
   }
 
-  res.json({ ok: true, message: "Pokémon sent to your party (if you were online)." });
+  res.json({
+    ok: true,
+    message: itemReward
+      ? "Item sent to your inventory (if you were online)."
+      : "Pokémon sent to your party (if you were online).",
+  });
 });
 
 app.get("/gacha/history", requireAuth, async (req, res) => {
@@ -3174,12 +3344,13 @@ app.get("/gacha/history", requireAuth, async (req, res) => {
       claimEnabled &&
       !fulfilledAt &&
       isLikelyMinecraftUsername(user.username) &&
-      parseRewardForGivePokemon(r.reward_type) != null;
+      (parseGachaItemReward(r.reward_type) != null || parseRewardForGivePokemon(r.reward_type) != null);
     return {
       id: r.id,
       poolId: r.pool_id,
       poolName: poolNames.get(r.pool_id) ?? "Unknown",
       rewardType: r.reward_type,
+      rewardLabel: formatGachaRewardLabel(r.reward_type),
       pulledAt: r.pull_at,
       fulfilledAt,
       claimable,
@@ -3406,35 +3577,29 @@ app.post("/admin/ranked-replay/ai-summary", requireAuth, requireAdmin, async (re
   }
 });
 
-const COBBLEDOLLARS_CURRENCY = "cobbledollars";
+const COBBLEDOLLARS_CURRENCY = ASTERYN_POINTS_CURRENCY;
 const DAILY_RESET_TIMEZONE = "Asia/Ho_Chi_Minh";
 const DAILY_STREAK_REWARDS = [
-  { day: 1, kind: "cobbledollars", amount: 50_000, label: "Cobble$ +50,000" },
-  { day: 2, kind: "cobbledollars", amount: 60_000, label: "Cobble$ +60,000" },
-  { day: 3, kind: "cobbledollars", amount: 70_000, label: "Cobble$ +70,000" },
-  { day: 4, kind: "cobbledollars", amount: 80_000, label: "Cobble$ +80,000" },
-  { day: 5, kind: "cobbledollars", amount: 90_000, label: "Cobble$ +90,000" },
-  { day: 6, kind: "cobbledollars", amount: 100_000, label: "Cobble$ +100,000" },
-  { day: 7, kind: "cobbledollars", amount: 150_000, label: "Cobble$ +150,000" },
+  { day: 1, kind: "asterynpoints", amount: 0, label: "Daily check-in" },
+  { day: 2, kind: "asterynpoints", amount: 0, label: "Daily check-in" },
+  { day: 3, kind: "asterynpoints", amount: 0, label: "Daily check-in" },
+  { day: 4, kind: "asterynpoints", amount: 0, label: "Daily check-in" },
+  { day: 5, kind: "asterynpoints", amount: 0, label: "Daily check-in" },
+  { day: 6, kind: "asterynpoints", amount: 0, label: "Daily check-in" },
+  { day: 7, kind: "asterynpoints", amount: 0, label: "Daily check-in" },
 ] as const;
 const SHOP_ITEMS = [
-  { itemKey: "exp_candy_xl", label: "EXP Candy XL", cost: 90_000 },
-  { itemKey: "silver_bottle_cap", label: "Silver Bottle Cap", cost: 700_000 },
-  { itemKey: "master_ball", label: "Master Ball", cost: 2_000_000 },
-  { itemKey: "ancient_origin_ball", label: "Ancient Origin Ball", cost: 2_500_000 },
+  { itemKey: "exp_candy_m", label: "EXP Candy M", cost: 5 },
+  { itemKey: "silver_bottle_cap", label: "Silver Bottle Cap", cost: 30 },
+  { itemKey: "master_ball", label: "Master Ball", cost: 45 },
+  { itemKey: "ancient_origin_ball", label: "Ancient Origin Ball", cost: 60 },
 ] as const;
 
 const BATTLEPASS_SHOP_ITEMS = [
   {
-    itemKey: "battlepass_party",
-    label: "Battle Pass — Party creation",
-    cost: 750_000,
-    battlePassKind: "party" as const,
-  },
-  {
     itemKey: "battlepass_premium",
     label: "Battle Pass — Premium",
-    cost: 1_650_000,
+    cost: 64,
     battlePassKind: "premium" as const,
   },
 ] as const;
@@ -3448,6 +3613,41 @@ async function getUserMinecraftRoleForShop(userId: number): Promise<string> {
   const { data, error } = await supabase.from("users").select("minecraft_role").eq("id", userId).maybeSingle();
   if (error || !data) return DEFAULT_MINECRAFT_ROLE;
   return readMinecraftRoleField(data as { minecraft_role?: string | null });
+}
+
+async function getEffectiveShopDiscountPercent(userId: number): Promise<number> {
+  const [role, vip] = await Promise.all([
+    getUserMinecraftRoleForShop(userId),
+    supabase ? readWebsiteVipTier(supabase, userId) : Promise.resolve(DEFAULT_VIP_TIER),
+  ]);
+  return Math.max(getWebsiteShopDiscountPercent(role), getWebsiteShopDiscountPercent(vip));
+}
+
+async function getEffectiveDailyLoginBonuses(userId: number): Promise<{
+  flatCobble: number;
+  tickets: number;
+  shopRank: string;
+  vipTier: string;
+  items: ReturnType<typeof mergeDailyItemGrants>;
+}> {
+  const [role, vip, owned] = await Promise.all([
+    getUserMinecraftRoleForShop(userId),
+    supabase ? readWebsiteVipTier(supabase, userId) : Promise.resolve(DEFAULT_VIP_TIER),
+    supabase ? listOwnedRoleKeys(supabase, userId) : Promise.resolve([] as string[]),
+  ]);
+  const shopRank = getShopProgressRoleKey(owned, role);
+  const grantRole = GRANT_ONLY_ROLE_KEYS.has(normalizeRoleKey(role));
+  const grantTickets = grantRole ? getDailyLoginTicketBonusPerClaim(role) : 0;
+  const rankItems = grantRole
+    ? getDailyLoginRankItemGrants(role)
+    : getDailyLoginRankItemGrants(shopRank);
+  return {
+    flatCobble: getDailyLoginFlatCobbleBonusPerClaim(vip),
+    tickets: Math.max(getDailyLoginTicketBonusPerClaim(shopRank), grantTickets),
+    shopRank,
+    vipTier: vip,
+    items: mergeDailyItemGrants(rankItems, getDailyLoginVipItemGrants(vip)),
+  };
 }
 
 const POKEMON_SHOP_REFRESH_HOURS = 12;
@@ -3597,7 +3797,7 @@ function notifyPokemonShopRefreshIfNeeded(
   const offerLines = offers
     .map(
       (o) =>
-        `#${o.slot} ${o.label}${o.shiny ? "" : " (normal)"} (${o.category}) - ${o.price.toLocaleString()} Cobble$`
+        `#${o.slot} ${o.label}${o.shiny ? "" : " (normal)"} (${o.category}) - ${o.price.toLocaleString()} Asteryn Point`
     )
     .join("\n");
   void notifyDiscordEmbed(
@@ -3684,6 +3884,19 @@ function buildPokemonShopOffers(windowStartIso: string) {
 
 const INVENTORY_ITEM_DEFS = [
   { key: "exp_candy_xl", label: "EXP Candy XL", itemId: "cobblemon:exp_candy_xl" },
+  { key: "exp_candy_xs", label: "EXP Candy XS", itemId: "cobblemon:exp_candy_xs" },
+  { key: "exp_candy_s", label: "EXP Candy S", itemId: "cobblemon:exp_candy_s" },
+  { key: "exp_candy_m", label: "EXP Candy M", itemId: "cobblemon:exp_candy_m" },
+  { key: "exp_candy_l", label: "EXP Candy L", itemId: "cobblemon:exp_candy_l" },
+  { key: "poke_ball", label: "Poke Ball", itemId: "cobblemon:poke_ball" },
+  { key: "great_ball", label: "Great Ball", itemId: "cobblemon:great_ball" },
+  { key: "ultra_ball", label: "Ultra Ball", itemId: "cobblemon:ultra_ball" },
+  { key: "potion", label: "Potion", itemId: "cobblemon:potion" },
+  { key: "super_potion", label: "Super Potion", itemId: "cobblemon:super_potion" },
+  { key: "hyper_potion", label: "Hyper Potion", itemId: "cobblemon:hyper_potion" },
+  { key: "max_potion", label: "Max Potion", itemId: "cobblemon:max_potion" },
+  { key: "full_heal", label: "Full Heal", itemId: "cobblemon:full_heal" },
+  { key: "revive", label: "Revive", itemId: "cobblemon:revive" },
   { key: "silver_bottle_cap", label: "Silver Bottle Cap", itemId: "obc:bottle_cap" },
   { key: "master_ball", label: "Master Ball", itemId: "cobblemon:master_ball" },
   { key: "ancient_origin_ball", label: "Ancient Origin Ball", itemId: "cobblemon:ancient_origin_ball" },
@@ -3825,6 +4038,10 @@ async function incrementUserCurrency(
   ledger?: CurrencyLedgerMeta
 ): Promise<number> {
   if (!supabase) throw new Error("Database not configured");
+  if (isAsterynPointsCurrency(currencyType)) {
+    await ensureUserCobbledollarsRow(userId);
+    currencyType = ASTERYN_POINTS_CURRENCY;
+  }
   const { data: sel, error: selErr } = await supabase
     .from("user_currency")
     .select("id, balance")
@@ -3842,7 +4059,7 @@ async function incrementUserCurrency(
       .eq("id", row.id);
     if (error) throw new Error(error.message);
     if (amount !== 0 && ledger) {
-      if (currencyType === COBBLEDOLLARS_CURRENCY) {
+      if (isAsterynPointsCurrency(currencyType)) {
         void recordCobbledollarLedger(userId, amount, newBalance, ledger.kind, ledger.detail ?? null);
       } else if (TICKET_LEDGER_CURRENCIES.has(currencyType)) {
         void recordTicketCurrencyLedger(
@@ -3864,7 +4081,7 @@ async function incrementUserCurrency(
   });
   if (error) throw new Error(error.message);
   if (amount !== 0 && ledger) {
-    if (currencyType === COBBLEDOLLARS_CURRENCY) {
+    if (isAsterynPointsCurrency(currencyType)) {
       void recordCobbledollarLedger(userId, amount, amount, ledger.kind, ledger.detail ?? null);
     } else if (TICKET_LEDGER_CURRENCIES.has(currencyType)) {
       void recordTicketCurrencyLedger(
@@ -3927,23 +4144,52 @@ async function isEligibleToday(userId: number, username: string): Promise<boolea
   return localDateOnly(new Date(lastSeen), DAILY_RESET_TIMEZONE) === today;
 }
 
-/** Website Cobble$ row — created on signup; lazily created for older accounts on first deposit. */
+/** Website Asteryn Point row — created on signup; lazily created for older accounts on first deposit.
+ * Also folds leftover `cobbledollars` into `asterynpoints` so shop spend matches the UI total.
+ */
 async function ensureUserCobbledollarsRow(
   userId: number
 ): Promise<{ id: number; balance: number } | null> {
   if (!supabase) return null;
-  const { data: row } = await supabase
+  const { data: rows, error: listErr } = await supabase
     .from("user_currency")
-    .select("id, balance")
+    .select("id, balance, currency_type")
     .eq("user_id", userId)
-    .eq("currency_type", COBBLEDOLLARS_CURRENCY)
-    .maybeSingle();
-  if (row) return row as { id: number; balance: number };
+    .in("currency_type", [ASTERYN_POINTS_CURRENCY, LEGACY_COBBLEDOLLARS_CURRENCY]);
+  if (listErr) return null;
+  const list = (rows ?? []) as { id: number; balance: number; currency_type: string }[];
+  const ap = list.find((r) => r.currency_type === ASTERYN_POINTS_CURRENCY);
+  const legacy = list.find((r) => r.currency_type === LEGACY_COBBLEDOLLARS_CURRENCY);
+  const now = new Date().toISOString();
+
+  if (ap && legacy) {
+    const merged = Number(ap.balance) + Number(legacy.balance);
+    if (Number(legacy.balance) !== 0) {
+      const { error: upAp } = await supabase
+        .from("user_currency")
+        .update({ balance: merged, updated_at: now })
+        .eq("id", ap.id);
+      if (upAp) return { id: ap.id, balance: Number(ap.balance) };
+      await supabase
+        .from("user_currency")
+        .update({ balance: 0, updated_at: now })
+        .eq("id", legacy.id);
+    }
+    return { id: ap.id, balance: merged };
+  }
+  if (ap) return { id: ap.id, balance: Number(ap.balance) };
+  if (legacy) {
+    const { error: rename } = await supabase
+      .from("user_currency")
+      .update({ currency_type: ASTERYN_POINTS_CURRENCY, updated_at: now })
+      .eq("id", legacy.id);
+    if (!rename) return { id: legacy.id, balance: Number(legacy.balance) };
+  }
   const { data: inserted, error } = await supabase
     .from("user_currency")
     .insert({
       user_id: userId,
-      currency_type: COBBLEDOLLARS_CURRENCY,
+      currency_type: ASTERYN_POINTS_CURRENCY,
       balance: 0,
     })
     .select("id, balance")
@@ -3953,15 +4199,15 @@ async function ensureUserCobbledollarsRow(
 }
 
 /**
- * Spend website Cobble$ and credit the linked Minecraft account via RCON.
+ * Spend website Asteryn Point and credit the linked Minecraft account via RCON.
  * Username must match Java edition IGN (same rule as gacha Pokémon claim).
  */
-app.post("/user/cobbledollars/deposit", requireAuth, async (req, res) => {
+app.post(["/user/cobbledollars/deposit", "/user/asterynpoints/deposit"], requireAuth, async (req, res) => {
   const user = res.locals.user!;
   if (!isCobbledollarsDepositEnabled()) {
     res.status(503).json({
       error:
-        "Cobble$ deposit is not configured (set MC_RCON_* or disable MC_COBBLEDOLLARS_DEPOSIT_DISABLE)",
+        "Asteryn Point deposit is not configured (set MC_RCON_* or disable MC_COBBLEDOLLARS_DEPOSIT_DISABLE)",
     });
     return;
   }
@@ -3983,19 +4229,19 @@ app.post("/user/cobbledollars/deposit", requireAuth, async (req, res) => {
   if (!isLikelyMinecraftUsername(user.username)) {
     res.status(400).json({
       error:
-        "Your website username must match your Minecraft name (2–16 letters, numbers, underscore) to deposit Cobble$.",
+        "Your website username must match your Minecraft name (2–16 letters, numbers, underscore) to deposit Asteryn Point.",
     });
     return;
   }
 
   const row = await ensureUserCobbledollarsRow(user.userId);
   if (!row) {
-    res.status(500).json({ error: "Could not open Cobble$ wallet" });
+    res.status(500).json({ error: "Could not open Asteryn Point wallet" });
     return;
   }
   if (row.balance < amount) {
     res.status(400).json({
-      error: "Not enough website Cobble$",
+      error: "Not enough website Asteryn Point",
       balance: row.balance,
       required: amount,
     });
@@ -4045,137 +4291,15 @@ app.post("/user/cobbledollars/deposit", requireAuth, async (req, res) => {
   res.json({ newBalance });
 });
 
-/** Transfer website Cobble$ to another website account by username. */
-app.post("/user/cobbledollars/transfer", requireAuth, async (req, res) => {
-  const user = res.locals.user!;
-  if (!supabase) {
-    res.status(503).json({ error: "Database not configured" });
-    return;
-  }
-  const rawRecipient = typeof req.body?.toUsername === "string" ? req.body.toUsername.trim() : "";
-  const rawAmount = req.body?.amount;
-  const amount =
-    typeof rawAmount === "number"
-      ? rawAmount
-      : typeof rawAmount === "string"
-        ? parseInt(rawAmount, 10)
-        : NaN;
-  if (!rawRecipient) {
-    res.status(400).json({ error: "toUsername is required" });
-    return;
-  }
-  if (!Number.isInteger(amount) || amount < 1) {
-    res.status(400).json({ error: "amount must be a positive whole number" });
-    return;
-  }
-  if (amount > 1_000_000_000_000) {
-    res.status(400).json({ error: "amount too large" });
-    return;
-  }
-  if (rawRecipient.toLowerCase() === user.username.toLowerCase()) {
-    res.status(400).json({ error: "You cannot transfer Cobble$ to yourself" });
-    return;
-  }
-
-  const { data: recipientRaw, error: recipientErr } = await supabase
-    .from("users")
-    .select("id, username")
-    .eq("username", rawRecipient)
-    .maybeSingle();
-  if (recipientErr) {
-    res.status(500).json({ error: recipientErr.message });
-    return;
-  }
-  const recipient = recipientRaw as { id: number; username: string } | null;
-  if (!recipient) {
-    res.status(404).json({ error: "Recipient account not found" });
-    return;
-  }
-  if (recipient.id === user.userId) {
-    res.status(400).json({ error: "You cannot transfer Cobble$ to yourself" });
-    return;
-  }
-
-  const senderWallet = await ensureUserCobbledollarsRow(user.userId);
-  if (!senderWallet) {
-    res.status(500).json({ error: "Could not open Cobble$ wallet" });
-    return;
-  }
-  if (senderWallet.balance < amount) {
-    res.status(400).json({
-      error: "Not enough website Cobble$",
-      balance: senderWallet.balance,
-      required: amount,
-    });
-    return;
-  }
-  const recipientWallet = await ensureUserCobbledollarsRow(recipient.id);
-  if (!recipientWallet) {
-    res.status(500).json({ error: "Could not open recipient Cobble$ wallet" });
-    return;
-  }
-
-  const now = new Date().toISOString();
-  const senderNewBalance = senderWallet.balance - amount;
-  const recipientNewBalance = recipientWallet.balance + amount;
-  const { data: senderUpdated, error: senderUpdErr } = await supabase
-    .from("user_currency")
-    .update({ balance: senderNewBalance, updated_at: now })
-    .eq("id", senderWallet.id)
-    .eq("balance", senderWallet.balance)
-    .select("balance");
-  if (senderUpdErr) {
-    res.status(500).json({ error: senderUpdErr.message });
-    return;
-  }
-  if (!senderUpdated?.length) {
-    res.status(409).json({ error: "Balance changed — try again" });
-    return;
-  }
-
-  const { data: recipientUpdated, error: recipientUpdErr } = await supabase
-    .from("user_currency")
-    .update({ balance: recipientNewBalance, updated_at: now })
-    .eq("id", recipientWallet.id)
-    .eq("balance", recipientWallet.balance)
-    .select("balance");
-  if (recipientUpdErr || !recipientUpdated?.length) {
-    await supabase
-      .from("user_currency")
-      .update({ balance: senderWallet.balance, updated_at: new Date().toISOString() })
-      .eq("id", senderWallet.id);
-    if (recipientUpdErr) {
-      res.status(500).json({ error: recipientUpdErr.message });
-      return;
-    }
-    res.status(409).json({ error: "Recipient balance changed — try again" });
-    return;
-  }
-
-  await recordCobbledollarLedger(
-    user.userId,
-    -amount,
-    senderNewBalance,
-    "transfer_to_user",
-    `to ${recipient.username}`
-  );
-  await recordCobbledollarLedger(
-    recipient.id,
-    amount,
-    recipientNewBalance,
-    "transfer_from_user",
-    `from ${user.username}`
-  );
-
-  res.json({
-    ok: true,
-    toUsername: recipient.username,
-    amount,
-    newBalance: senderNewBalance,
+/** Player-to-player Asteryn Point transfer is disabled. */
+app.post(["/user/cobbledollars/transfer", "/user/asterynpoints/transfer"], requireAuth, (_req, res) => {
+  res.status(410).json({
+    error: "Sending Asteryn Point to other players is disabled.",
+    code: "transfer_disabled",
   });
 });
 
-app.get("/user/cobbledollars/ledger", requireAuth, async (req, res) => {
+app.get(["/user/cobbledollars/ledger", "/user/asterynpoints/ledger"], requireAuth, async (req, res) => {
   const user = res.locals.user!;
   if (!supabase) {
     res.status(503).json({ error: "Database not configured" });
@@ -4329,8 +4453,7 @@ app.post("/user/inventory/claim", requireAuth, async (req, res) => {
 
 app.get("/shop/items", requireAuth, async (_req, res) => {
   const user = res.locals.user!;
-  const role = await getUserMinecraftRoleForShop(user.userId);
-  const shopDiscountPercent = getWebsiteShopDiscountPercent(role);
+  const shopDiscountPercent = await getEffectiveShopDiscountPercent(user.userId);
   const owned = await getBattlePassOwnershipForUser(user.userId);
   res.json({
     currency: COBBLEDOLLARS_CURRENCY,
@@ -4394,18 +4517,17 @@ app.post("/shop/buy", requireAuth, async (req, res) => {
       });
       return;
     }
-    const role = await getUserMinecraftRoleForShop(user.userId);
-    const shopDiscountPercent = getWebsiteShopDiscountPercent(role);
+    const shopDiscountPercent = await getEffectiveShopDiscountPercent(user.userId);
     const totalCost = applyWebsiteShopPrice(bpItem.cost, shopDiscountPercent);
 
     const wallet = await ensureUserCobbledollarsRow(user.userId);
     if (!wallet) {
-      res.status(500).json({ error: "Could not open Cobble$ wallet" });
+      res.status(500).json({ error: "Could not open Asteryn Point wallet" });
       return;
     }
     if (wallet.balance < totalCost) {
       res.status(400).json({
-        error: "Not enough Cobble$",
+        error: "Not enough Asteryn Point",
         balance: wallet.balance,
         required: totalCost,
       });
@@ -4452,7 +4574,7 @@ app.post("/shop/buy", requireAuth, async (req, res) => {
       await runBattlePassLuckpermsCommand(bpItem.battlePassKind, ign, false);
       res.status(500).json({
         error:
-          "Server permission was applied but the grant could not be saved. Your Cobble$ was refunded. Contact staff if this persists.",
+          "Server permission was applied but the grant could not be saved. Your Asteryn Point was refunded. Contact staff if this persists.",
         dbPersisted: false,
       });
       return;
@@ -4486,18 +4608,17 @@ app.post("/shop/buy", requireAuth, async (req, res) => {
     res.status(400).json({ error: "Unknown item key" });
     return;
   }
-  const role = await getUserMinecraftRoleForShop(user.userId);
-  const shopDiscountPercent = getWebsiteShopDiscountPercent(role);
+  const shopDiscountPercent = await getEffectiveShopDiscountPercent(user.userId);
   const totalCost = applyWebsiteShopPrice(item.cost * quantity, shopDiscountPercent);
 
   const wallet = await ensureUserCobbledollarsRow(user.userId);
   if (!wallet) {
-    res.status(500).json({ error: "Could not open Cobble$ wallet" });
+    res.status(500).json({ error: "Could not open Asteryn Point wallet" });
     return;
   }
   if (wallet.balance < totalCost) {
     res.status(400).json({
-      error: "Not enough Cobble$",
+      error: "Not enough Asteryn Point",
       balance: wallet.balance,
       required: totalCost,
     });
@@ -4552,62 +4673,13 @@ app.post("/shop/buy", requireAuth, async (req, res) => {
   }
 });
 
-app.get("/pokemon-shop/offers", requireAuth, async (req, res) => {
-  const user = res.locals.user!;
-  if (!supabase) {
-    res.status(503).json({ error: "Database not configured" });
-    return;
-  }
-  const { start, end } = getPokemonShopWindow();
-  const windowStartIso = start.toISOString();
-  const offers = buildPokemonShopOffers(windowStartIso);
-  const role = await getUserMinecraftRoleForShop(user.userId);
-  const shopDiscountPercent = getWebsiteShopDiscountPercent(role);
-
-  notifyPokemonShopRefreshIfNeeded(windowStartIso, offers);
-  const { data: windowPurchases } = await supabase
-    .from("user_pokemon_shop_purchases")
-    .select("slot, user_id, claimed_at")
-    .eq("window_start", windowStartIso);
-  const soldSlots = new Set<number>();
-  const mineBySlot = new Map<number, { claimed_at: string | null }>();
-  for (const p of (windowPurchases ?? []) as {
-    slot: number;
-    user_id: number;
-    claimed_at: string | null;
-  }[]) {
-    soldSlots.add(p.slot);
-    if (p.user_id === user.userId) {
-      mineBySlot.set(p.slot, { claimed_at: p.claimed_at });
-    }
-  }
-  res.json({
-    refreshHours: POKEMON_SHOP_REFRESH_HOURS,
-    shopDiscountPercent,
-    shopEventDiscountPercent: SHOP_EVENT_DISCOUNT_PERCENT,
-    windowStart: windowStartIso,
-    windowEnd: end.toISOString(),
-    offers: offers.map((o) => {
-      const listPrice = o.price;
-      const price = applyWebsiteShopPrice(listPrice, shopDiscountPercent);
-      const purchasedByYou = mineBySlot.has(o.slot);
-      return {
-        slot: o.slot,
-        category: o.category,
-        species: o.species,
-        shiny: o.shiny,
-        listPrice,
-        price,
-        label: o.label,
-        soldOut: soldSlots.has(o.slot),
-        purchasedByYou,
-        claimed: Boolean(mineBySlot.get(o.slot)?.claimed_at),
-      };
-    }),
-  });
+app.get("/pokemon-shop/offers", requireAuth, (_req, res) => {
+  res.status(410).json({ error: "Pokémon shop is disabled.", code: "pokemon_shop_disabled" });
 });
 
-app.post("/pokemon-shop/buy", requireAuth, async (req, res) => {
+app.post("/pokemon-shop/buy", requireAuth, async (_req, res) => {
+  res.status(410).json({ error: "Pokémon shop is disabled.", code: "pokemon_shop_disabled" });
+  return;
   const user = res.locals.user!;
   if (!supabase) {
     res.status(503).json({ error: "Database not configured" });
@@ -4632,8 +4704,7 @@ app.post("/pokemon-shop/buy", requireAuth, async (req, res) => {
     res.status(404).json({ error: "Offer not found" });
     return;
   }
-  const role = await getUserMinecraftRoleForShop(user.userId);
-  const shopDiscountPercent = getWebsiteShopDiscountPercent(role);
+  const shopDiscountPercent = await getEffectiveShopDiscountPercent(user.userId);
   const payPrice = applyWebsiteShopPrice(offer.price, shopDiscountPercent);
 
   const { data: taken } = await supabase
@@ -4657,11 +4728,11 @@ app.post("/pokemon-shop/buy", requireAuth, async (req, res) => {
 
   const wallet = await ensureUserCobbledollarsRow(user.userId);
   if (!wallet) {
-    res.status(500).json({ error: "Could not open Cobble$ wallet" });
+    res.status(500).json({ error: "Could not open Asteryn Point wallet" });
     return;
   }
   if (wallet.balance < payPrice) {
-    res.status(400).json({ error: "Not enough Cobble$", balance: wallet.balance, required: payPrice });
+    res.status(400).json({ error: "Not enough Asteryn Point", balance: wallet.balance, required: payPrice });
     return;
   }
 
@@ -4700,7 +4771,7 @@ app.post("/pokemon-shop/buy", requireAuth, async (req, res) => {
       .eq("id", wallet.id);
     if (/uq_pokemon_shop_window_slot_global|uq_user_pokemon_shop_window_slot|duplicate key/i.test(insErr.message)) {
       res.status(409).json({
-        error: "This Pokémon was just purchased by another player. Your Cobble$ balance was restored.",
+        error: "This Pokémon was just purchased by another player. Your Asteryn Point balance was restored.",
         code: "pokemon_shop_sold_out",
       });
       return;
@@ -4728,7 +4799,9 @@ app.post("/pokemon-shop/buy", requireAuth, async (req, res) => {
   });
 });
 
-app.get("/pokemon-shop/purchases", requireAuth, async (req, res) => {
+app.get("/pokemon-shop/purchases", requireAuth, async (_req, res) => {
+  res.status(410).json({ error: "Pokémon shop is disabled.", code: "pokemon_shop_disabled" });
+  return;
   const user = res.locals.user!;
   if (!supabase) {
     res.status(503).json({ error: "Database not configured" });
@@ -4759,7 +4832,9 @@ app.get("/pokemon-shop/purchases", requireAuth, async (req, res) => {
   });
 });
 
-app.post("/pokemon-shop/purchases/:id/claim", requireAuth, async (req, res) => {
+app.post("/pokemon-shop/purchases/:id/claim", requireAuth, async (_req, res) => {
+  res.status(410).json({ error: "Pokémon shop is disabled.", code: "pokemon_shop_disabled" });
+  return;
   const user = res.locals.user!;
   if (!supabase) {
     res.status(503).json({ error: "Database not configured" });
@@ -4855,25 +4930,21 @@ app.get("/user/daily-login/status", requireAuth, async (_req, res) => {
   const prevStreak = Number((prev as { streak_day?: number } | null)?.streak_day ?? 0) || 0;
   const nextDay = prevDate === yesterdayDateOnly(today) ? Math.min(prevStreak + 1, 7) : 1;
   const nextReward = DAILY_STREAK_REWARDS.find((r) => r.day === nextDay) ?? DAILY_STREAK_REWARDS[0]!;
-  const role = await getUserMinecraftRoleForShop(user.userId);
-  const flatCobbleBonusPerClaim = getDailyLoginFlatCobbleBonusPerClaim(role);
-  const ticketBonusPerClaim = getDailyLoginTicketBonusPerClaim(role);
-  const nextClaimCobbleTotal =
-    nextReward.kind === "cobbledollars"
-      ? nextReward.amount + flatCobbleBonusPerClaim
-      : flatCobbleBonusPerClaim > 0
-        ? flatCobbleBonusPerClaim
-        : null;
+  const { flatCobble: flatCobbleBonusPerClaim, tickets: ticketBonusPerClaim, shopRank, vipTier, items } =
+    await getEffectiveDailyLoginBonuses(user.userId);
+  const nextClaimCobbleTotal = flatCobbleBonusPerClaim > 0 ? flatCobbleBonusPerClaim : null;
 
   res.json({
     date: today,
     timeZone: DAILY_RESET_TIMEZONE,
     eligible,
     dailyRankBonus: {
-      minecraftRole: role,
+      minecraftRole: shopRank,
+      vipTier,
       flatCobbleBonusPerClaim,
       ticketBonusPerClaim,
       nextClaimCobbleTotal,
+      items,
     },
     streak: { nextDay, nextReward },
     /** Lifetime count of successful daily claims (distinct calendar days in reset timezone). */
@@ -4946,14 +5017,20 @@ app.post("/user/daily-login/claim", requireAuth, async (_req, res) => {
   const prevStreak = Number((prev as { streak_day?: number } | null)?.streak_day ?? 0) || 0;
   const streakDay = prevDate === yesterdayDateOnly(today) ? Math.min(prevStreak + 1, 7) : 1;
   const reward = DAILY_STREAK_REWARDS.find((r) => r.day === streakDay) ?? DAILY_STREAK_REWARDS[0]!;
-  const role = await getUserMinecraftRoleForShop(user.userId);
-  const flatCobbleBonus = getDailyLoginFlatCobbleBonusPerClaim(role);
-  const ticketBonus = getDailyLoginTicketBonusPerClaim(role);
+  const { flatCobble: flatCobbleBonus, tickets: ticketBonus, shopRank, vipTier, items } =
+    await getEffectiveDailyLoginBonuses(user.userId);
   const streakCobbleTotal = reward.amount + flatCobbleBonus;
-  const selectedRewardLabel =
-    flatCobbleBonus > 0
-      ? `${reward.label} + ${flatCobbleBonus.toLocaleString()} Cobble$ rank`
-      : reward.label;
+  const itemLabel =
+    items.length > 0
+      ? items.map((it) => `${it.label} ×${it.amount}`).join(", ")
+      : null;
+  const selectedRewardLabel = [
+    flatCobbleBonus > 0 ? `VIP +${flatCobbleBonus} Asteryn Point` : null,
+    ticketBonus > 0 ? `rank +${ticketBonus} ticket(s)` : null,
+    itemLabel ? `items: ${itemLabel}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ") || reward.label;
 
   if (!existing) {
     const { error: insErr } = await supabase.from("user_daily_login_claims").insert({
@@ -4979,26 +5056,40 @@ app.post("/user/daily-login/claim", requireAuth, async (_req, res) => {
   try {
     let message = "";
     let newBalance = 0;
-    newBalance = await incrementUserCurrency(user.userId, COBBLEDOLLARS_CURRENCY, reward.amount, {
-      kind: "daily_login",
-      detail: `Day ${streakDay} — streak (${reward.label})`,
-    });
+    if (reward.amount > 0) {
+      newBalance = await incrementUserCurrency(user.userId, COBBLEDOLLARS_CURRENCY, reward.amount, {
+        kind: "daily_login",
+        detail: `Day ${streakDay} — streak (${reward.label})`,
+      });
+    }
     if (flatCobbleBonus > 0) {
       newBalance = await incrementUserCurrency(user.userId, COBBLEDOLLARS_CURRENCY, flatCobbleBonus, {
         kind: "daily_login",
-        detail: `Day ${streakDay} — rank daily bonus (${role})`,
+        detail: `Day ${streakDay} — VIP daily bonus (${vipTier})`,
       });
     }
-    message = `Day ${streakDay}: +${(reward.amount + flatCobbleBonus).toLocaleString()} Cobble$`;
-    if (flatCobbleBonus > 0) message += ` (streak + rank)`;
-    message += ` (new balance ${newBalance.toLocaleString()})`;
+    const parts: string[] = [`Day ${streakDay}`];
+    if (flatCobbleBonus + reward.amount > 0) {
+      parts.push(`+${(reward.amount + flatCobbleBonus).toLocaleString()} Asteryn Point`);
+    }
+    message = parts.join(": ");
+    if (newBalance > 0 && flatCobbleBonus + reward.amount > 0) {
+      message += ` (new balance ${newBalance.toLocaleString()})`;
+    }
 
     if (ticketBonus > 0) {
       const tb = await incrementUserCurrency(user.userId, PVP_TICKETS_CURRENCY, ticketBonus, {
         kind: "daily_login",
-        detail: `Day ${streakDay} — rank ticket bonus`,
+        detail: `Day ${streakDay} — rank ticket bonus (${shopRank})`,
       });
-      message += ` · +${ticketBonus} normal ticket(s) (balance ${tb.toLocaleString()})`;
+      message += `${message ? " · " : ""}+${ticketBonus} normal ticket(s) (balance ${tb.toLocaleString()})`;
+    }
+
+    if (items.length > 0) {
+      for (const it of items) {
+        await incrementUserInventory(user.userId, it.key, it.amount);
+      }
+      message += `${message ? " · " : ""}items: ${items.map((it) => `${it.label} ×${it.amount}`).join(", ")} (claim from Inventory)`;
     }
 
     await supabase
@@ -5027,6 +5118,7 @@ app.post("/user/daily-login/claim", requireAuth, async (_req, res) => {
       dailyRankBonus: {
         flatCobbleBonus,
         ticketBonus,
+        items,
       },
       clanXp: clanXp ?? undefined,
     });
@@ -5049,120 +5141,15 @@ app.post("/user/daily-login/claim", requireAuth, async (_req, res) => {
   }
 });
 
-// Ticket exchange: spend normal tickets for special ticket types (shiny = 2× base cost).
-const EXCHANGE_RATES: { to_currency: string; cost_tickets: number; label: string }[] = [
-  { to_currency: "mythic tickets", cost_tickets: 40, label: "Mythic Tickets" },
-  { to_currency: "shiny mythic tickets", cost_tickets: 80, label: "Shiny Mythic Tickets" },
-  { to_currency: "legendary tickets", cost_tickets: 45, label: "Legend Tickets" },
-  { to_currency: "shiny legendary tickets", cost_tickets: 90, label: "Shiny Legend Tickets" },
-  { to_currency: "paradox tickets", cost_tickets: 25, label: "Paradox Tickets" },
-  { to_currency: "shiny paradox tickets", cost_tickets: 50, label: "Shiny Paradox Tickets" },
-  { to_currency: "ultra beast tickets", cost_tickets: 35, label: "Ultra Beast Tickets" },
-  { to_currency: "shiny ultra beast tickets", cost_tickets: 70, label: "Shiny Ultra Beast Tickets" },
-];
-
+// Ticket exchange removed — special tickets only drop from the ticket wheel.
 app.get("/user/exchange-rates", requireAuth, (_req, res) => {
-  res.json({ rates: EXCHANGE_RATES });
+  res.json({ rates: [] });
 });
 
-app.post("/user/exchange", requireAuth, async (req, res) => {
-  const user = res.locals.user!;
-  const userId = user.userId;
-  const { to_currency } = req.body ?? {};
-  if (!to_currency || typeof to_currency !== "string") {
-    res.status(400).json({ error: "Missing or invalid to_currency" });
-    return;
-  }
-  const rate = EXCHANGE_RATES.find((r) => r.to_currency === to_currency);
-  if (!rate) {
-    res.status(400).json({ error: "Unknown exchange target" });
-    return;
-  }
-  if (!supabase) {
-    res.status(503).json({ error: "Database not configured" });
-    return;
-  }
-  if (!(await userMayUseTeamAiFeatures(userId))) {
-    res.status(403).json({
-      code: "verification_required",
-      error: "A verified account is required to exchange tickets on the website.",
-    });
-    return;
-  }
-  const cost = rate.cost_tickets;
-
-  const { data: ticketsRow } = await supabase
-    .from("user_currency")
-    .select("id, balance")
-    .eq("user_id", userId)
-    .eq("currency_type", "tickets")
-    .maybeSingle();
-  const currentTickets = (ticketsRow as { balance: number } | null)?.balance ?? 0;
-  if (currentTickets < cost) {
-    res.status(400).json({ error: "Not enough tickets", balance: currentTickets, required: cost });
-    return;
-  }
-
-  const ticketsId = (ticketsRow as { id: number } | null)?.id;
-  if (ticketsId) {
-    const { error: updErr } = await supabase
-      .from("user_currency")
-      .update({
-        balance: currentTickets - cost,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", ticketsId);
-    if (updErr) {
-      res.status(500).json({ error: updErr.message });
-      return;
-    }
-  }
-
-  const { data: targetRow } = await supabase
-    .from("user_currency")
-    .select("id, balance")
-    .eq("user_id", userId)
-    .eq("currency_type", to_currency)
-    .maybeSingle();
-  const now = new Date().toISOString();
-  const ticketsAfter = currentTickets - cost;
-  let targetNewBalance: number;
-  if (targetRow) {
-    targetNewBalance = (targetRow as { balance: number }).balance + 1;
-    await supabase
-      .from("user_currency")
-      .update({ balance: targetNewBalance, updated_at: now })
-      .eq("id", (targetRow as { id: number }).id);
-  } else {
-    targetNewBalance = 1;
-    await supabase.from("user_currency").insert({
-      user_id: userId,
-      currency_type: to_currency,
-      balance: 1,
-    });
-  }
-
-  void recordTicketCurrencyLedger(
-    userId,
-    PVP_TICKETS_CURRENCY,
-    -cost,
-    ticketsAfter,
-    "ticket_exchange",
-    `Spent on ${rate.label}`
-  );
-  void recordTicketCurrencyLedger(
-    userId,
-    to_currency,
-    1,
-    targetNewBalance,
-    "ticket_exchange",
-    `From normal tickets (−${cost})`
-  );
-
-  res.json({
-    to_currency,
-    cost_tickets: cost,
-    new_tickets_balance: currentTickets - cost,
+app.post("/user/exchange", requireAuth, (_req, res) => {
+  res.status(410).json({
+    error: "Ticket exchange is disabled. Spend tickets on the gacha wheel.",
+    code: "exchange_disabled",
   });
 });
 
@@ -5338,7 +5325,7 @@ app.post("/admin/profile-achievement-definitions", requireAuth, requireAdmin, as
   if (!title || !description || !tier) {
     res.status(400).json({
       error:
-        "title, description, and a valid tier are required (silver|cyan|emerald|violet|rose|gold|crimson|mythic).",
+        "title, description, and a valid tier are required (silver|cyan|emerald|violet|rose|gold|mythic|legend).",
     });
     return;
   }
@@ -5396,7 +5383,7 @@ app.patch("/admin/profile-achievement-definitions/:id", requireAuth, requireAdmi
     if (!t) {
       res.status(400).json({
         error:
-          "tier must be silver, cyan, emerald, violet, rose, gold, crimson, or mythic (run profile_achievement_tiers_expand.sql if the DB rejects new tiers).",
+          "tier must be silver, cyan, emerald, violet, rose, gold, mythic, or legend (run migrate-badge-tiers-mythic-legend.sql if the DB rejects new tiers).",
       });
       return;
     }
@@ -6316,6 +6303,148 @@ app.post("/admin/minecraft/battlepass-party", requireAuth, requireAdmin, async (
   res.json({ ok: false, command: exec.command, error: exec.error });
 });
 
+app.get("/admin/users/:userId/owned-roles", requireAuth, requireAdmin, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const userId = Number(req.params.userId);
+  if (!Number.isFinite(userId)) {
+    res.status(400).json({ error: "Invalid user id" });
+    return;
+  }
+  const { data: target, error: fetchErr } = await supabase
+    .from("users")
+    .select("id, minecraft_role, website_vip_tier")
+    .eq("id", userId)
+    .maybeSingle();
+  if (fetchErr) {
+    res.status(500).json({ error: fetchErr.message });
+    return;
+  }
+  if (!target) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+  const owned = await listOwnedRoleKeys(supabase, userId);
+  const active = readMinecraftRoleField(target as { minecraft_role?: string | null });
+  const vip = normalizeVipTierKey((target as { website_vip_tier?: string | null }).website_vip_tier);
+  res.json({
+    ownedRoles: owned,
+    ownedInventory: buildOwnedInventoryEntries(owned, active),
+    activeDisplayRole: active,
+    highestShopRank: getShopProgressRoleKey(owned, active),
+    highestVip: vip,
+  });
+});
+
+app.delete("/admin/users/:userId/owned-roles/:roleKey", requireAuth, requireAdmin, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const userId = Number(req.params.userId);
+  if (!Number.isFinite(userId)) {
+    res.status(400).json({ error: "Invalid user id" });
+    return;
+  }
+  const roleKey = normalizeRoleKey(String(req.params.roleKey ?? ""));
+  if (!roleKey) {
+    res.status(400).json({ error: "Invalid role key" });
+    return;
+  }
+  if (roleKey === DEFAULT_MINECRAFT_ROLE || roleKey === DEFAULT_VIP_TIER) {
+    res.status(400).json({ error: "Default member/player cannot be removed." });
+    return;
+  }
+
+  const { data: target, error: fetchErr } = await supabase
+    .from("users")
+    .select("id, username, minecraft_role, website_vip_tier")
+    .eq("id", userId)
+    .maybeSingle();
+  if (fetchErr) {
+    res.status(500).json({ error: fetchErr.message });
+    return;
+  }
+  if (!target) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  const removed = await removeOwnedRole(supabase, userId, roleKey);
+  if (!removed.ok) {
+    res.status(400).json({ error: removed.error });
+    return;
+  }
+
+  let active = readMinecraftRoleField(target as { minecraft_role?: string | null });
+  const username = String((target as { username?: string }).username ?? "").trim();
+
+  // If they were displaying the removed role, fall back to member in-game.
+  if (normalizeRoleKey(active) === roleKey) {
+    let lpWarn: string | null = null;
+    if (username) {
+      const lp = await runLuckpermsParentSet(username, DEFAULT_MINECRAFT_ROLE);
+      if (!lp.ok) lpWarn = lp.error;
+    }
+    const now = new Date().toISOString();
+    await supabase
+      .from("users")
+      .update({ minecraft_role: DEFAULT_MINECRAFT_ROLE, updated_at: now })
+      .eq("id", userId);
+    active = DEFAULT_MINECRAFT_ROLE;
+
+    const owned = await listOwnedRoleKeys(supabase, userId);
+    const nextVip = highestOwnedVipTier(owned);
+    const curVip = normalizeVipTierKey((target as { website_vip_tier?: string | null }).website_vip_tier);
+    if (getVipTierIndex(nextVip) !== getVipTierIndex(curVip)) {
+      await setWebsiteVipTier(supabase, userId, nextVip);
+    }
+
+    if (lpWarn) {
+      res.status(502).json({
+        error: `Removed from inventory, but failed to reset in-game display: ${lpWarn}`,
+        removedRoleKey: roleKey,
+        ownedRoles: owned,
+        ownedInventory: buildOwnedInventoryEntries(owned, active),
+        activeDisplayRole: active,
+        highestShopRank: getShopProgressRoleKey(owned, active),
+        highestVip: nextVip,
+      });
+      return;
+    }
+
+    res.json({
+      ok: true,
+      removedRoleKey: roleKey,
+      ownedRoles: owned,
+      ownedInventory: buildOwnedInventoryEntries(owned, active),
+      activeDisplayRole: active,
+      highestShopRank: getShopProgressRoleKey(owned, active),
+      highestVip: nextVip,
+    });
+    return;
+  }
+
+  const owned = await listOwnedRoleKeys(supabase, userId);
+  const nextVip = highestOwnedVipTier(owned);
+  const curVip = normalizeVipTierKey((target as { website_vip_tier?: string | null }).website_vip_tier);
+  if (getVipTierIndex(nextVip) !== getVipTierIndex(curVip)) {
+    await setWebsiteVipTier(supabase, userId, nextVip);
+  }
+
+  res.json({
+    ok: true,
+    removedRoleKey: roleKey,
+    ownedRoles: owned,
+    ownedInventory: buildOwnedInventoryEntries(owned, active),
+    activeDisplayRole: active,
+    highestShopRank: getShopProgressRoleKey(owned, active),
+    highestVip: nextVip,
+  });
+});
+
 app.post("/admin/users/:userId/minecraft-role", requireAuth, requireAdmin, async (req, res) => {
   if (!supabase) {
     res.status(503).json({ error: "Database not configured" });
@@ -6327,13 +6456,13 @@ app.post("/admin/users/:userId/minecraft-role", requireAuth, requireAdmin, async
     return;
   }
   const roleKey = normalizeRoleKey(String((req.body as { roleKey?: unknown })?.roleKey ?? ""));
-  if (!roleKey || !isKnownRoleKey(roleKey)) {
-    res.status(400).json({ error: "Unknown or invalid role key" });
+  if (!roleKey || roleKey === DEFAULT_MINECRAFT_ROLE || !isKnownRoleKey(roleKey)) {
+    res.status(400).json({ error: "Unknown or invalid role key to grant" });
     return;
   }
   const { data: target, error: fetchErr } = await supabase
     .from("users")
-    .select("id, username")
+    .select("id, email, username, is_admin, created_at, minecraft_verified_at, minecraft_role, website_vip_tier")
     .eq("id", userId)
     .maybeSingle();
   if (fetchErr) {
@@ -6344,32 +6473,36 @@ app.post("/admin/users/:userId/minecraft-role", requireAuth, requireAdmin, async
     res.status(404).json({ error: "User not found" });
     return;
   }
-  const username = (target as { username: string }).username.trim();
-  if (!username) {
-    res.status(400).json({ error: "User has no username" });
-    return;
+
+  // Inventory grant only — do not change in-game display (player activates).
+  if (getPurchasableTierIndex(roleKey) >= 0) {
+    await addOwnedShopProgress(supabase, userId, roleKey);
+  } else if (isVipTierKey(roleKey) && roleKey !== DEFAULT_VIP_TIER) {
+    const idx = getVipTierIndex(roleKey);
+    for (let i = 1; i <= idx; i++) {
+      const k = VIP_TIER_KEYS[i];
+      if (k) await addOwnedRole(supabase, userId, k, "admin");
+    }
+    const curVip = await readWebsiteVipTier(supabase, userId);
+    if (getVipTierIndex(roleKey) > getVipTierIndex(curVip)) {
+      await setWebsiteVipTier(supabase, userId, normalizeVipTierKey(roleKey));
+    }
+  } else {
+    await addOwnedRole(supabase, userId, roleKey, "admin");
   }
-  const lp = await runLuckpermsParentSet(username, roleKey);
-  if (!lp.ok) {
-    res.status(502).json({ error: lp.error });
-    return;
-  }
-  const now = new Date().toISOString();
-  const { data: updated, error: updErr } = await supabase
-    .from("users")
-    .update({ minecraft_role: roleKey, updated_at: now })
-    .eq("id", userId)
-    .select("id, email, username, is_admin, created_at, minecraft_verified_at, minecraft_role")
-    .single();
-  if (updErr) {
-    console.error("[admin/minecraft-role] RCON ok but DB update failed", updErr);
-    res.status(500).json({
-      error:
-        "LuckPerms command ran on the server but the website failed to save the rank. Fix the DB row manually.",
-    });
-    return;
-  }
-  res.json({ user: updated });
+
+  const owned = await listOwnedRoleKeys(supabase, userId);
+  const active = readMinecraftRoleField(target as { minecraft_role?: string | null });
+  const vip = await readWebsiteVipTier(supabase, userId);
+  res.json({
+    user: target,
+    grantedRoleKey: roleKey,
+    ownedRoles: owned,
+    ownedInventory: buildOwnedInventoryEntries(owned, active),
+    activeDisplayRole: active,
+    highestShopRank: getShopProgressRoleKey(owned, active),
+    highestVip: vip,
+  });
 });
 
 async function countAdminUsers(): Promise<number> {
@@ -6780,8 +6913,8 @@ async function runDailyPvpRankPayout(): Promise<{
           const msg = e instanceof Error ? e.message : String(e);
           ticketError = msg;
           payoutStatus = "partial";
-          console.error(`[pvp-daily-payout] Cobble$ paid but tickets failed (rank ${rank}, user ${user.id}):`, msg);
-          note = `Cobble$ OK. Ticket grant failed: ${msg}. Staff can grant ${ticketBonus} ${PVP_TICKETS_CURRENCY} manually.`;
+          console.error(`[pvp-daily-payout] Asteryn Point paid but tickets failed (rank ${rank}, user ${user.id}):`, msg);
+          note = `Asteryn Point OK. Ticket grant failed: ${msg}. Staff can grant ${ticketBonus} ${PVP_TICKETS_CURRENCY} manually.`;
         }
       }
       await supabase.from("user_pvp_daily_payouts").insert({
@@ -6872,6 +7005,8 @@ app.post("/admin/minecraft/boss-spawn/run-now", requireAuth, requireAdmin, async
 });
 
 app.post("/admin/pokemon-shop/refresh", requireAuth, requireAdmin, async (_req, res) => {
+  res.status(410).json({ error: "Pokémon shop is disabled.", code: "pokemon_shop_disabled" });
+  return;
   const { start, end } = forcePokemonShopWindowRefresh();
   const windowStartIso = start.toISOString();
   const offers = buildPokemonShopOffers(windowStartIso);
@@ -6922,7 +7057,8 @@ app.post("/admin/users/:userId/currency", requireAuth, requireAdmin, async (req,
   const staff = res.locals.user!;
   const userId = Number(req.params.userId);
   const { currency_type, amount } = req.body ?? {};
-  const currencyTypeStr = typeof currency_type === "string" ? currency_type.trim() : "";
+  let currencyTypeStr = typeof currency_type === "string" ? currency_type.trim() : "";
+  if (isAsterynPointsCurrency(currencyTypeStr)) currencyTypeStr = ASTERYN_POINTS_CURRENCY;
   if (!Number.isFinite(userId) || !currencyTypeStr || typeof amount !== "number" || amount <= 0) {
     res.status(400).json({ error: "Invalid user id, currency_type, or positive amount" });
     return;
@@ -6946,7 +7082,7 @@ app.post("/admin/users/:userId/currency", requireAuth, requireAdmin, async (req,
       res.status(500).json({ error: error.message });
       return;
     }
-    if (currencyTypeStr === COBBLEDOLLARS_CURRENCY) {
+    if (isAsterynPointsCurrency(currencyTypeStr)) {
       await recordCobbledollarLedger(
         userId,
         amount,
@@ -6979,7 +7115,7 @@ app.post("/admin/users/:userId/currency", requireAuth, requireAdmin, async (req,
       res.status(500).json({ error: error.message });
       return;
     }
-    if (currencyTypeStr === COBBLEDOLLARS_CURRENCY) {
+    if (isAsterynPointsCurrency(currencyTypeStr)) {
       await recordCobbledollarLedger(
         userId,
         amount,
@@ -7001,8 +7137,12 @@ app.post("/admin/users/:userId/currency", requireAuth, requireAdmin, async (req,
   }
 });
 
-/** Grant website Cobble$ (cobbledollars) to many users in one request; ledger uses same kind as single admin grant. */
-app.post("/admin/cobbledollars/bulk-grant", requireAuth, requireAdmin, async (req, res) => {
+/** Grant website Asteryn Point to many users in one request; ledger uses same kind as single admin grant. */
+app.post(
+  ["/admin/cobbledollars/bulk-grant", "/admin/asterynpoints/bulk-grant"],
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
   if (!supabase) {
     res.status(503).json({ error: "Database not configured" });
     return;

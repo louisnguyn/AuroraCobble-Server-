@@ -1,0 +1,34 @@
+# Setup LuckPerms groups `member` + `player` (Asteryn defaults).
+# Same baseline as other ranks: create, glyph prefix, inherit `default`,
+# redeem + tab.scoreboard + randomteleport.
+#
+# Pack glyphs: member=\uE008  player=\uE00D
+# Run: npx tsx scripts/rcon-batch.ts scripts/luckperms/08-setup-member-player.txt
+
+# --- Create ---
+lp creategroup member
+lp creategroup player
+
+# --- Prefixes (Asteryn rank pack) ---
+# LP `default` also gets the player glyph (unassigned / fallback display).
+lp group default meta setprefix 100 "&f\uE00D "
+lp group member meta setprefix 100 "&f\uE008 "
+lp group player meta setprefix 100 "&f\uE00D "
+
+# --- Inherit LuckPerms default (parent set on website replaces parents) ---
+lp group member parent add default
+lp group player parent add default
+
+# --- Permissions (same as other rank groups) ---
+lp group member permission set redeemed.command.redeem true
+lp group player permission set redeemed.command.redeem true
+
+lp group member permission set tab.scoreboard.toggle true
+lp group player permission set tab.scoreboard.toggle true
+
+lp group member permission set essentialcommands.randomteleport true
+lp group player permission set essentialcommands.randomteleport true
+
+# --- Verify ---
+lp group member info
+lp group player info

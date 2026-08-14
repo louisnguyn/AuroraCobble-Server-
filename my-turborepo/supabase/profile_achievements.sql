@@ -13,8 +13,8 @@ CREATE TABLE IF NOT EXISTS profile_achievement_definitions (
       'violet',
       'rose',
       'gold',
-      'crimson',
-      'mythic'
+      'mythic',
+      'legend'
     )
   ),
   sort_order integer NOT NULL DEFAULT 0,

@@ -688,11 +688,11 @@ async function spendCobbledollars(
   detail: string
 ): Promise<{ ok: true; newBalance: number } | { ok: false; error: string; status: number; balance?: number }> {
   const row = await deps.ensureUserCobbledollarsRow(userId);
-  if (!row) return { ok: false, error: "Could not open Cobble$ wallet", status: 500 };
+  if (!row) return { ok: false, error: "Could not open Asteryn Point wallet", status: 500 };
   if (row.balance < amount) {
     return {
       ok: false,
-      error: "Not enough website Cobble$",
+      error: "Not enough website Asteryn Point",
       status: 400,
       balance: row.balance,
     };

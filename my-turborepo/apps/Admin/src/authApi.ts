@@ -131,13 +131,49 @@ export async function fetchAdminMinecraftRoles(): Promise<{ keys: string[] }> {
   return fetchJson<{ keys: string[] }>('/admin/minecraft-roles')
 }
 
+export async function fetchAdminUserOwnedRoles(userId: number): Promise<{
+  ownedRoles: string[]
+  ownedInventory: { key: string; kind: string; active: boolean }[]
+  activeDisplayRole: string
+  highestShopRank: string
+  highestVip: string
+}> {
+  return fetchJson(`/admin/users/${userId}/owned-roles`)
+}
+
+/** Grant rank/VIP into the player's inventory (does not change in-game display). */
 export async function grantAdminUserMinecraftRole(
   userId: number,
   roleKey: string
-): Promise<{ user: AdminUser }> {
-  return fetchJson<{ user: AdminUser }>(`/admin/users/${userId}/minecraft-role`, {
+): Promise<{
+  user: AdminUser
+  grantedRoleKey: string
+  ownedRoles: string[]
+  ownedInventory: { key: string; kind: string; active: boolean }[]
+  activeDisplayRole: string
+  highestShopRank: string
+  highestVip: string
+}> {
+  return fetchJson(`/admin/users/${userId}/minecraft-role`, {
     method: 'POST',
     body: JSON.stringify({ roleKey }),
+  })
+}
+
+export async function removeAdminUserOwnedRole(
+  userId: number,
+  roleKey: string
+): Promise<{
+  ok: boolean
+  removedRoleKey: string
+  ownedRoles: string[]
+  ownedInventory: { key: string; kind: string; active: boolean }[]
+  activeDisplayRole: string
+  highestShopRank: string
+  highestVip: string
+}> {
+  return fetchJson(`/admin/users/${userId}/owned-roles/${encodeURIComponent(roleKey)}`, {
+    method: 'DELETE',
   })
 }
 
@@ -803,8 +839,8 @@ export type ProfileAchievementTier =
   | 'violet'
   | 'rose'
   | 'gold'
-  | 'crimson'
   | 'mythic'
+  | 'legend'
 
 export type ProfileAchievementDefinition = {
   id: number

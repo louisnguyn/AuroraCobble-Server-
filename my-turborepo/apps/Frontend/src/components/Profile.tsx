@@ -37,8 +37,8 @@ const PROFILE_AC_TIER_CLASS: Record<string, string> = {
   violet: 'profile-ac-card profile-ac-violet',
   rose: 'profile-ac-card profile-ac-rose',
   gold: 'profile-ac-card profile-ac-gold',
-  crimson: 'profile-ac-card profile-ac-crimson',
   mythic: 'profile-ac-card profile-ac-mythic',
+  legend: 'profile-ac-card profile-ac-legend',
 }
 
 function achievementCardClass(tier: string) {
@@ -280,10 +280,10 @@ export function Profile({ slugFromHashOrNav }: ProfileProps) {
             ) : (
               <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 profile-achievements-grid">
                 {profile.achievements.map((a) =>
-                  a.tier === 'mythic' ? (
+                  a.tier === 'legend' ? (
                     <div key={a.id} className={achievementCardClass(a.tier)}>
-                      <span className="profile-ac-mythic-ring" aria-hidden />
-                      <div className="profile-ac-mythic-fill">
+                      <span className="profile-ac-legend-ring" aria-hidden />
+                      <div className="profile-ac-legend-fill">
                         <p className="text-sm font-bold m-0 mb-1 tracking-wide">{a.title}</p>
                         <p className="text-xs text-[#aab4d9] leading-snug m-0">{a.description}</p>
                       </div>
@@ -301,7 +301,7 @@ export function Profile({ slugFromHashOrNav }: ProfileProps) {
         </div>
 
         <div className="space-y-6 min-w-0">
-          {profile.clan ? (
+          {profile.clan && user?.is_admin ? (
             <section className="profile-glass rounded-2xl border border-[#2d2a45]/85 p-6 sm:p-7 profile-clan-card">
               <div className="profile-clan-head">
                 <div className="profile-clan-icon-wrap" aria-hidden>

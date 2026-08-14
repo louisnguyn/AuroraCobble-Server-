@@ -11,39 +11,36 @@
 
 lp group default permission set essentialcommands.randomteleport true
 
-# --- Default role ---
+# --- Defaults ---
 lp group member permission set essentialcommands.randomteleport true
+lp group player permission set essentialcommands.randomteleport true
 
-# --- Purchasable ladder ---
+# --- Shop ladder ---
 lp group noob permission set essentialcommands.randomteleport true
 lp group elite permission set essentialcommands.randomteleport true
 lp group pro permission set essentialcommands.randomteleport true
 lp group master permission set essentialcommands.randomteleport true
-lp group ultimate permission set essentialcommands.randomteleport true
+lp group hero permission set essentialcommands.randomteleport true
 lp group onichan permission set essentialcommands.randomteleport true
-lp group legend permission set essentialcommands.randomteleport true
+lp group ultimate permission set essentialcommands.randomteleport true
 lp group overlord permission set essentialcommands.randomteleport true
+lp group god permission set essentialcommands.randomteleport true
 
-# --- Grant-only: staff / partner ---
+# --- VIP ladder ---
+lp group vip permission set essentialcommands.randomteleport true
+lp group mvip permission set essentialcommands.randomteleport true
+lp group svip permission set essentialcommands.randomteleport true
+lp group uvip permission set essentialcommands.randomteleport true
+lp group legend permission set essentialcommands.randomteleport true
+lp group titan permission set essentialcommands.randomteleport true
+
+# --- Grant / staff / partner ---
 lp group champion permission set essentialcommands.randomteleport true
 lp group helper permission set essentialcommands.randomteleport true
 lp group mod permission set essentialcommands.randomteleport true
 lp group tiktok permission set essentialcommands.randomteleport true
 lp group youtuber permission set essentialcommands.randomteleport true
 lp group builder permission set essentialcommands.randomteleport true
-lp group god permission set essentialcommands.randomteleport true
 lp group admin permission set essentialcommands.randomteleport true
 lp group owner permission set essentialcommands.randomteleport true
-
-# --- Grant-only: donation / VIP tiers ---
 lp group donator permission set essentialcommands.randomteleport true
-lp group vip permission set essentialcommands.randomteleport true
-lp group svip permission set essentialcommands.randomteleport true
-lp group mvip permission set essentialcommands.randomteleport true
-lp group uvip permission set essentialcommands.randomteleport true
-
-# --- Grant-only: special / event ---
-lp group knight permission set essentialcommands.randomteleport true
-lp group hero permission set essentialcommands.randomteleport true
-lp group titan permission set essentialcommands.randomteleport true
-lp group zeus permission set essentialcommands.randomteleport true

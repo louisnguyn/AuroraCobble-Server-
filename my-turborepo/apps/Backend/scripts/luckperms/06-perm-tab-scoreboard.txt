@@ -1,0 +1,46 @@
+# Grant tab.scoreboard.toggle to every rank group.
+#
+# Set per-group on purpose: the website assigns ranks with
+# `lp user <name> parent set <role>`, which replaces all parents, so a ranked
+# player no longer inherits LuckPerms' `default` group. Granting only on
+# `default` would miss everyone who owns a rank.
+#
+# `default` is included anyway so players with no group still get it.
+#
+# Run: npx tsx scripts/rcon-batch.ts scripts/luckperms/06-perm-tab-scoreboard.txt
+
+lp group default permission set tab.scoreboard.toggle true
+
+# --- Defaults ---
+lp group member permission set tab.scoreboard.toggle true
+lp group player permission set tab.scoreboard.toggle true
+
+# --- Shop ladder ---
+lp group noob permission set tab.scoreboard.toggle true
+lp group elite permission set tab.scoreboard.toggle true
+lp group pro permission set tab.scoreboard.toggle true
+lp group master permission set tab.scoreboard.toggle true
+lp group hero permission set tab.scoreboard.toggle true
+lp group onichan permission set tab.scoreboard.toggle true
+lp group ultimate permission set tab.scoreboard.toggle true
+lp group overlord permission set tab.scoreboard.toggle true
+lp group god permission set tab.scoreboard.toggle true
+
+# --- VIP ladder ---
+lp group vip permission set tab.scoreboard.toggle true
+lp group mvip permission set tab.scoreboard.toggle true
+lp group svip permission set tab.scoreboard.toggle true
+lp group uvip permission set tab.scoreboard.toggle true
+lp group legend permission set tab.scoreboard.toggle true
+lp group titan permission set tab.scoreboard.toggle true
+
+# --- Grant / staff / partner ---
+lp group champion permission set tab.scoreboard.toggle true
+lp group helper permission set tab.scoreboard.toggle true
+lp group mod permission set tab.scoreboard.toggle true
+lp group tiktok permission set tab.scoreboard.toggle true
+lp group youtuber permission set tab.scoreboard.toggle true
+lp group builder permission set tab.scoreboard.toggle true
+lp group admin permission set tab.scoreboard.toggle true
+lp group owner permission set tab.scoreboard.toggle true
+lp group donator permission set tab.scoreboard.toggle true

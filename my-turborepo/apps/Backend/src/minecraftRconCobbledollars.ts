@@ -14,9 +14,18 @@ function parseMoneyAmount(main: string, suffix?: string): number | null {
   return base * mult;
 }
 
+export function rconTextPreview(text: string, max = 280): string {
+  return stripMinecraftFormatCodes(text)
+    .replace(/\u001b\[[0-9;]*m/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, max);
+}
+
 /**
  * Parse CobbleDollars (or similar) leaderboard text from RCON.
  * Handles: "1. PlayerName - 1,234", "1. Player $ 2.05M", "Name: 500", §-colored lines, K/M/B suffixes.
+ * RCON often concatenates chat into one line — split on rank tokens first.
  */
 export function parseCobbledollarsLeaderboardOutput(text: string): Map<string, number> {
   const map = new Map<string, number>();
@@ -24,12 +33,40 @@ export function parseCobbledollarsLeaderboardOutput(text: string): Map<string, n
   const raw = text.replace(/\u001b\[[0-9;]*m/g, "");
 
   const push = (nameRaw: string, n: number) => {
-    const key = nameRaw.trim().toLowerCase();
-    if (!key || key.length > 36 || !Number.isFinite(n)) return;
-    if (!map.has(key)) map.set(key, n);
+    const display = nameRaw.trim();
+    const key = display.toLowerCase();
+    if (!key || key.length > 48 || !Number.isFinite(n)) return;
+    for (const existing of map.keys()) {
+      if (existing.toLowerCase() === key) return;
+    }
+    map.set(display, n);
   };
 
-  for (const line of raw.split(/\r?\n/)) {
+  const cleaned = stripMinecraftFormatCodes(raw);
+  // RCON glues rows: "166K2. Name" / "PCo2. Name" / "):1. Name" / "---1. Name"
+  const dollarGlobal =
+    /(\d{1,3})\.\s+([A-Za-z0-9_]{1,36})\s+\$\s*([\d.,]+)\s*([KkMmBb])?/g;
+  for (const m of cleaned.matchAll(dollarGlobal)) {
+    if (!m[2] || m[3] == null) continue;
+    const n = parseMoneyAmount(m[3], m[4]);
+    if (n != null) push(m[2], n);
+  }
+  if (map.size > 0) return map;
+
+  const pcoGlobal =
+    /(\d{1,3})\.\s+(.+?)\s+[-–—]\s*([\d.,]+)\s*([KkMmBb])?\s*PCo\b/gi;
+  for (const m of cleaned.matchAll(pcoGlobal)) {
+    if (!m[2] || m[3] == null) continue;
+    const name = m[2].replace(/^[-–—\s]+/, "").trim();
+    if (name.length > 48) continue;
+    const n = parseMoneyAmount(m[3], m[4]);
+    if (n != null) push(name, n);
+  }
+  if (map.size > 0) return map;
+
+  const splitRaw = cleaned.replace(/((?:PCo)|[KkMmBb]|---+|:|\))(?=\d{1,3}\.\s)/gi, "$1\n");
+
+  for (const line of splitRaw.split(/\r?\n/)) {
     let trimmed = stripMinecraftFormatCodes(line).trim();
     if (!trimmed) continue;
     if (/^[-=─_]+$/.test(trimmed)) continue;
@@ -39,6 +76,7 @@ export function parseCobbledollarsLeaderboardOutput(text: string): Map<string, n
     if (/^page\s+\d/i.test(trimmed)) continue;
     if (/^---+$/i.test(trimmed)) continue;
     if (/^there (are|is)\s+no\b/i.test(trimmed)) continue;
+    if (/^pco\s+top\b/i.test(trimmed)) continue;
 
     trimmed = trimmed
       .replace(/\s+(?:cobble\s*dollars?|\bcd\b|coins?)\s*$/i, "")
@@ -166,11 +204,7 @@ export async function fetchCobbledollarsViaRcon(): Promise<CobbledollarsRconResu
     let out = await rcon.execute("cobbledollars leaderboard");
     let balances = parseCobbledollarsLeaderboardOutput(out);
 
-    if (
-      balances.size === 0 &&
-      (/unknown|incomplete command|no such command|wrong number of arguments/i.test(out) ||
-        out.trim().length === 0)
-    ) {
+    if (balances.size === 0) {
       for (const cmd of ["/cobbledollars leaderboard", "cd leaderboard", "/cd leaderboard"] as const) {
         const alt = await rcon.execute(cmd);
         const b = parseCobbledollarsLeaderboardOutput(alt);
@@ -179,11 +213,25 @@ export async function fetchCobbledollarsViaRcon(): Promise<CobbledollarsRconResu
           out = alt;
           break;
         }
+        if (rconTextPreview(alt).length > rconTextPreview(out).length) out = alt;
       }
     }
 
     rcon.close();
-    return { balances };
+    if (balances.size > 0) return { balances };
+
+    const preview = rconTextPreview(out);
+    if (!preview || /command (ran|executed) successfully|done\.?$/i.test(preview)) {
+      return {
+        balances,
+        error:
+          "RCON connected but Cobble$ leaderboard returned no player rows. Run `/cobbledollars leaderboard update` on the Minecraft server (mod only saves the board every few minutes), then refresh.",
+      };
+    }
+    return {
+      balances,
+      error: `Could not parse Cobble$ leaderboard from RCON: ${preview}`,
+    };
   } catch (err) {
     const raw = err instanceof Error ? err.message : String(err);
     console.warn("[MC RCON] cobbledollars:", raw);

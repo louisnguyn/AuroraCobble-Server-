@@ -1,0 +1,41 @@
+# Deny pvptoggle.player.toggle on every rank group.
+# Set per-group because website uses `lp user <name> parent set <role>`,
+# which replaces parents — ranked players no longer inherit `default` only.
+#
+# Run: npx tsx scripts/rcon-batch.ts scripts/luckperms/11-perm-pvptoggle-false.txt
+
+lp group default permission set pvptoggle.player.toggle false
+
+# --- Defaults ---
+lp group member permission set pvptoggle.player.toggle false
+lp group player permission set pvptoggle.player.toggle false
+
+# --- Shop ladder ---
+lp group noob permission set pvptoggle.player.toggle false
+lp group elite permission set pvptoggle.player.toggle false
+lp group pro permission set pvptoggle.player.toggle false
+lp group master permission set pvptoggle.player.toggle false
+lp group hero permission set pvptoggle.player.toggle false
+lp group onichan permission set pvptoggle.player.toggle false
+lp group ultimate permission set pvptoggle.player.toggle false
+lp group overlord permission set pvptoggle.player.toggle false
+lp group god permission set pvptoggle.player.toggle false
+
+# --- VIP ladder ---
+lp group vip permission set pvptoggle.player.toggle false
+lp group mvip permission set pvptoggle.player.toggle false
+lp group svip permission set pvptoggle.player.toggle false
+lp group uvip permission set pvptoggle.player.toggle false
+lp group legend permission set pvptoggle.player.toggle false
+lp group titan permission set pvptoggle.player.toggle false
+
+# --- Grant / staff / partner ---
+lp group champion permission set pvptoggle.player.toggle false
+lp group helper permission set pvptoggle.player.toggle false
+lp group mod permission set pvptoggle.player.toggle false
+lp group tiktok permission set pvptoggle.player.toggle false
+lp group youtuber permission set pvptoggle.player.toggle false
+lp group builder permission set pvptoggle.player.toggle false
+lp group admin permission set pvptoggle.player.toggle false
+lp group owner permission set pvptoggle.player.toggle false
+lp group donator permission set pvptoggle.player.toggle false

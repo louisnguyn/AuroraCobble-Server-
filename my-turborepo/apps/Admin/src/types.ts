@@ -104,6 +104,24 @@ export interface BattleTowerLeaderboardResponse {
   updatedAt: string | null
 }
 
+/** GET /leaderboard/achievements */
+export interface AchievementLeaderboardRow {
+  rank: number
+  userId: number
+  username: string
+  badgeCount: number
+  score: number
+  legend: number
+  mythic: number
+  gold: number
+}
+
+export interface AchievementLeaderboardResponse {
+  ok: boolean
+  rows: AchievementLeaderboardRow[]
+  error: string | null
+}
+
 export interface MatchResultPokemon {
   species: string
   ability?: string

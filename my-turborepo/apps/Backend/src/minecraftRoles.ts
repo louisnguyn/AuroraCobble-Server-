@@ -2,7 +2,38 @@ import { executeMinecraftRconCommand } from "./minecraftRconExecute.js";
 
 export const DEFAULT_MINECRAFT_ROLE = "member";
 
-/** Roles that cannot be bought with Cobble$; only staff grant or approved user request. */
+/** Website VIP overlay default (separate from shop ranks). */
+export const DEFAULT_VIP_TIER = "player";
+
+/**
+ * VIP ladder (achievement-gated; not Asteryn Point shop ranks):
+ * player → vip → mvip → svip → uvip → legend → titan
+ */
+export const VIP_TIER_KEYS = [
+  "player",
+  "vip",
+  "mvip",
+  "svip",
+  "uvip",
+  "legend",
+  "titan",
+] as const;
+
+export type VipTierKey = (typeof VIP_TIER_KEYS)[number];
+
+export const VIP_TIER_LABELS: Record<VipTierKey, string> = {
+  player: "PLAYER",
+  vip: "VIP",
+  mvip: "MVIP",
+  svip: "SVIP",
+  uvip: "UVIP",
+  legend: "LEGEND",
+  titan: "TITAN",
+};
+
+const VIP_TIER_SET = new Set<string>(VIP_TIER_KEYS);
+
+/** Staff / partner / donation roles — request or admin grant only (not VIP ladder). */
 export const GRANT_ONLY_ROLE_KEYS = new Set([
   "champion",
   "helper",
@@ -10,46 +41,49 @@ export const GRANT_ONLY_ROLE_KEYS = new Set([
   "tiktok",
   "youtuber",
   "builder",
-  "god",
   "owner",
   "admin",
   "donator",
-  "vip",
-  "svip",
-  "mvip",
-  "uvip",
-  "knight",
-  "hero",
-  "titan",
-  "zeus",
 ]);
 
-/** Website perks tied to LuckPerms rank (shop discount, daily login streak extras). */
+/** Website perks tied to LuckPerms rank (shop discount, daily login extras). */
+export type DailyItemGrant = { key: string; amount: number; label: string };
+
 export type RoleWebsitePerks = {
   shopDiscountPercent: number;
   dailyFlatCobble: number;
   dailyTickets: number;
+  dailyItems: DailyItemGrant[];
 };
 
 export type RoleCatalogEntry = {
   key: string;
   label: string;
-  /** Cobble$ cost; omit if not purchasable */
+  /** Asteryn Point cost; omit if not purchasable */
   cost?: number;
   purchasable: boolean;
   perks: RoleWebsitePerks;
 };
 
-/** Cobble$ shop — NOOB through ULTIMATE; Legend+ above Ultimate are grant/request-only. */
+/**
+ * Shop ladder (Asteryn Point, step-by-step):
+ * noob → elite → pro → master → hero → onichan → ultimate → overlord → god
+ * VIP track (separate): player → vip → mvip → svip → uvip → legend → titan
+ *
+ * `cost` is paid for that one next step only — cannot skip. Daily AP is 1–3.
+ * Early steps are a few days of login; later steps are weeks. Oniichan is free
+ * after Hero so the ladder still has a checkpoint before Ultimate+.
+ */
 const PURCHASABLE: { key: string; label: string; cost: number }[] = [
-  { key: "noob", label: "NOOB", cost: 100_000 },
-  { key: "elite", label: "ELITE", cost: 500_000 },
-  { key: "pro", label: "PRO", cost: 500_000 },
-  { key: "master", label: "MASTER", cost: 500_000 },
-  { key: "ultimate", label: "ULTIMATE", cost: 1_000_000 },
+  { key: "noob", label: "NOOB", cost: 4 },
+  { key: "elite", label: "ELITE", cost: 7 },
+  { key: "pro", label: "PRO", cost: 10 },
+  { key: "master", label: "MASTER", cost: 15 },
+  { key: "hero", label: "HERO", cost: 20 },
   { key: "onichan", label: "ONIICHAN", cost: 0 },
-  { key: "legend", label: "LEGEND", cost: 1_000_000 },
-  { key: "overlord", label: "OVERLORD", cost: 1_000_000 },
+  { key: "ultimate", label: "ULTIMATE", cost: 28 },
+  { key: "overlord", label: "OVERLORD", cost: 38 },
+  { key: "god", label: "GOD", cost: 50 },
 ];
 
 const GRANT_ONLY_LABELS: Record<string, string> = {
@@ -59,21 +93,9 @@ const GRANT_ONLY_LABELS: Record<string, string> = {
   tiktok: "TIKTOK",
   youtuber: "YOUTUBER",
   builder: "BUILDER",
-  legend: "LEGEND",
-  ultimate: "ULTIMATE",
-  overlord: "OVERLORD",
-  god: "GOD",
   owner: "OWNER",
   admin: "ADMIN",
   donator: "DONATOR",
-  vip: "VIP",
-  svip: "SVIP",
-  mvip: "MVIP",
-  uvip: "UVIP",
-  knight: "KNIGHT",
-  hero: "HERO",
-  titan: "TITAN",
-  zeus: "ZEUS",
 };
 
 /** Staff / partner grant-only ranks — same website shop discount as MASTER (15%). */
@@ -86,14 +108,41 @@ const GRANT_ONLY_FLAT_SHOP_DISCOUNT_15 = new Set([
   "builder",
 ]);
 
+/**
+ * Old shop ranks removed from the ladder → treat as this shop tier for "next buy" / owned checks.
+ * zeus/knight sat between pro and master; legend sat between ultimate and overlord.
+ */
+const LEGACY_SHOP_EQUIV: Record<string, string> = {
+  zeus: "pro",
+  knight: "pro",
+  legend: "ultimate",
+};
+
 const ALL_KNOWN_KEYS = new Set<string>([
   DEFAULT_MINECRAFT_ROLE,
   ...PURCHASABLE.map((p) => p.key),
   ...GRANT_ONLY_ROLE_KEYS,
+  ...VIP_TIER_KEYS.filter((k) => k !== DEFAULT_VIP_TIER),
 ]);
 
 export function isKnownRoleKey(key: string): boolean {
   return ALL_KNOWN_KEYS.has(normalizeRoleKey(key));
+}
+
+export function isVipTierKey(key: string): boolean {
+  return VIP_TIER_SET.has(normalizeRoleKey(key));
+}
+
+export function normalizeVipTierKey(raw: string | null | undefined): VipTierKey {
+  const k = (raw ?? "").trim().toLowerCase();
+  if (VIP_TIER_SET.has(k)) return k as VipTierKey;
+  // Removed from VIP ladder — treat as next remaining tier.
+  if (k === "zeus") return "legend";
+  return DEFAULT_VIP_TIER;
+}
+
+export function getVipTierIndex(tierKey: string): number {
+  return VIP_TIER_KEYS.indexOf(normalizeVipTierKey(tierKey));
 }
 
 /** All configured LuckPerms group keys (for admin grant UI), `member` first. */
@@ -136,7 +185,11 @@ export const PURCHASABLE_ROLE_KEYS: readonly string[] = PURCHASABLE.map((p) => p
 export function getPurchasableTierIndex(roleKey: string): number {
   const k = normalizeRoleKey(roleKey);
   if (k === DEFAULT_MINECRAFT_ROLE) return -1;
-  return PURCHASABLE_ROLE_KEYS.indexOf(k);
+  const direct = PURCHASABLE_ROLE_KEYS.indexOf(k);
+  if (direct >= 0) return direct;
+  const equiv = LEGACY_SHOP_EQUIV[k];
+  if (equiv) return PURCHASABLE_ROLE_KEYS.indexOf(equiv);
+  return -1;
 }
 
 /** Next rank the user may buy on the website shop, or null if none. */
@@ -188,41 +241,17 @@ export function validatePurchasableRoleUpgrade(
 }
 
 export type UserProfileBadgeCounts = {
-  crimson: number;
-  gold: number;
   mythic: number;
+  gold: number;
+  legend: number;
 };
 
-export function meetsRolePurchaseBadgeRequirement(
-  badgeCounts: UserProfileBadgeCounts,
-  roleKey: string,
-  currentRoleKey?: string
-): boolean {
-  const k = normalizeRoleKey(roleKey);
-  if (k === "onichan") {
-    if (!currentRoleKey || normalizeRoleKey(currentRoleKey) !== "ultimate") return false;
-    return badgeCounts.crimson >= 1 || badgeCounts.gold >= 2;
-  }
-  if (k === "legend") return badgeCounts.crimson >= 3;
-  if (k === "overlord") return badgeCounts.crimson >= 5 || badgeCounts.mythic >= 2;
-  return true;
-}
-
-export function getRoleBadgeRequirementLabel(roleKey: string): string | null {
-  const k = normalizeRoleKey(roleKey);
-  if (k === "onichan") {
-    return "Requires Ultimate rank, plus 1 crimson badge or 2 gold badges (free rank)";
-  }
-  if (k === "legend") return "Requires 3 crimson profile badges";
-  if (k === "overlord") return "Requires 5 crimson badges, or 2 mythic badges";
-  return null;
-}
-
+/** Shop ranks no longer require profile badges (VIP track does). */
 export function purchasableRoleCatalogFlags(
-  currentRoleKey: string,
+  shopProgressRoleKey: string,
   entryKey: string,
   tierIndex: number,
-  badgeCounts: UserProfileBadgeCounts = { crimson: 0, gold: 0, mythic: 0 }
+  ownedKeys: Set<string>
 ): {
   owned: boolean;
   canBuyNow: boolean;
@@ -230,66 +259,26 @@ export function purchasableRoleCatalogFlags(
   freeRank: boolean;
   badgeRequirementLabel: string | null;
   meetsBadgeRequirement: boolean;
+  canActivate: boolean;
 } {
-  const currentIdx = getPurchasableTierIndex(currentRoleKey);
-  const next = getNextPurchasableRoleKey(currentRoleKey);
-  const owned = currentIdx >= 0 && tierIndex <= currentIdx;
-  const meetsBadgeRequirement = meetsRolePurchaseBadgeRequirement(badgeCounts, entryKey, currentRoleKey);
-  const canBuyNow = entryKey === next && meetsBadgeRequirement;
+  const next = getNextPurchasableRoleKey(shopProgressRoleKey);
+  const owned = ownedKeys.has(normalizeRoleKey(entryKey)) || (() => {
+    const progressIdx = getPurchasableTierIndex(shopProgressRoleKey);
+    return progressIdx >= 0 && tierIndex <= progressIdx;
+  })();
+  const canBuyNow = entryKey === next && !owned;
   return {
     owned,
     canBuyNow,
     locked: !owned && !canBuyNow,
     freeRank: isFreeShopRank(entryKey),
-    badgeRequirementLabel: getRoleBadgeRequirementLabel(entryKey),
-    meetsBadgeRequirement,
+    badgeRequirementLabel: null,
+    meetsBadgeRequirement: true,
+    canActivate: owned,
   };
 }
 
-export function validateRolePurchaseBadgeRequirement(
-  badgeCounts: UserProfileBadgeCounts,
-  targetRoleKey: string,
-  currentRoleKey: string
-): { ok: true } | { ok: false; error: string; badgeCounts: UserProfileBadgeCounts } {
-  if (meetsRolePurchaseBadgeRequirement(badgeCounts, targetRoleKey, currentRoleKey)) return { ok: true };
-  const label = getRoleBadgeRequirementLabel(targetRoleKey);
-  const k = normalizeRoleKey(targetRoleKey);
-  if (k === "legend") {
-    return {
-      ok: false,
-      error: `This rank requires at least 3 crimson profile badge(s). You have ${badgeCounts.crimson}.`,
-      badgeCounts,
-    };
-  }
-  if (k === "onichan") {
-    if (normalizeRoleKey(currentRoleKey) !== "ultimate") {
-      return {
-        ok: false,
-        error: "OniiChan requires Ultimate rank first, then 1 crimson badge or 2 gold badges.",
-        badgeCounts,
-      };
-    }
-    return {
-      ok: false,
-      error: `OniiChan requires 1 crimson badge, or 2 gold badge(s). You have ${badgeCounts.crimson} crimson and ${badgeCounts.gold} gold.`,
-      badgeCounts,
-    };
-  }
-  if (k === "overlord") {
-    return {
-      ok: false,
-      error: `This rank requires 5 crimson badge(s), or 2 mythic badge(s). You have ${badgeCounts.crimson} crimson and ${badgeCounts.mythic} mythic.`,
-      badgeCounts,
-    };
-  }
-  return {
-    ok: false,
-    error: label ?? "Profile badge requirements not met.",
-    badgeCounts,
-  };
-}
-
-/** Limited-time percent off all website Cobble$ shops (items, Pokémon shop, battle pass, rank shop). Set to 0 when no event. */
+/** Limited-time percent off all website Asteryn Point shops (items, battle pass, rank shop). Set to 0 when no event. */
 export const SHOP_EVENT_DISCOUNT_PERCENT = 0;
 
 /** Cobble$ after integer percent-off. */
@@ -306,7 +295,7 @@ export function applyWebsiteShopEventPrice(baseCobble: number): number {
   return applyCobbleShopDiscount(baseCobble, SHOP_EVENT_DISCOUNT_PERCENT);
 }
 
-/** Event discount, then rank shop discount (items, Pokémon shop, battle pass). */
+/** Event discount, then rank shop discount (items, battle pass). */
 export function applyWebsiteShopPrice(baseCobble: number, roleDiscountPercent: number): number {
   return applyCobbleShopDiscount(
     applyCobbleShopDiscount(baseCobble, SHOP_EVENT_DISCOUNT_PERCENT),
@@ -315,9 +304,9 @@ export function applyWebsiteShopPrice(baseCobble: number, roleDiscountPercent: n
 }
 
 /**
- * Percent off website Cobble$ shop (items + Pokémon shop).
- * Staff/special grant ranks (champion, helper, mod, tiktok, youtuber, builder): 15%.
- * Legend+ (grant-only): 18%–30%. Purchasable ranks: stepped up to MASTER 15%.
+ * Percent off website Asteryn Point shop (items + battle pass).
+ * Staff/partner grant ranks (champion, helper, mod, tiktok, youtuber, builder): 15%.
+ * Shop ladder: stepped discounts by tier.
  */
 export function getWebsiteShopDiscountPercent(roleKey: string): number {
   const k = normalizeRoleKey(roleKey);
@@ -327,23 +316,22 @@ export function getWebsiteShopDiscountPercent(roleKey: string): number {
     noob: 5,
     elite: 8,
     pro: 10,
-    onichan: 20,
+    zeus: 12,
+    knight: 13,
     master: 15,
-    legend: 20,
-    ultimate: 18,
+    hero: 16,
+    onichan: 18,
+    ultimate: 20,
+    legend: 22,
     overlord: 25,
-    god: 25,
-    // Donation / VIP tiers (ascending)
+    titan: 27,
+    god: 30,
+    // Donation / VIP tiers (website overlay — ascending)
     donator: 10,
     vip: 12,
     svip: 15,
     mvip: 18,
     uvip: 22,
-    // Special / event ranks (ascending)
-    knight: 12,
-    hero: 16,
-    titan: 20,
-    zeus: 25,
     // Staff
     admin: 25,
     owner: 30,
@@ -352,85 +340,304 @@ export function getWebsiteShopDiscountPercent(roleKey: string): number {
 }
 
 /**
- * Flat extra Cobble$ every daily claim (streak + this bonus), same idea as fixed PVP top payouts.
- * Staff/partner grant ranks: fixed daily stipend. Unknown keys → 0.
+ * Daily Asteryn Point from VIP overlay only (1–3). Shop ranks do not add Point.
  */
 export function getDailyLoginFlatCobbleBonusPerClaim(roleKey: string): number {
   const k = normalizeRoleKey(roleKey);
-  const byRole: Record<string, number> = {
-    [DEFAULT_MINECRAFT_ROLE]: 0,
-    noob: 25_000,
-    elite: 40_000,
-    pro: 50_000,
-    onichan: 100_000,
-    master: 75_000,
-    helper: 90_000,
-    mod: 100_000,
-    champion: 95_000,
-    tiktok: 75_000,
-    youtuber: 75_000,
-    legend: 120_000,
-    ultimate: 90_000,
-    overlord: 150_000,
-    god: 200_000,
-    // Donation / VIP tiers (ascending)
-    donator: 50_000,
-    vip: 60_000,
-    svip: 80_000,
-    mvip: 100_000,
-    uvip: 130_000,
-    // Special / event ranks (ascending)
-    knight: 60_000,
-    hero: 85_000,
-    titan: 120_000,
-    zeus: 160_000,
-    // Staff
-    admin: 150_000,
-    owner: 250_000,
+  const byVip: Record<string, number> = {
+    [DEFAULT_VIP_TIER]: 1,
+    vip: 2,
+    mvip: 2,
+    svip: 2,
+    uvip: 3,
+    legend: 3,
+    titan: 3,
+    donator: 2,
   };
-  if (k in byRole) return byRole[k]!;
-  if (GRANT_ONLY_FLAT_SHOP_DISCOUNT_15.has(k)) return 85_000;
-  return 0;
+  return byVip[k] ?? 0;
 }
 
-/** Bonus normal website tickets on every successful daily claim (in addition to streak reward). */
+/** Daily normal tickets from shop/staff rank only (1–5). VIP overlay does not add tickets. */
 export function getDailyLoginTicketBonusPerClaim(roleKey: string): number {
   const k = normalizeRoleKey(roleKey);
-  if (GRANT_ONLY_FLAT_SHOP_DISCOUNT_15.has(k)) return 2;
-  const byRole: Record<string, number> = {
-    [DEFAULT_MINECRAFT_ROLE]: 0,
-    noob: 0,
-    elite: 1,
-    pro: 1,
-    onichan: 2,
-    master: 2,
-    legend: 2,
-    ultimate: 2,
-    overlord: 3,
-    god: 3,
-    // Donation / VIP tiers (ascending)
-    donator: 1,
-    vip: 1,
-    svip: 2,
-    mvip: 2,
-    uvip: 3,
-    // Special / event ranks (ascending)
-    knight: 1,
-    hero: 2,
-    titan: 3,
-    zeus: 3,
-    // Staff
-    admin: 3,
+  if (VIP_TIER_SET.has(k)) return 0;
+  const byRank: Record<string, number> = {
+    [DEFAULT_MINECRAFT_ROLE]: 1,
+    noob: 1,
+    elite: 2,
+    pro: 2,
+    zeus: 2,
+    knight: 2,
+    master: 3,
+    hero: 3,
+    onichan: 3,
+    ultimate: 4,
+    overlord: 4,
+    god: 5,
+    champion: 3,
+    helper: 3,
+    mod: 3,
+    tiktok: 3,
+    youtuber: 3,
+    builder: 3,
+    admin: 4,
     owner: 5,
   };
-  return byRole[k] ?? 0;
+  if (GRANT_ONLY_FLAT_SHOP_DISCOUNT_15.has(k) && !(k in byRank)) return 3;
+  return byRank[k] ?? 1;
+}
+
+const DAILY_ITEM_ORDER = [
+  "poke_ball",
+  "great_ball",
+  "ultra_ball",
+  "exp_candy_xs",
+  "exp_candy_s",
+  "exp_candy_m",
+  "exp_candy_l",
+  "potion",
+  "super_potion",
+  "hyper_potion",
+  "max_potion",
+  "full_heal",
+  "revive",
+] as const;
+
+export function mergeDailyItemGrants(...lists: DailyItemGrant[][]): DailyItemGrant[] {
+  const map = new Map<string, DailyItemGrant>();
+  for (const list of lists) {
+    for (const it of list) {
+      if (!it.key || it.amount <= 0) continue;
+      const prev = map.get(it.key);
+      if (prev) map.set(it.key, { ...prev, amount: prev.amount + it.amount });
+      else map.set(it.key, { ...it });
+    }
+  }
+  return [...map.values()].sort((a, b) => {
+    const ia = DAILY_ITEM_ORDER.indexOf(a.key as (typeof DAILY_ITEM_ORDER)[number]);
+    const ib = DAILY_ITEM_ORDER.indexOf(b.key as (typeof DAILY_ITEM_ORDER)[number]);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+}
+
+/**
+ * Daily website-inventory items from shop/staff rank.
+ * Starts at Poke Ball + Candy XS + Potion; Great Ball / Candy S only from Master+.
+ */
+export function getDailyLoginRankItemGrants(roleKey: string): DailyItemGrant[] {
+  const k = normalizeRoleKey(roleKey);
+  const byRank: Record<string, DailyItemGrant[]> = {
+    [DEFAULT_MINECRAFT_ROLE]: [
+      { key: "poke_ball", amount: 2, label: "Poke Ball" },
+      { key: "exp_candy_xs", amount: 1, label: "EXP Candy XS" },
+      { key: "potion", amount: 1, label: "Potion" },
+    ],
+    noob: [
+      { key: "poke_ball", amount: 4, label: "Poke Ball" },
+      { key: "exp_candy_xs", amount: 2, label: "EXP Candy XS" },
+      { key: "potion", amount: 2, label: "Potion" },
+    ],
+    elite: [
+      { key: "poke_ball", amount: 6, label: "Poke Ball" },
+      { key: "exp_candy_xs", amount: 3, label: "EXP Candy XS" },
+      { key: "potion", amount: 3, label: "Potion" },
+    ],
+    pro: [
+      { key: "poke_ball", amount: 8, label: "Poke Ball" },
+      { key: "exp_candy_xs", amount: 4, label: "EXP Candy XS" },
+      { key: "potion", amount: 4, label: "Potion" },
+    ],
+    zeus: [
+      { key: "poke_ball", amount: 8, label: "Poke Ball" },
+      { key: "exp_candy_xs", amount: 4, label: "EXP Candy XS" },
+      { key: "potion", amount: 4, label: "Potion" },
+    ],
+    knight: [
+      { key: "poke_ball", amount: 8, label: "Poke Ball" },
+      { key: "exp_candy_xs", amount: 4, label: "EXP Candy XS" },
+      { key: "potion", amount: 4, label: "Potion" },
+    ],
+    master: [
+      { key: "poke_ball", amount: 8, label: "Poke Ball" },
+      { key: "great_ball", amount: 2, label: "Great Ball" },
+      { key: "exp_candy_xs", amount: 4, label: "EXP Candy XS" },
+      { key: "exp_candy_s", amount: 1, label: "EXP Candy S" },
+      { key: "potion", amount: 3, label: "Potion" },
+      { key: "super_potion", amount: 1, label: "Super Potion" },
+    ],
+    hero: [
+      { key: "poke_ball", amount: 6, label: "Poke Ball" },
+      { key: "great_ball", amount: 4, label: "Great Ball" },
+      { key: "exp_candy_xs", amount: 3, label: "EXP Candy XS" },
+      { key: "exp_candy_s", amount: 2, label: "EXP Candy S" },
+      { key: "super_potion", amount: 2, label: "Super Potion" },
+    ],
+    onichan: [
+      { key: "poke_ball", amount: 6, label: "Poke Ball" },
+      { key: "great_ball", amount: 5, label: "Great Ball" },
+      { key: "exp_candy_s", amount: 3, label: "EXP Candy S" },
+      { key: "super_potion", amount: 3, label: "Super Potion" },
+    ],
+    ultimate: [
+      { key: "great_ball", amount: 6, label: "Great Ball" },
+      { key: "ultra_ball", amount: 2, label: "Ultra Ball" },
+      { key: "exp_candy_s", amount: 3, label: "EXP Candy S" },
+      { key: "exp_candy_m", amount: 1, label: "EXP Candy M" },
+      { key: "hyper_potion", amount: 2, label: "Hyper Potion" },
+    ],
+    overlord: [
+      { key: "great_ball", amount: 4, label: "Great Ball" },
+      { key: "ultra_ball", amount: 4, label: "Ultra Ball" },
+      { key: "exp_candy_m", amount: 2, label: "EXP Candy M" },
+      { key: "hyper_potion", amount: 3, label: "Hyper Potion" },
+      { key: "full_heal", amount: 1, label: "Full Heal" },
+    ],
+    god: [
+      { key: "ultra_ball", amount: 6, label: "Ultra Ball" },
+      { key: "exp_candy_m", amount: 2, label: "EXP Candy M" },
+      { key: "exp_candy_l", amount: 1, label: "EXP Candy L" },
+      { key: "max_potion", amount: 2, label: "Max Potion" },
+      { key: "revive", amount: 1, label: "Revive" },
+    ],
+    champion: [
+      { key: "poke_ball", amount: 8, label: "Poke Ball" },
+      { key: "great_ball", amount: 2, label: "Great Ball" },
+      { key: "exp_candy_xs", amount: 4, label: "EXP Candy XS" },
+      { key: "exp_candy_s", amount: 1, label: "EXP Candy S" },
+      { key: "potion", amount: 3, label: "Potion" },
+      { key: "super_potion", amount: 1, label: "Super Potion" },
+    ],
+    helper: [
+      { key: "poke_ball", amount: 8, label: "Poke Ball" },
+      { key: "great_ball", amount: 2, label: "Great Ball" },
+      { key: "exp_candy_xs", amount: 4, label: "EXP Candy XS" },
+      { key: "exp_candy_s", amount: 1, label: "EXP Candy S" },
+      { key: "potion", amount: 3, label: "Potion" },
+      { key: "super_potion", amount: 1, label: "Super Potion" },
+    ],
+    mod: [
+      { key: "poke_ball", amount: 8, label: "Poke Ball" },
+      { key: "great_ball", amount: 2, label: "Great Ball" },
+      { key: "exp_candy_xs", amount: 4, label: "EXP Candy XS" },
+      { key: "exp_candy_s", amount: 1, label: "EXP Candy S" },
+      { key: "potion", amount: 3, label: "Potion" },
+      { key: "super_potion", amount: 1, label: "Super Potion" },
+    ],
+    tiktok: [
+      { key: "poke_ball", amount: 8, label: "Poke Ball" },
+      { key: "great_ball", amount: 2, label: "Great Ball" },
+      { key: "exp_candy_xs", amount: 4, label: "EXP Candy XS" },
+      { key: "exp_candy_s", amount: 1, label: "EXP Candy S" },
+      { key: "potion", amount: 3, label: "Potion" },
+      { key: "super_potion", amount: 1, label: "Super Potion" },
+    ],
+    youtuber: [
+      { key: "poke_ball", amount: 8, label: "Poke Ball" },
+      { key: "great_ball", amount: 2, label: "Great Ball" },
+      { key: "exp_candy_xs", amount: 4, label: "EXP Candy XS" },
+      { key: "exp_candy_s", amount: 1, label: "EXP Candy S" },
+      { key: "potion", amount: 3, label: "Potion" },
+      { key: "super_potion", amount: 1, label: "Super Potion" },
+    ],
+    builder: [
+      { key: "poke_ball", amount: 8, label: "Poke Ball" },
+      { key: "great_ball", amount: 2, label: "Great Ball" },
+      { key: "exp_candy_xs", amount: 4, label: "EXP Candy XS" },
+      { key: "exp_candy_s", amount: 1, label: "EXP Candy S" },
+      { key: "potion", amount: 3, label: "Potion" },
+      { key: "super_potion", amount: 1, label: "Super Potion" },
+    ],
+    donator: [
+      { key: "poke_ball", amount: 8, label: "Poke Ball" },
+      { key: "great_ball", amount: 4, label: "Great Ball" },
+      { key: "exp_candy_xs", amount: 4, label: "EXP Candy XS" },
+      { key: "exp_candy_s", amount: 2, label: "EXP Candy S" },
+      { key: "super_potion", amount: 2, label: "Super Potion" },
+    ],
+    admin: [
+      { key: "great_ball", amount: 4, label: "Great Ball" },
+      { key: "ultra_ball", amount: 4, label: "Ultra Ball" },
+      { key: "exp_candy_m", amount: 2, label: "EXP Candy M" },
+      { key: "hyper_potion", amount: 3, label: "Hyper Potion" },
+      { key: "full_heal", amount: 1, label: "Full Heal" },
+    ],
+    owner: [
+      { key: "ultra_ball", amount: 6, label: "Ultra Ball" },
+      { key: "exp_candy_m", amount: 2, label: "EXP Candy M" },
+      { key: "exp_candy_l", amount: 1, label: "EXP Candy L" },
+      { key: "max_potion", amount: 2, label: "Max Potion" },
+      { key: "revive", amount: 1, label: "Revive" },
+    ],
+  };
+  if (GRANT_ONLY_FLAT_SHOP_DISCOUNT_15.has(k) && !(k in byRank)) return byRank.master ?? [];
+  return byRank[k] ?? byRank[DEFAULT_MINECRAFT_ROLE] ?? [];
+}
+
+/**
+ * Daily website-inventory items from VIP overlay.
+ * Player/VIP start at Poke Ball + Candy XS + Potion; Great Ball / Candy S from MVIP+.
+ */
+export function getDailyLoginVipItemGrants(vipKey: string): DailyItemGrant[] {
+  const k = normalizeVipTierKey(vipKey);
+  const byVip: Record<VipTierKey, DailyItemGrant[]> = {
+    player: [
+      { key: "poke_ball", amount: 4, label: "Poke Ball" },
+      { key: "exp_candy_xs", amount: 2, label: "EXP Candy XS" },
+      { key: "potion", amount: 2, label: "Potion" },
+    ],
+    vip: [
+      { key: "poke_ball", amount: 6, label: "Poke Ball" },
+      { key: "exp_candy_xs", amount: 3, label: "EXP Candy XS" },
+      { key: "potion", amount: 3, label: "Potion" },
+    ],
+    mvip: [
+      { key: "poke_ball", amount: 8, label: "Poke Ball" },
+      { key: "great_ball", amount: 2, label: "Great Ball" },
+      { key: "exp_candy_xs", amount: 4, label: "EXP Candy XS" },
+      { key: "exp_candy_s", amount: 1, label: "EXP Candy S" },
+      { key: "potion", amount: 4, label: "Potion" },
+    ],
+    svip: [
+      { key: "poke_ball", amount: 6, label: "Poke Ball" },
+      { key: "great_ball", amount: 4, label: "Great Ball" },
+      { key: "exp_candy_xs", amount: 3, label: "EXP Candy XS" },
+      { key: "exp_candy_s", amount: 2, label: "EXP Candy S" },
+      { key: "super_potion", amount: 2, label: "Super Potion" },
+    ],
+    uvip: [
+      { key: "great_ball", amount: 6, label: "Great Ball" },
+      { key: "ultra_ball", amount: 2, label: "Ultra Ball" },
+      { key: "exp_candy_s", amount: 3, label: "EXP Candy S" },
+      { key: "exp_candy_m", amount: 1, label: "EXP Candy M" },
+      { key: "super_potion", amount: 3, label: "Super Potion" },
+      { key: "full_heal", amount: 1, label: "Full Heal" },
+    ],
+    legend: [
+      { key: "great_ball", amount: 4, label: "Great Ball" },
+      { key: "ultra_ball", amount: 4, label: "Ultra Ball" },
+      { key: "exp_candy_m", amount: 2, label: "EXP Candy M" },
+      { key: "hyper_potion", amount: 2, label: "Hyper Potion" },
+      { key: "full_heal", amount: 1, label: "Full Heal" },
+      { key: "revive", amount: 1, label: "Revive" },
+    ],
+    titan: [
+      { key: "ultra_ball", amount: 8, label: "Ultra Ball" },
+      { key: "exp_candy_m", amount: 2, label: "EXP Candy M" },
+      { key: "exp_candy_l", amount: 1, label: "EXP Candy L" },
+      { key: "hyper_potion", amount: 3, label: "Hyper Potion" },
+      { key: "revive", amount: 2, label: "Revive" },
+    ],
+  };
+  return byVip[k] ?? byVip.player;
 }
 
 export function getRoleWebsitePerks(roleKey: string): RoleWebsitePerks {
+  const k = normalizeRoleKey(roleKey);
   return {
     shopDiscountPercent: getWebsiteShopDiscountPercent(roleKey),
     dailyFlatCobble: getDailyLoginFlatCobbleBonusPerClaim(roleKey),
     dailyTickets: getDailyLoginTicketBonusPerClaim(roleKey),
+    dailyItems: isVipTierKey(k) ? getDailyLoginVipItemGrants(k) : getDailyLoginRankItemGrants(k),
   };
 }
 
@@ -463,11 +670,19 @@ export function getRoleCatalog(): {
 
 export function buildLuckpermsParentSetCommand(minecraftUsername: string, roleKey: string): string {
   const user = minecraftUsername.trim();
-  const role = normalizeRoleKey(roleKey);
+  const role = resolveLuckpermsGroupForDisplay(roleKey);
   const tpl =
     process.env.MC_LUCKPERMS_PARENT_COMMAND_TEMPLATE?.trim() ||
     "lp user {username} parent set {role}";
   return tpl.replace(/\{username\}/g, user).replace(/\{role\}/g, role);
+}
+
+/**
+ * Map website display keys → LuckPerms group names.
+ * Asteryn resource pack includes a `player` glyph (U+E00D); use LP group `player`.
+ */
+export function resolveLuckpermsGroupForDisplay(roleKey: string): string {
+  return normalizeRoleKey(roleKey);
 }
 
 /**
@@ -476,7 +691,10 @@ export function buildLuckpermsParentSetCommand(minecraftUsername: string, roleKe
 export async function runLuckpermsParentSet(
   minecraftUsername: string,
   roleKey: string
-): Promise<{ ok: true; output: string } | { ok: false; error: string }> {
+): Promise<{ ok: true; output: string; lpGroup: string } | { ok: false; error: string }> {
+  const lpGroup = resolveLuckpermsGroupForDisplay(roleKey);
   const cmd = buildLuckpermsParentSetCommand(minecraftUsername, roleKey);
-  return executeMinecraftRconCommand(cmd);
+  const result = await executeMinecraftRconCommand(cmd);
+  if (!result.ok) return result;
+  return { ok: true, output: result.output, lpGroup };
 }

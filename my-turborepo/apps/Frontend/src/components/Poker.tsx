@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { fetchUserCurrencies } from '../authApi'
+import { websitePointsBalance } from '../currencyLabel'
 import { showdownSpriteFallbackUrls } from '../pokemonApi'
 import { usePokemonSpriteSrc } from '../usePokemonSpriteSrc'
 import { usePokerWebSocket } from '../usePokerWebSocket'
@@ -121,8 +122,7 @@ export function Poker() {
     if (!isAuthenticated) return setWalletBalance(null)
     fetchUserCurrencies()
       .then(({ currencies }) => {
-        const row = currencies.find((c) => c.currency_type === 'cobbledollars')
-        setWalletBalance(row?.balance ?? 0)
+        setWalletBalance(websitePointsBalance(currencies))
       })
       .catch(() => setWalletBalance(null))
   }, [isAuthenticated])
@@ -198,7 +198,7 @@ export function Poker() {
             accent="gold"
             eyebrow="Mini-games"
             title="Pokémon Poker"
-            description="Texas Hold'em with Pokémon cards. Virtual Cobble$ only — no real-money gambling."
+            description="Texas Hold'em with Pokémon cards. Virtual Asteryn Point only — no real-money gambling."
           />
           <div className="pixel-panel-soft p-8 text-center">
             <button
@@ -230,7 +230,7 @@ export function Poker() {
         >
           <p className="m-0 font-medium">Pokémon Poker requires a verified account</p>
           <p className="m-0 mt-1 text-xs text-amber-100/90">
-            Verify your account under <strong>Account</strong> to create or join tables and play with Cobble$.
+            Verify your account under <strong>Account</strong> to create or join tables and play with Asteryn Point.
           </p>
         </div>
       </PageShell>
@@ -410,7 +410,7 @@ export function Poker() {
                 )}
               </div>
               <div className="holdem-pot-label">
-                {formatCobble(room.pot)} Cobble$
+                {formatCobble(room.pot)} Asteryn Point
                 {room.turnEndsAt && inHand && (
                   <span className="ml-2 opacity-90">
                     · <TurnCountdown endsAt={room.turnEndsAt} />

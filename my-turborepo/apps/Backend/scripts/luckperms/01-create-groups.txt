@@ -1,42 +1,38 @@
-# LuckPerms groups for every role the website knows (apps/Backend/src/minecraftRoles.ts).
-# 27 groups = member + 8 purchasable + 18 grant-only.
-# `player` and `starlight` ship as icons in the rank pack but are intentionally excluded.
+# LuckPerms groups for website ranks + VIP (apps/Backend/src/minecraftRoles.ts).
 # Re-running is safe: LuckPerms rejects duplicates instead of overwriting.
+# Icons come from Asteryn resource pack (README_rank_pack.txt).
 # Run: npx tsx scripts/rcon-batch.ts scripts/luckperms/01-create-groups.txt
 
-# --- Default ---
+# --- Defaults ---
 lp creategroup member
+lp creategroup player
 
-# --- Purchasable ladder (shop order) ---
+# --- Shop ladder ---
 lp creategroup noob
 lp creategroup elite
 lp creategroup pro
 lp creategroup master
-lp creategroup ultimate
+lp creategroup hero
 lp creategroup onichan
-lp creategroup legend
+lp creategroup ultimate
 lp creategroup overlord
+lp creategroup god
 
-# --- Grant-only: staff / partner ---
+# --- VIP ladder ---
+lp creategroup vip
+lp creategroup mvip
+lp creategroup svip
+lp creategroup uvip
+lp creategroup legend
+lp creategroup titan
+
+# --- Grant / staff / partner ---
 lp creategroup champion
 lp creategroup helper
 lp creategroup mod
 lp creategroup tiktok
 lp creategroup youtuber
 lp creategroup builder
-lp creategroup god
 lp creategroup admin
 lp creategroup owner
-
-# --- Grant-only: donation / VIP tiers ---
 lp creategroup donator
-lp creategroup vip
-lp creategroup svip
-lp creategroup mvip
-lp creategroup uvip
-
-# --- Grant-only: special / event ---
-lp creategroup knight
-lp creategroup hero
-lp creategroup titan
-lp creategroup zeus

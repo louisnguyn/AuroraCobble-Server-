@@ -172,15 +172,15 @@ function initialPageFromLocation(): Page {
   return 'main'
 }
 
+const ADMIN_ONLY_PAGES = new Set<Page>(['poker', 'clan'])
+
 function AppContent() {
   const [page, setPage] = useState<Page>(initialPageFromLocation)
   const [menuOpen, setMenuOpen] = useState(false)
   const [showAuth, setShowAuth] = useState(false)
   const { isAuthenticated, user, logout } = useAuth()
-  const canUsePoker = Boolean(user?.is_admin) || isAccountVerified(user)
-  const navPages = PAGES.filter(
-    ({ id }) => id !== 'poker' || (isAuthenticated && canUsePoker)
-  )
+  const isAdmin = Boolean(user?.is_admin)
+  const navPages = PAGES.filter(({ id }) => !ADMIN_ONLY_PAGES.has(id) || isAdmin)
   const [hashProfileSlug, setHashProfileSlug] = useState<string | null>(() =>
     typeof window !== 'undefined' ? parseProfileSlugFromLocation() : null
   )
@@ -193,6 +193,10 @@ function AppContent() {
   }>(() => ({
     slug: typeof window !== 'undefined' ? (parseTournamentSlugFromLocation() ?? '') : '',
   }))
+
+  useEffect(() => {
+    if (ADMIN_ONLY_PAGES.has(page) && !isAdmin) setPage('main')
+  }, [page, isAdmin])
 
   useEffect(() => {
     const sync = () => {
@@ -225,6 +229,7 @@ function AppContent() {
   }, [])
 
   const goTo = (p: Page) => {
+    if (ADMIN_ONLY_PAGES.has(p) && !isAdmin) p = 'main'
     if (typeof window !== 'undefined') {
       const isTeamPasteHash = isTeamPasteViewHash()
       const profilePathSlug = parseProfileSlugFromPath()
@@ -334,7 +339,7 @@ function AppContent() {
 
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} defaultMode="login" />}
       <main className="flex-1 p-4 sm:p-6 min-w-0">
-        {page === 'main' && <Home onNavigate={goTo} />}
+        {page === 'main' && <Home onNavigate={goTo} showAdminOnlyLinks={isAdmin} />}
         {page === 'usage' && <UsageStats />}
         {page === 'leaderboard' && <Leaderboard />}
         {page === 'wiki' && <Wiki />}
@@ -344,9 +349,9 @@ function AppContent() {
           <TeamPasteViewPage onBack={() => goTo('teambuilder')} />
         )}
         {page === 'gacha' && <Gacha />}
-        {page === 'poker' && <Poker />}
+        {page === 'poker' && isAdmin && <Poker />}
         {page === 'spawn' && <Spawn />}
-        {page === 'clan' && <Clan />}
+        {page === 'clan' && isAdmin && <Clan />}
         {page === 'account' && <Account />}
         {page === 'profile' && <Profile slugFromHashOrNav={hashProfileSlug} />}
         {page === 'tournament' &&

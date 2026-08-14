@@ -94,17 +94,117 @@ export function isGachaClaimEnabled(): boolean {
 }
 
 /**
- * Parse website Cobble$ reward labels for auto-credit.
- * Supported format (strict): `cobbledollars:<amount>`
- * Example: `cobbledollars:5000`
+ * Parse website Asteryn Point reward labels for auto-credit.
+ * Supported: `asterynpoints:<amount>` or legacy `cobbledollars:<amount>`
+ * Example: `asterynpoints:5000`
  */
 export function parseCobbledollarsReward(
   rewardType: string
 ): { amount: number } | null {
   const t = rewardType.trim().toLowerCase();
-  const m = /^cobbledollars\s*:\s*([0-9]{1,13})$/.exec(t);
+  const m = /^(?:asterynpoints|cobbledollars)\s*:\s*([0-9]{1,13})$/.exec(t);
   if (!m) return null;
   const amount = Number.parseInt(m[1] ?? "", 10);
   if (!Number.isInteger(amount) || amount < 1) return null;
   return { amount };
+}
+
+/** `item|{namespace:id}|{min}-{max}|{label}` or materialized `item|{id}|{n}|{label}`. */
+const GACHA_ITEM_NAMESPACES = new Set(["cobblemon", "mega_showdown", "obc"]);
+
+export type GachaItemReward = {
+  itemId: string;
+  min: number;
+  max: number;
+  label: string;
+};
+
+export type GachaCurrencyReward = {
+  currencyType: string;
+  amount: number;
+  label: string;
+};
+
+function parseAmountRange(raw: string): { min: number; max: number } | null {
+  const t = raw.trim();
+  const range = /^([0-9]{1,3})-([0-9]{1,3})$/.exec(t);
+  if (range) {
+    const min = Number.parseInt(range[1] ?? "", 10);
+    const max = Number.parseInt(range[2] ?? "", 10);
+    if (!Number.isInteger(min) || !Number.isInteger(max) || min < 1 || max > 64 || max < min) {
+      return null;
+    }
+    return { min, max };
+  }
+  const n = Number.parseInt(t, 10);
+  if (!Number.isInteger(n) || n < 1 || n > 64) return null;
+  return { min: n, max: n };
+}
+
+export function parseGachaItemReward(rewardType: string): GachaItemReward | null {
+  const parts = rewardType.trim().split("|");
+  if (parts.length < 3 || parts[0] !== "item") return null;
+  const itemId = (parts[1] ?? "").trim().toLowerCase();
+  const ns = itemId.split(":")[0] ?? "";
+  const path = itemId.split(":")[1] ?? "";
+  if (!GACHA_ITEM_NAMESPACES.has(ns) || !/^[a-z0-9_]+$/.test(path)) return null;
+  const range = parseAmountRange(parts[2] ?? "");
+  if (!range) return null;
+  const label = (parts[3] ?? path.replace(/_/g, " ")).trim() || path;
+  return { itemId, min: range.min, max: range.max, label };
+}
+
+export function parseGachaCurrencyReward(rewardType: string): GachaCurrencyReward | null {
+  const parts = rewardType.trim().split("|");
+  if (parts.length < 3 || parts[0] !== "currency") return null;
+  const currencyType = (parts[1] ?? "").trim().toLowerCase();
+  if (!currencyType || currencyType.length > 64) return null;
+  const range = parseAmountRange(parts[2] ?? "");
+  if (!range) return null;
+  const label = (parts[3] ?? currencyType).trim() || currencyType;
+  return { currencyType, amount: range.min, label };
+}
+
+export function rollGachaItemAmount(item: GachaItemReward): number {
+  if (item.min === item.max) return item.min;
+  return item.min + Math.floor(Math.random() * (item.max - item.min + 1));
+}
+
+export function materializeGachaRewardType(template: string): string {
+  const item = parseGachaItemReward(template);
+  if (item) {
+    const n = rollGachaItemAmount(item);
+    return `item|${item.itemId}|${n}|${item.label}`;
+  }
+  return template.trim();
+}
+
+export function formatGachaRewardLabel(rewardType: string): string {
+  const item = parseGachaItemReward(rewardType);
+  if (item) {
+    const n = item.min === item.max ? item.min : `${item.min}–${item.max}`;
+    return `${item.label} ×${n}`;
+  }
+  const cur = parseGachaCurrencyReward(rewardType);
+  if (cur) return `${cur.label} ×${cur.amount}`;
+  const cobble = parseCobbledollarsReward(rewardType);
+  if (cobble) return `Asteryn Point +${cobble.amount.toLocaleString()}`;
+  return rewardType.trim();
+}
+
+export function buildGiveItemCommand(playerName: string, itemId: string, amount: number): string {
+  const template =
+    process.env.INVENTORY_CLAIM_COMMAND_TEMPLATE?.trim() || "give {player} {item_id} {amount}";
+  return template
+    .replace(/\{player\}/g, playerName)
+    .replace(/\{item_id\}/g, itemId)
+    .replace(/\{amount\}/g, String(amount));
+}
+
+export function gachaRewardMatchKey(rewardType: string): string {
+  const item = parseGachaItemReward(rewardType);
+  if (item) return `item|${item.itemId}`;
+  const cur = parseGachaCurrencyReward(rewardType);
+  if (cur) return `currency|${cur.currencyType}`;
+  return rewardType.trim().toLowerCase();
 }

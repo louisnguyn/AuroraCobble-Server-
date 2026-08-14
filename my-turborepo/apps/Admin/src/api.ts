@@ -56,9 +56,13 @@ export async function fetchPcoLeaderboard() {
   return get<import('./types').CobbleDollarsLeaderboardResponse>('/minecraft/pco-leaderboard')
 }
 
-/** Website wallet Cobble$ top 10 — same JSON shape as in-game economy boards. */
+/** Website wallet Asteryn Point top 10 — same JSON shape as in-game economy boards. */
 export async function fetchWebsiteCobbledollarsLeaderboard() {
-  return get<import('./types').CobbleDollarsLeaderboardResponse>('/leaderboard/website-cobbledollars')
+  return get<import('./types').CobbleDollarsLeaderboardResponse>('/leaderboard/website-asterynpoints')
+}
+
+export async function fetchAchievementLeaderboard() {
+  return get<import('./types').AchievementLeaderboardResponse>('/leaderboard/achievements')
 }
 
 export async function fetchBattleTowerLeaderboard(params?: { mode?: string; top?: 10 | 25 | 50 | 100 }) {

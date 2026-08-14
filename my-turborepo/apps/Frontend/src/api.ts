@@ -43,9 +43,13 @@ export async function fetchPcoLeaderboard() {
   return get<import('./types').CobbleDollarsLeaderboardResponse>('/minecraft/pco-leaderboard')
 }
 
-/** Website wallet Cobble$ top 10 (`user_currency` on the API host). Same shape as in-game economy boards. */
+/** Website wallet Asteryn Point top 10 (`user_currency` on the API host). Same shape as in-game economy boards. */
 export async function fetchWebsiteCobbledollarsLeaderboard() {
-  return get<import('./types').CobbleDollarsLeaderboardResponse>('/leaderboard/website-cobbledollars')
+  return get<import('./types').CobbleDollarsLeaderboardResponse>('/leaderboard/website-asterynpoints')
+}
+
+export async function fetchAchievementLeaderboard() {
+  return get<import('./types').AchievementLeaderboardResponse>('/leaderboard/achievements')
 }
 
 export async function fetchBattleTowerLeaderboard(params?: { mode?: string; top?: 10 | 25 | 50 | 100 }) {
@@ -76,11 +80,10 @@ export async function fetchMatchResults(params?: { limit?: number }) {
   )
 }
 
-export async function fetchSpawnPokemon(params?: { q?: string; generation?: string; source?: string; limit?: number }) {
+export async function fetchSpawnPokemon(params?: { q?: string; generation?: string; limit?: number }) {
   const sp = new URLSearchParams()
   if (params?.q) sp.set('q', params.q)
   if (params?.generation) sp.set('generation', params.generation)
-  if (params?.source) sp.set('source', params.source)
   if (params?.limit) sp.set('limit', String(params.limit))
   const q = sp.toString()
   return get<import('./types').SpawnPokemonResponse>(`/spawn/pokemon${q ? `?${q}` : ''}`)

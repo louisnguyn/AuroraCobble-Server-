@@ -1,4 +1,4 @@
-/** Ordered roughly from subtle to standout (mythic = animated on the website). */
+/** Ordered roughly from subtle to standout (legend = animated on the website). */
 export const ACHIEVEMENT_TIERS = [
   "silver",
   "cyan",
@@ -6,17 +6,22 @@ export const ACHIEVEMENT_TIERS = [
   "violet",
   "rose",
   "gold",
-  "crimson",
   "mythic",
+  "legend",
 ] as const;
 
 export type AchievementTier = (typeof ACHIEVEMENT_TIERS)[number];
 
 const TIER_SET = new Set<string>(ACHIEVEMENT_TIERS);
 
-/** Lower = earlier in lists (silver → mythic). Unknown tiers sort last. */
+/** Legacy DB values accepted when reading (run migrate-badge-tiers-mythic-legend.sql). */
+const TIER_ALIASES: Record<string, AchievementTier> = {
+  crimson: "mythic",
+};
+
+/** Lower = earlier in lists (silver → legend). Unknown tiers sort last. */
 export function achievementTierRank(tier: string): number {
-  const t = typeof tier === "string" ? tier.trim().toLowerCase() : "";
+  const t = normalizeAchievementTierKey(tier) ?? "";
   const i = (ACHIEVEMENT_TIERS as readonly string[]).indexOf(t);
   return i === -1 ? 999 : i;
 }
@@ -28,7 +33,13 @@ export type PublicAchievement = {
   tier: AchievementTier;
 };
 
-export function parseAchievementTier(raw: unknown): AchievementTier | null {
+export function normalizeAchievementTierKey(raw: unknown): AchievementTier | null {
   const t = typeof raw === "string" ? raw.trim().toLowerCase() : "";
-  return TIER_SET.has(t) ? (t as AchievementTier) : null;
+  if (!t) return null;
+  if (TIER_SET.has(t)) return t as AchievementTier;
+  return TIER_ALIASES[t] ?? null;
+}
+
+export function parseAchievementTier(raw: unknown): AchievementTier | null {
+  return normalizeAchievementTierKey(raw);
 }

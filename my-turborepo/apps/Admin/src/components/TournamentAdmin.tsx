@@ -529,7 +529,7 @@ export function TournamentAdmin() {
           Tournaments
         </h2>
         <p className="text-sm text-muted m-0">
-          Manage brackets, publish events, and configure Cobble$ predictions from the tabs below.
+          Manage brackets, publish events, and configure Asteryn Point predictions from the tabs below.
         </p>
       </header>
 
@@ -716,7 +716,7 @@ export function TournamentAdmin() {
             />
           </label>
           <label className="block space-y-1">
-            <span className="text-xs text-slate-400">Max stake (Cobble$)</span>
+            <span className="text-xs text-slate-400">Max stake (Asteryn Point)</span>
             <input
               className={fieldClass}
               inputMode="numeric"
@@ -809,7 +809,7 @@ export function TournamentAdmin() {
           <p className="text-xs text-slate-300 m-0">
             <span className="font-medium text-[#f5efe6]">{betHistoryMeta.title}</span> —{' '}
             {betHistoryMeta.totalEntries} bet{betHistoryMeta.totalEntries === 1 ? '' : 's'},{' '}
-            {betHistoryMeta.totalStaked.toLocaleString()} Cobble$ total staked
+            {betHistoryMeta.totalStaked.toLocaleString()} Asteryn Point total staked
           </p>
         ) : null}
 

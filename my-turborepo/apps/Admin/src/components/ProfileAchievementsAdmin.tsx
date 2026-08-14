@@ -20,8 +20,8 @@ const TIERS: ProfileAchievementTier[] = [
   'violet',
   'rose',
   'gold',
-  'crimson',
   'mythic',
+  'legend',
 ]
 
 function achievementTierRank(tier: string): number {
@@ -36,8 +36,8 @@ const TIER_LABELS: Record<ProfileAchievementTier, string> = {
   violet: 'Violet',
   rose: 'Rose',
   gold: 'Gold',
-  crimson: 'Crimson',
   mythic: 'Mythic',
+  legend: 'Legend',
 }
 
 const inp = 'w-full px-2 py-1.5 rounded-lg bg-black/40 border border-white/15 text-sm text-slate-100'
@@ -54,22 +54,22 @@ function adminAcPreviewClass(tier: string): string {
     violet: 'admin-ac-preview admin-ac-violet',
     rose: 'admin-ac-preview admin-ac-rose',
     gold: 'admin-ac-preview admin-ac-gold',
-    crimson: 'admin-ac-preview admin-ac-crimson',
     mythic: 'admin-ac-preview admin-ac-mythic',
+    legend: 'admin-ac-preview admin-ac-legend',
   }
   return map[tier] ?? 'admin-ac-preview admin-ac-cyan'
 }
 
 function BadgeMiniPreview({ title, tier }: { title: string; tier: string }) {
   const tierLabel = (TIER_LABELS as Record<string, string>)[tier] ?? tier
-  const isMythic = tier === 'mythic'
-  const haloOverflow = tier === 'crimson' || tier === 'violet' || tier === 'gold'
+  const isLegend = tier === 'legend'
+  const haloOverflow = tier === 'mythic' || tier === 'violet' || tier === 'gold'
   return (
     <div
-      className={`${adminAcPreviewClass(tier)} max-w-[14rem] ${isMythic ? 'relative border-0 bg-transparent p-0 overflow-visible' : ''} ${haloOverflow ? 'overflow-visible' : ''}`}
+      className={`${adminAcPreviewClass(tier)} max-w-[14rem] ${isLegend ? 'relative border-0 bg-transparent p-0 overflow-visible' : ''} ${haloOverflow ? 'overflow-visible' : ''}`}
     >
-      {isMythic ? <span className="admin-ac-mythic-ring" aria-hidden /> : null}
-      <div className={isMythic ? 'relative z-[1] rounded-[10px] bg-[linear-gradient(155deg,rgba(40,12,6,0.98),rgba(14,6,10,0.99))] px-[0.65rem] py-[0.55rem]' : ''}>
+      {isLegend ? <span className="admin-ac-legend-ring" aria-hidden /> : null}
+      <div className={isLegend ? 'relative z-[1] rounded-[10px] bg-[linear-gradient(155deg,rgba(40,12,6,0.98),rgba(14,6,10,0.99))] px-[0.65rem] py-[0.55rem]' : ''}>
         <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 m-0 mb-0.5">{tierLabel}</p>
         <p className="text-sm font-semibold text-[#f5efe6] m-0 leading-snug line-clamp-2">{title}</p>
       </div>
@@ -330,7 +330,7 @@ export function ProfileAchievementsAdmin() {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <h2 className="text-lg font-semibold m-0 text-[#f5efe6]">Badge types</h2>
           <p className="text-xs text-slate-500 m-0 max-w-md">
-            Preview matches the public profile. Lists order by tier (silver → mythic), then sort order within the same tier.
+            Preview matches the public profile. Lists order by tier (silver → legend), then sort order within the same tier.
           </p>
         </div>
 

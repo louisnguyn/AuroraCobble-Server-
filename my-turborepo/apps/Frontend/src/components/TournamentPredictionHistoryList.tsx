@@ -7,7 +7,7 @@ function formatBetResult(
   switch (result) {
     case 'won':
       return {
-        label: payout != null && payout > 0 ? `Won — +${payout.toLocaleString()} Cobble$` : 'Won',
+        label: payout != null && payout > 0 ? `Won — +${payout.toLocaleString()} Asteryn Point` : 'Won',
         className: 'text-emerald-300',
       }
     case 'lost':
@@ -54,7 +54,7 @@ export function TournamentPredictionHistoryList({
                 <span className="text-muted text-xs">Champion · </span>
                 {row.pickChampionLabel ?? '—'} ·{' '}
                 <span className="text-[#fbbf24] tabular-nums">{row.stakeChampion.toLocaleString()}</span>{' '}
-                Cobble$ — <span className={champ.className}>{champ.label}</span>
+                Asteryn Point — <span className={champ.className}>{champ.label}</span>
               </p>
             )}
             {row.stakeRunnerUp > 0 && (
@@ -62,11 +62,11 @@ export function TournamentPredictionHistoryList({
                 <span className="text-muted text-xs">Runner-up · </span>
                 {row.pickRunnerUpLabel ?? '—'} ·{' '}
                 <span className="text-[#fbbf24] tabular-nums">{row.stakeRunnerUp.toLocaleString()}</span>{' '}
-                Cobble$ — <span className={ru.className}>{ru.label}</span>
+                Asteryn Point — <span className={ru.className}>{ru.label}</span>
               </p>
             )}
             <p className="m-0 text-xs text-muted tabular-nums">
-              Total staked {row.totalStake.toLocaleString()} Cobble$
+              Total staked {row.totalStake.toLocaleString()} Asteryn Point
             </p>
           </li>
         )

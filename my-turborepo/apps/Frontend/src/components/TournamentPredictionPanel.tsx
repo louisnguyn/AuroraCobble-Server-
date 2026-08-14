@@ -102,7 +102,7 @@ function PredictionRulesOverview({
           <p className="text-lg sm:text-xl font-bold tabular-nums text-[#fbbf24] m-0 leading-tight">
             {fmt(minStake)}
           </p>
-          <p className="text-[11px] text-muted mt-2 m-0">Cobble$ per line</p>
+          <p className="text-[11px] text-muted mt-2 m-0">Asteryn Point per line</p>
         </div>
 
         <div className="rounded-xl border border-rose-500/30 bg-gradient-to-b from-rose-950/30 to-[#0f0a1a]/60 px-3 py-4 text-center">
@@ -112,7 +112,7 @@ function PredictionRulesOverview({
           <p className="text-lg sm:text-xl font-bold tabular-nums text-[#fbbf24] m-0 leading-tight">
             {fmt(maxStake)}
           </p>
-          <p className="text-[11px] text-muted mt-2 m-0">Cobble$ per line</p>
+          <p className="text-[11px] text-muted mt-2 m-0">Asteryn Point per line</p>
         </div>
       </div>
 
@@ -153,7 +153,7 @@ function StakePayoutHint({
   if (stake < minStake || stake > maxStake) {
     return (
       <p className="text-[11px] text-rose-300/90 m-0 mt-1.5">
-        Stake must be {minStake.toLocaleString()}–{maxStake.toLocaleString()} Cobble$
+        Stake must be {minStake.toLocaleString()}–{maxStake.toLocaleString()} Asteryn Point
       </p>
     )
   }
@@ -164,7 +164,7 @@ function StakePayoutHint({
         <span className="font-bold tabular-nums text-emerald-200 text-sm">
           +{(stake * multiplier).toLocaleString()}
         </span>{' '}
-        <span className="text-muted">CD</span>
+        <span className="text-muted">AsterynPoints</span>
       </p>
     </div>
   )
@@ -235,7 +235,7 @@ function PredictionWalletBar({
         <p className="text-[10px] uppercase tracking-wider text-muted font-semibold m-0 mb-0.5">Your wallet</p>
         <p className="text-xl sm:text-2xl font-bold tabular-nums text-[#fbbf24] m-0 leading-none">
           {balance.toLocaleString()}
-          <span className="text-sm font-medium text-muted ml-1.5">Cobble$</span>
+          <span className="text-sm font-medium text-muted ml-1.5">Asteryn Point</span>
         </p>
       </div>
       <span className={`rounded-lg border px-3 py-1.5 text-xs font-semibold uppercase tracking-wide ${statusClass}`}>
@@ -279,7 +279,7 @@ function LockedBetLine({
       </div>
       <p className="text-base font-medium text-[#f5efe6] m-0 leading-snug">{pickLabel}</p>
       <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-white/5">
-        <span className="text-sm tabular-nums text-[#fbbf24] font-medium">{stake.toLocaleString()} CD staked</span>
+        <span className="text-sm tabular-nums text-[#fbbf24] font-medium">{stake.toLocaleString()} AsterynPoints staked</span>
         <span className={`text-sm font-semibold ${className}`}>{label}</span>
       </div>
     </div>
@@ -303,7 +303,7 @@ function formatBetResult(
   switch (result) {
     case 'won':
       return {
-        label: payout != null && payout > 0 ? `Won — +${payout.toLocaleString()} Cobble$` : 'Won',
+        label: payout != null && payout > 0 ? `Won — +${payout.toLocaleString()} Asteryn Point` : 'Won',
         className: 'text-emerald-300',
       }
     case 'lost':
@@ -441,7 +441,7 @@ export function TournamentPredictionPanel({
       {!embedded ? (
         <div className="space-y-1">
           <h2 className="text-xl font-semibold text-[#f5efe6] m-0">Tournament predictions</h2>
-          <p className="text-sm text-muted m-0">Stake Cobble$ on champion and runner-up before the bracket locks.</p>
+          <p className="text-sm text-muted m-0">Stake Asteryn Point on champion and runner-up before the bracket locks.</p>
         </div>
       ) : null}
       {showEventBanner && predictionTournamentTitle ? (
@@ -497,7 +497,7 @@ export function TournamentPredictionPanel({
               ) : null}
               {status?.resultsReady ? (
                 <p className="text-sm text-emerald-200/95 m-0 rounded-lg border border-emerald-500/30 bg-emerald-950/25 px-3 py-2">
-                  Tournament finished — winnings are in your site Cobble$ balance.
+                  Tournament finished — winnings are in your site Asteryn Point balance.
                 </p>
               ) : null}
 
@@ -600,7 +600,7 @@ export function TournamentPredictionPanel({
               }
               const total = sc + sr
               if (cobbleBalance < total) {
-                setError(`Need ${total.toLocaleString()} Cobble$ (wallet too low).`)
+                setError(`Need ${total.toLocaleString()} Asteryn Point (wallet too low).`)
                 return
               }
               setBusy(true)
@@ -726,7 +726,7 @@ export function TournamentPredictionPanel({
               <div className="rounded-xl border border-violet-500/30 bg-violet-950/25 px-4 py-3 flex flex-wrap items-center justify-between gap-2">
                 <span className="text-sm text-muted">Total to lock</span>
                 <span className="text-lg font-bold tabular-nums text-[#fbbf24]">
-                  {totalStakePreview.toLocaleString()} Cobble$
+                  {totalStakePreview.toLocaleString()} Asteryn Point
                 </span>
               </div>
             ) : null}

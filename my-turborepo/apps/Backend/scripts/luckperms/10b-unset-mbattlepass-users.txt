@@ -1,0 +1,37 @@
+# Unset from currently online players (direct user nodes).
+# Also kick off LP bulkupdate for ALL users (needs console confirm code if prompted).
+
+lp user _QAnn_ permission unset mbattlepass.party.create
+lp user _QAnn_ permission unset mbattlepass.player.premium
+lp user MiraidonIsDaBest permission unset mbattlepass.party.create
+lp user MiraidonIsDaBest permission unset mbattlepass.player.premium
+lp user MikuuuuHS permission unset mbattlepass.party.create
+lp user MikuuuuHS permission unset mbattlepass.player.premium
+lp user Kavoox permission unset mbattlepass.party.create
+lp user Kavoox permission unset mbattlepass.player.premium
+lp user Lucids2102 permission unset mbattlepass.party.create
+lp user Lucids2102 permission unset mbattlepass.player.premium
+lp user DoubleD206 permission unset mbattlepass.party.create
+lp user DoubleD206 permission unset mbattlepass.player.premium
+lp user HBenthMC permission unset mbattlepass.party.create
+lp user HBenthMC permission unset mbattlepass.player.premium
+lp user Hoangsleep permission unset mbattlepass.party.create
+lp user Hoangsleep permission unset mbattlepass.player.premium
+lp user M1dnight00 permission unset mbattlepass.party.create
+lp user M1dnight00 permission unset mbattlepass.player.premium
+lp user VanhHomie permission unset mbattlepass.party.create
+lp user VanhHomie permission unset mbattlepass.player.premium
+lp user HDannn permission unset mbattlepass.party.create
+lp user HDannn permission unset mbattlepass.player.premium
+lp user ThaiZuis2k14 permission unset mbattlepass.party.create
+lp user ThaiZuis2k14 permission unset mbattlepass.player.premium
+lp user Bach_zero permission unset mbattlepass.party.create
+lp user Bach_zero permission unset mbattlepass.player.premium
+lp user beLouisss permission unset mbattlepass.party.create
+lp user beLouisss permission unset mbattlepass.player.premium
+lp user Supberxz9 permission unset mbattlepass.party.create
+lp user Supberxz9 permission unset mbattlepass.player.premium
+
+# Wipe from every user record in LP storage (covers offline).
+lp bulkupdate users delete "permission == mbattlepass.party.create"
+lp bulkupdate users delete "permission == mbattlepass.player.premium"

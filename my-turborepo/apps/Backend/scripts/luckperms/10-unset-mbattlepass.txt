@@ -1,0 +1,62 @@
+# Remove battlepass premium/party.create from all LP groups + online players.
+# Run: npx tsx scripts/rcon-batch.ts scripts/luckperms/10-unset-mbattlepass.txt
+
+# --- Groups (default + all website ranks) ---
+lp group default permission unset mbattlepass.party.create
+lp group default permission unset mbattlepass.player.premium
+
+lp group member permission unset mbattlepass.party.create
+lp group member permission unset mbattlepass.player.premium
+lp group player permission unset mbattlepass.party.create
+lp group player permission unset mbattlepass.player.premium
+
+lp group noob permission unset mbattlepass.party.create
+lp group noob permission unset mbattlepass.player.premium
+lp group elite permission unset mbattlepass.party.create
+lp group elite permission unset mbattlepass.player.premium
+lp group pro permission unset mbattlepass.party.create
+lp group pro permission unset mbattlepass.player.premium
+lp group master permission unset mbattlepass.party.create
+lp group master permission unset mbattlepass.player.premium
+lp group hero permission unset mbattlepass.party.create
+lp group hero permission unset mbattlepass.player.premium
+lp group onichan permission unset mbattlepass.party.create
+lp group onichan permission unset mbattlepass.player.premium
+lp group ultimate permission unset mbattlepass.party.create
+lp group ultimate permission unset mbattlepass.player.premium
+lp group overlord permission unset mbattlepass.party.create
+lp group overlord permission unset mbattlepass.player.premium
+lp group god permission unset mbattlepass.party.create
+lp group god permission unset mbattlepass.player.premium
+
+lp group vip permission unset mbattlepass.party.create
+lp group vip permission unset mbattlepass.player.premium
+lp group mvip permission unset mbattlepass.party.create
+lp group mvip permission unset mbattlepass.player.premium
+lp group svip permission unset mbattlepass.party.create
+lp group svip permission unset mbattlepass.player.premium
+lp group uvip permission unset mbattlepass.party.create
+lp group uvip permission unset mbattlepass.player.premium
+lp group legend permission unset mbattlepass.party.create
+lp group legend permission unset mbattlepass.player.premium
+lp group titan permission unset mbattlepass.party.create
+lp group titan permission unset mbattlepass.player.premium
+
+lp group champion permission unset mbattlepass.party.create
+lp group champion permission unset mbattlepass.player.premium
+lp group helper permission unset mbattlepass.party.create
+lp group helper permission unset mbattlepass.player.premium
+lp group mod permission unset mbattlepass.party.create
+lp group mod permission unset mbattlepass.player.premium
+lp group tiktok permission unset mbattlepass.party.create
+lp group tiktok permission unset mbattlepass.player.premium
+lp group youtuber permission unset mbattlepass.party.create
+lp group youtuber permission unset mbattlepass.player.premium
+lp group builder permission unset mbattlepass.party.create
+lp group builder permission unset mbattlepass.player.premium
+lp group admin permission unset mbattlepass.party.create
+lp group admin permission unset mbattlepass.player.premium
+lp group owner permission unset mbattlepass.party.create
+lp group owner permission unset mbattlepass.player.premium
+lp group donator permission unset mbattlepass.party.create
+lp group donator permission unset mbattlepass.player.premium

@@ -2,6 +2,7 @@ import { RCON } from "minecraft-server-util";
 import { explainRconConnectionError, getTcpPortDiagnostics } from "./minecraftRconHelpers.js";
 import {
   parseCobbledollarsLeaderboardOutput,
+  rconTextPreview,
   type CobbledollarsRconResult,
 } from "./minecraftRconCobbledollars.js";
 
@@ -46,24 +47,36 @@ export async function fetchPcoTopViaRcon(): Promise<CobbledollarsRconResult> {
     let out = await rcon.execute(primary);
     let balances = parseCobbledollarsLeaderboardOutput(out);
 
-    if (
-      balances.size === 0 &&
-      (/unknown|incomplete command|no such command|wrong number of arguments/i.test(out) ||
-        out.trim().length === 0)
-    ) {
-      for (const alt of ["/pco top", "pco top 10"] as const) {
-        const altOut = await rcon.execute(alt);
+    if (balances.size === 0) {
+      const alts = ["/pco top", "pco top 10", "pco leaderboard", "/pco leaderboard"] as const;
+      for (const cmd of alts) {
+        if (cmd === primary) continue;
+        const altOut = await rcon.execute(cmd);
         const b = parseCobbledollarsLeaderboardOutput(altOut);
         if (b.size > 0) {
           balances = b;
           out = altOut;
           break;
         }
+        if (rconTextPreview(altOut).length > rconTextPreview(out).length) out = altOut;
       }
     }
 
     rcon.close();
-    return { balances };
+    if (balances.size > 0) return { balances };
+
+    const preview = rconTextPreview(out);
+    if (!preview || /command (ran|executed) successfully|done\.?$/i.test(preview)) {
+      return {
+        balances,
+        error:
+          "RCON connected but PCO top returned no player rows. Confirm `/pco top` works in-game, or set MC_PCO_TOP_COMMAND to the exact server command.",
+      };
+    }
+    return {
+      balances,
+      error: `Could not parse PCO leaderboard from RCON: ${preview}`,
+    };
   } catch (err) {
     const raw = err instanceof Error ? err.message : String(err);
     console.warn("[MC RCON] pco top:", raw);

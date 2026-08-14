@@ -174,7 +174,7 @@ export interface GachaPool {
 }
 
 export interface GachaRewardResult {
-  reward: { id: number; reward_type: string }
+  reward: { id: number; reward_type: string; label?: string }
   newBalance: number
   cobbledollarsReward?: {
     amount: number
@@ -205,10 +205,11 @@ export interface GachaHistoryEntry {
   poolId: number
   poolName: string
   rewardType: string
+  rewardLabel?: string
   pulledAt: string
   /** Set when claimed in-game or marked fulfilled by admin */
   fulfilledAt?: string | null
-  /** Server says this row can use Claim (RCON + parsable species + not fulfilled) */
+  /** Server says this row can use Claim (RCON give item/pokemon + not fulfilled) */
   claimable?: boolean
 }
 
@@ -397,21 +398,21 @@ export async function submitTournamentPrediction(body: {
   )
 }
 
-/** Move website Cobble$ (user_currency cobbledollars) into the Minecraft server via RCON. */
+/** Move website Asteryn Point (user_currency asterynpoints) into the Minecraft server via RCON. */
 export async function depositCobbledollars(amount: number): Promise<{ newBalance: number }> {
-  return fetchApi<{ newBalance: number }>('/user/cobbledollars/deposit', {
+  return fetchApi<{ newBalance: number }>('/user/asterynpoints/deposit', {
     method: 'POST',
     body: JSON.stringify({ amount }),
   })
 }
 
-/** Transfer website Cobble$ to another website account username. */
+/** Transfer website Asteryn Point to another website account username. */
 export async function transferCobbledollars(
   toUsername: string,
   amount: number
 ): Promise<{ ok: boolean; toUsername: string; amount: number; newBalance: number }> {
   return fetchApi<{ ok: boolean; toUsername: string; amount: number; newBalance: number }>(
-    '/user/cobbledollars/transfer',
+    '/user/asterynpoints/transfer',
     {
       method: 'POST',
       body: JSON.stringify({ toUsername, amount }),
@@ -428,14 +429,14 @@ export interface CobbledollarLedgerRow {
   created_at: string
 }
 
-/** Last website Cobble$ movements (deposit, shop, rewards, etc.). */
+/** Last website Asteryn Point movements (deposit, shop, rewards, etc.). */
 export async function fetchCobbledollarsLedger(
   limit = 10
 ): Promise<{ transactions: CobbledollarLedgerRow[] }> {
   const n = typeof limit === 'number' && Number.isFinite(limit) ? Math.floor(limit) : 10
   const clamped = Math.min(Math.max(n, 1), 50)
   return fetchApi<{ transactions: CobbledollarLedgerRow[] }>(
-    `/user/cobbledollars/ledger?limit=${clamped}`
+    `/user/asterynpoints/ledger?limit=${clamped}`
   )
 }
 
@@ -464,14 +465,14 @@ export interface DailyLoginStatus {
   date: string
   timeZone: string
   eligible: boolean
-  /** Extra Cobble$ / tickets from `users.minecraft_role` (LuckPerms mirror). */
+  /** VIP Point (1–3) + rank tickets (1–5) + rank/VIP items for daily claim. */
   dailyRankBonus?: {
     minecraftRole: string
-    /** Flat Cobble$ added every claim (on top of streak Cobble on days 1–6). */
+    vipTier?: string
     flatCobbleBonusPerClaim: number
     ticketBonusPerClaim: number
-    /** Total Cobble$ from this claim (streak + rank flat), or rank-only if next reward is item. */
     nextClaimCobbleTotal: number | null
+    items?: { key: string; amount: number; label: string }[]
   }
   streak: {
     nextDay: number
@@ -620,6 +621,7 @@ export type RoleWebsitePerks = {
   shopDiscountPercent: number
   dailyFlatCobble: number
   dailyTickets: number
+  dailyItems?: { key: string; amount: number; label: string }[]
 }
 
 export type RoleCatalogEntry = {
@@ -631,50 +633,69 @@ export type RoleCatalogEntry = {
   listCost?: number | null
   purchasable: boolean
   perks: RoleWebsitePerks
-  /** User already has this shop rank or higher. */
+  /** User already owns this rank (bought / claimed / granted). */
   owned?: boolean
   /** This is the only rank the user can buy next. */
   canBuyNow?: boolean
   /** Cannot buy yet — must upgrade previous tiers first. */
   locked?: boolean
-  /** Human-readable profile badge requirement, if any. */
+  /** Human-readable profile badge requirement, if any (VIP). */
   badgeRequirementLabel?: string | null
-  /** User meets badge requirements for this rank. */
+  /** User meets badge requirements (VIP). */
   meetsBadgeRequirement?: boolean
-  /** No Cobble$ cost — badge-gated claim only. */
+  /** No Asteryn Point cost — free claim on the shop ladder. */
   freeRank?: boolean
+  /** Currently active in-game display rank. */
+  active?: boolean
+  /** User can switch this owned rank as the in-game display. */
+  canActivate?: boolean
+}
+
+export type VipCatalogEntry = {
+  key: string
+  label: string
+  owned: boolean
+  canClaimNow: boolean
+  locked: boolean
+  badgeRequirementLabel: string | null
+  meetsBadgeRequirement: boolean
+  canActivate: boolean
+  active: boolean
+  perks?: RoleWebsitePerks
+}
+
+export type OwnedRoleInventoryEntry = {
+  key: string
+  kind: 'shop' | 'vip' | 'grant' | 'other'
+  active: boolean
 }
 
 export async function fetchRoleCatalog(): Promise<{
   currency: string
   shopEventDiscountPercent: number
   currentRole: string
+  activeDisplayRole: string
+  highestShopRank: string
+  shopProgressRoleKey: string
+  highestVip: string
   nextPurchasableRoleKey: string | null
-  crimsonBadgeCount: number
-  goldBadgeCount: number
+  ownedRoles: string[]
+  ownedInventory: OwnedRoleInventoryEntry[]
+  websiteVipTier: string
+  nextVipClaimKey: string | null
   mythicBadgeCount: number
-  profileBadgeCounts: { crimson: number; gold: number; mythic: number }
+  goldBadgeCount: number
+  legendBadgeCount: number
+  profileBadgeCounts: { mythic: number; gold: number; legend: number }
   purchasableTierOrder: string[]
+  vipTierOrder: string[]
   defaultRole: string
   memberPerks: RoleWebsitePerks
   purchasable: RoleCatalogEntry[]
   grantOnly: RoleCatalogEntry[]
+  vip: VipCatalogEntry[]
 }> {
-  return fetchApi<{
-    currency: string
-    shopEventDiscountPercent: number
-    currentRole: string
-    nextPurchasableRoleKey: string | null
-    crimsonBadgeCount: number
-    goldBadgeCount: number
-    mythicBadgeCount: number
-    profileBadgeCounts: { crimson: number; gold: number; mythic: number }
-    purchasableTierOrder: string[]
-    defaultRole: string
-    memberPerks: RoleWebsitePerks
-    purchasable: RoleCatalogEntry[]
-    grantOnly: RoleCatalogEntry[]
-  }>('/roles/catalog')
+  return fetchApi('/roles/catalog')
 }
 
 export async function buyRank(roleKey: string): Promise<{
@@ -686,6 +707,31 @@ export async function buyRank(roleKey: string): Promise<{
   return fetchApi<{ ok: boolean; roleKey: string; cost: number; newBalance: number }>('/roles/buy', {
     method: 'POST',
     body: JSON.stringify({ roleKey }),
+    headers: clientLocaleViHeaders(),
+  })
+}
+
+export async function activateOwnedRank(roleKey: string): Promise<{
+  ok: boolean
+  roleKey: string
+  alreadyActive?: boolean
+  lpGroup?: string
+}> {
+  return fetchApi('/roles/activate', {
+    method: 'POST',
+    body: JSON.stringify({ roleKey }),
+    headers: clientLocaleViHeaders(),
+  })
+}
+
+export async function claimVipTier(tierKey: string): Promise<{
+  ok: boolean
+  tierKey: string
+  websiteVipTier: string
+}> {
+  return fetchApi('/roles/vip/claim', {
+    method: 'POST',
+    body: JSON.stringify({ tierKey }),
     headers: clientLocaleViHeaders(),
   })
 }
@@ -896,8 +942,8 @@ export type PublicProfileAchievement = {
     | 'violet'
     | 'rose'
     | 'gold'
-    | 'crimson'
     | 'mythic'
+    | 'legend'
 }
 
 export type PublicProfileClan = {

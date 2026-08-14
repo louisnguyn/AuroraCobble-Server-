@@ -82,7 +82,8 @@ export function RoleRequestsAdmin() {
     <div className="space-y-6">
       <h1 className="text-xl font-bold text-[#f5efe6] m-0">Rank grant requests</h1>
       <p className="text-sm text-muted m-0 -mt-2">
-        Approving applies the requested in-game rank and updates it on the website. Reject with an optional note.
+        Approving adds the requested rank to the player&apos;s inventory. They choose what to display in-game
+        themselves. Reject with an optional note.
       </p>
       {error && (
         <div className="p-3 rounded-lg bg-error/15 border border-error/30 text-error text-sm">{error}</div>

@@ -1,0 +1,41 @@
+# Make every rank group inherit LuckPerms `default`.
+# After this, permissions set on `default` apply to all ranks.
+#
+# Needed because the website uses `lp user <name> parent set <role>`,
+# which replaces parents — ranked players no longer sit in `default` directly.
+#
+# Run: npx tsx scripts/rcon-batch.ts scripts/luckperms/07-parent-add-default.txt
+
+# --- Default role ---
+lp group member parent add default
+lp group player parent add default
+
+# --- Purchasable ladder ---
+lp group noob parent add default
+lp group elite parent add default
+lp group pro parent add default
+lp group master parent add default
+lp group hero parent add default
+lp group ultimate parent add default
+lp group onichan parent add default
+lp group overlord parent add default
+lp group god parent add default
+
+# --- VIP ladder ---
+lp group vip parent add default
+lp group mvip parent add default
+lp group svip parent add default
+lp group uvip parent add default
+lp group legend parent add default
+lp group titan parent add default
+
+# --- Grant-only: staff / partner ---
+lp group champion parent add default
+lp group helper parent add default
+lp group mod parent add default
+lp group tiktok parent add default
+lp group youtuber parent add default
+lp group builder parent add default
+lp group admin parent add default
+lp group owner parent add default
+lp group donator parent add default

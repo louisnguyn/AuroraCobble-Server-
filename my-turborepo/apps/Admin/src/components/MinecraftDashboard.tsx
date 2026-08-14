@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   fetchMinecraftDashboard,
-  refreshAdminPokemonShop,
   runAdminBossSpawnNow,
   type MinecraftDashboardResponse,
 } from '../authApi'
@@ -108,7 +107,6 @@ export function MinecraftDashboard({ viewerUsername }: { viewerUsername?: string
   const [search, setSearch] = useState('')
   const [bossRunBusy, setBossRunBusy] = useState(false)
   const [bossRunMessage, setBossRunMessage] = useState<string | null>(null)
-  const [pokemonShopRefreshBusy, setPokemonShopRefreshBusy] = useState(false)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -163,22 +161,6 @@ export function MinecraftDashboard({ viewerUsername }: { viewerUsername?: string
     }
   }, [bossRunBusy])
 
-  const handleRefreshPokemonShop = useCallback(async () => {
-    if (pokemonShopRefreshBusy) return
-    setPokemonShopRefreshBusy(true)
-    setBossRunMessage(null)
-    try {
-      const res = await refreshAdminPokemonShop()
-      setBossRunMessage(
-        `Pokémon shop refreshed · ${res.offers.length} offers · next auto window ends ${new Date(res.windowEnd).toLocaleString()}`
-      )
-    } catch (e) {
-      setBossRunMessage(e instanceof Error ? e.message : 'Pokémon shop refresh failed')
-    } finally {
-      setPokemonShopRefreshBusy(false)
-    }
-  }, [pokemonShopRefreshBusy])
-
   return (
     <div className="space-y-8 pb-12">
       {/* Header */}
@@ -197,15 +179,6 @@ export function MinecraftDashboard({ viewerUsername }: { viewerUsername?: string
             title="Send raid warning now and spawn bosses after 1 minute"
           >
             {bossRunBusy ? 'Running…' : 'Run boss now'}
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleRefreshPokemonShop()}
-            disabled={pokemonShopRefreshBusy}
-            className="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-violet-700 to-fuchsia-700 hover:from-violet-600 hover:to-fuchsia-600 border border-violet-300/20 shadow-lg shadow-violet-900/40 disabled:opacity-50 transition-all"
-            title="Roll 6 new Pokémon shop offers for all players"
-          >
-            {pokemonShopRefreshBusy ? 'Refreshing…' : 'Refresh Pokémon shop'}
           </button>
           <button
             type="button"

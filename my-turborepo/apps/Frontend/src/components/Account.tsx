@@ -1,16 +1,13 @@
 import { displayInventoryItemName } from '../inventoryLabels'
+import { websitePointsBalance } from '../currencyLabel'
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import {
-  buyPokemonShopOffer,
   buyShopItem,
   changePassword,
   claimDailyLoginReward,
   claimInventoryItem,
-  claimPokemonShopPurchase,
   fetchDailyLoginStatus,
-  fetchPokemonShopOffers,
-  fetchPokemonShopPurchases,
   fetchShopItems,
   fetchUserPvpRank,
   fetchUserCurrencies,
@@ -19,14 +16,15 @@ import {
   submitVerificationRequest,
   fetchRoleCatalog,
   buyRank,
+  activateOwnedRank,
+  claimVipTier,
   fetchRoleRequestStatus,
   submitRoleGrantRequest,
   type VerificationStatusResponse,
   type RoleCatalogEntry,
+  type VipCatalogEntry,
   type RoleWebsitePerks,
   type DailyLoginStatus,
-  type PokemonShopOffer,
-  type PokemonShopPurchase,
   type UserPvpRank,
   type BattlePassShopItem,
   type ShopItem,
@@ -88,20 +86,11 @@ function DailyRewardStatCard({
   )
 }
 
-function formatPokemonShopCategory(category: string): string {
-  const labels: Record<string, string> = {
-    legend_high: 'Legend (high tier)',
-    legend_low: 'Legend (low tier)',
-    pseudo_legend: 'Pseudo-legend',
-    ultra_beast: 'Ultra Beast',
-  }
-  return labels[category] ?? category.replace(/_/g, ' ')
-}
-
 function perksForMinecraftRole(
   cat: {
     purchasable: RoleCatalogEntry[]
     grantOnly: RoleCatalogEntry[]
+    vip?: VipCatalogEntry[]
     memberPerks: RoleWebsitePerks
   },
   minecraftRole: string
@@ -112,6 +101,54 @@ function perksForMinecraftRole(
     cat.grantOnly.find((e) => e.key === k)?.perks ??
     cat.memberPerks
   )
+}
+
+type RoleCatState = {
+  defaultRole: string
+  memberPerks: RoleWebsitePerks
+  purchasable: RoleCatalogEntry[]
+  grantOnly: RoleCatalogEntry[]
+  vip: VipCatalogEntry[]
+  currentRole?: string
+  activeDisplayRole?: string
+  highestShopRank?: string
+  shopProgressRoleKey?: string
+  highestVip?: string
+  nextPurchasableRoleKey?: string | null
+  websiteVipTier?: string
+  nextVipClaimKey?: string | null
+  ownedRoles?: string[]
+  ownedInventory?: { key: string; kind: string; active: boolean }[]
+  mythicBadgeCount?: number
+  goldBadgeCount?: number
+  legendBadgeCount?: number
+  profileBadgeCounts?: { mythic: number; gold: number; legend: number }
+  purchasableTierOrder?: string[]
+}
+
+function roleCatFromApi(roles: Awaited<ReturnType<typeof fetchRoleCatalog>>): RoleCatState {
+  return {
+    defaultRole: roles.defaultRole,
+    memberPerks: roles.memberPerks,
+    purchasable: roles.purchasable,
+    grantOnly: roles.grantOnly,
+    vip: roles.vip ?? [],
+    currentRole: roles.currentRole,
+    activeDisplayRole: roles.activeDisplayRole ?? roles.currentRole,
+    highestShopRank: roles.highestShopRank ?? roles.shopProgressRoleKey,
+    shopProgressRoleKey: roles.shopProgressRoleKey,
+    highestVip: roles.highestVip ?? roles.websiteVipTier,
+    nextPurchasableRoleKey: roles.nextPurchasableRoleKey,
+    websiteVipTier: roles.websiteVipTier,
+    nextVipClaimKey: roles.nextVipClaimKey,
+    ownedRoles: roles.ownedRoles,
+    ownedInventory: roles.ownedInventory ?? [],
+    mythicBadgeCount: roles.mythicBadgeCount,
+    goldBadgeCount: roles.goldBadgeCount,
+    legendBadgeCount: roles.legendBadgeCount,
+    profileBadgeCounts: roles.profileBadgeCounts,
+    purchasableTierOrder: roles.purchasableTierOrder,
+  }
 }
 
 function RolePerksSummary({ perks }: { perks: RoleWebsitePerks }) {
@@ -140,16 +177,24 @@ function RolePerksSummary({ perks }: { perks: RoleWebsitePerks }) {
           <span className="text-amber-200/95 font-medium tabular-nums">
             +{perks.dailyFlatCobble.toLocaleString()}
           </span>
-          <span className="text-slate-500 block text-[10px] sm:text-[11px] mt-0.5">Extra Cobble$</span>
+          <span className="text-slate-500 block text-[10px] sm:text-[11px] mt-0.5">VIP AsterynPoints / day</span>
         </p>
       </div>
       <div className={cellClass}>
         <p className={labelClass}>Tickets</p>
         <p className="m-0">
           <span className="text-sky-200/95 font-medium tabular-nums">+{perks.dailyTickets}</span>
-          <span className="text-slate-500 block text-[10px] sm:text-[11px] mt-0.5">Per daily claim</span>
+          <span className="text-slate-500 block text-[10px] sm:text-[11px] mt-0.5">Rank tickets / day</span>
         </p>
       </div>
+      {(perks.dailyItems?.length ?? 0) > 0 ? (
+        <div className={`${cellClass} sm:col-span-3`}>
+          <p className={labelClass}>Daily items</p>
+          <p className="m-0 text-slate-200">
+            {perks.dailyItems!.map((it) => `${it.label} ×${it.amount}`).join(' · ')}
+          </p>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -187,33 +232,13 @@ export function Account() {
   const [claimError, setClaimError] = useState<string | null>(null)
   const [claimedToServerAt, setClaimedToServerAt] = useState<Record<string, string>>({})
   const [activeTab, setActiveTab] = useState<AccountTab>('daily')
-  const [pokemonOffers, setPokemonOffers] = useState<PokemonShopOffer[]>([])
-  const [pokemonWindowEnd, setPokemonWindowEnd] = useState<string | null>(null)
-  const [pokemonCountdown, setPokemonCountdown] = useState('-')
-  const [pokemonPurchases, setPokemonPurchases] = useState<PokemonShopPurchase[]>([])
-  const [pokemonBusy, setPokemonBusy] = useState<string | null>(null)
-  const [pokemonError, setPokemonError] = useState<string | null>(null)
-  const [pokemonSuccess, setPokemonSuccess] = useState<string | null>(null)
-  const [pokemonClaimedToServerAt, setPokemonClaimedToServerAt] = useState<Record<number, string>>({})
   const [userPvpRank, setUserPvpRank] = useState<UserPvpRank | null>(null)
   const [vStatus, setVStatus] = useState<VerificationStatusResponse | null>(null)
   const [vLoading, setVLoading] = useState(false)
   const [vError, setVError] = useState<string | null>(null)
   const [vRequestNote, setVRequestNote] = useState('')
   const [vSubmitting, setVSubmitting] = useState(false)
-  const [roleCat, setRoleCat] = useState<{
-    defaultRole: string
-    memberPerks: RoleWebsitePerks
-    purchasable: RoleCatalogEntry[]
-    grantOnly: RoleCatalogEntry[]
-    currentRole?: string
-    nextPurchasableRoleKey?: string | null
-    crimsonBadgeCount?: number
-    goldBadgeCount?: number
-    mythicBadgeCount?: number
-    profileBadgeCounts?: { crimson: number; gold: number; mythic: number }
-    purchasableTierOrder?: string[]
-  } | null>(null)
+  const [roleCat, setRoleCat] = useState<RoleCatState | null>(null)
   const [roleStatus, setRoleStatus] = useState<Awaited<ReturnType<typeof fetchRoleRequestStatus>> | null>(null)
   const [rankBusyKey, setRankBusyKey] = useState<string | null>(null)
   const [rankError, setRankError] = useState<string | null>(null)
@@ -223,20 +248,16 @@ export function Account() {
   const [grantSubmitting, setGrantSubmitting] = useState(false)
   const refreshWebsiteCobbleBalance = useCallback(() => {
     fetchUserCurrencies().then(({ currencies }) => {
-      setCobbleBalance(currencies.find((c) => c.currency_type === 'cobbledollars')?.balance ?? 0)
+      setCobbleBalance(websitePointsBalance(currencies))
     })
   }, [])
 
   /** Must match `PVP_DAILY_REWARDS` in backend (`apps/Backend/src/index.ts`). */
   const PVP_DAILY_REWARD_BY_RANK: Record<number, number> = {
-    1: 100_000,
-    2: 75_000,
-    3: 50_000,
+    1: 1,
   }
   const PVP_DAILY_TICKETS_BY_RANK: Record<number, number> = {
-    1: 2,
-    2: 1,
-    3: 1,
+    1: 1,
   }
 
   const displayItemName = displayInventoryItemName
@@ -292,69 +313,28 @@ export function Account() {
       fetchShopItems(),
       fetchUserCurrencies(),
       fetchUserPvpRank(),
-      fetchPokemonShopOffers(),
-      fetchPokemonShopPurchases(20),
       fetchRoleCatalog().catch(() => null),
       fetchRoleRequestStatus().catch(() => null),
     ])
-      .then(([d, inv, shop, currencies, pvpRank, pOffers, pPurchases, roles, rStatus]) => {
+      .then(([d, inv, shop, currencies, pvpRank, roles, rStatus]) => {
         setDaily(d)
         setInventory(inv.inventory ?? [])
         setShopItems(shop.items ?? [])
         setBattlePassShopItems(shop.battlePassItems ?? [])
-        setShopDiscountPercent(shop.shopDiscountPercent ?? pOffers.shopDiscountPercent ?? 0)
-        setShopEventDiscountPercent(
-          shop.shopEventDiscountPercent ?? pOffers.shopEventDiscountPercent ?? roles?.shopEventDiscountPercent ?? 0
-        )
+        setShopDiscountPercent(shop.shopDiscountPercent ?? 0)
+        setShopEventDiscountPercent(shop.shopEventDiscountPercent ?? roles?.shopEventDiscountPercent ?? 0)
         setCobbleBalance(
-          currencies.currencies.find((c) => c.currency_type === 'cobbledollars')?.balance ?? 0
+          websitePointsBalance(currencies.currencies)
         )
         setUserPvpRank(pvpRank)
-        setPokemonOffers(pOffers.offers ?? [])
-        setPokemonWindowEnd(pOffers.windowEnd ?? null)
-        setPokemonPurchases(pPurchases.purchases ?? [])
         if (roles) {
-          setRoleCat({
-            defaultRole: roles.defaultRole,
-            memberPerks: roles.memberPerks,
-            purchasable: roles.purchasable,
-            grantOnly: roles.grantOnly,
-            currentRole: roles.currentRole,
-            nextPurchasableRoleKey: roles.nextPurchasableRoleKey,
-            crimsonBadgeCount: roles.crimsonBadgeCount,
-            goldBadgeCount: roles.goldBadgeCount,
-            mythicBadgeCount: roles.mythicBadgeCount,
-            profileBadgeCounts: roles.profileBadgeCounts,
-            purchasableTierOrder: roles.purchasableTierOrder,
-          })
+          setRoleCat(roleCatFromApi(roles))
         }
         if (rStatus) setRoleStatus(rStatus)
       })
       .catch((e) => setDailyLoadError(e instanceof Error ? e.message : 'Failed to load daily rewards'))
       .finally(() => setDailyLoading(false))
   }, [isAuthenticated])
-
-  useEffect(() => {
-    if (!pokemonWindowEnd) {
-      setPokemonCountdown('-')
-      return
-    }
-    const update = () => {
-      const diffMs = new Date(pokemonWindowEnd).getTime() - Date.now()
-      if (diffMs <= 0) {
-        setPokemonCountdown('Refreshing...')
-        return
-      }
-      const total = Math.floor(diffMs / 1000)
-      const h = Math.floor(total / 3600)
-      const m = Math.floor((total % 3600) / 60)
-      const s = total % 60
-      setPokemonCountdown(`${h}h ${m}m ${s}s`)
-    }
-    update()
-    const id = setInterval(update, 1000)
-    return () => clearInterval(id)
-  }, [pokemonWindowEnd])
 
   useEffect(() => {
     const update = () => {
@@ -385,10 +365,10 @@ export function Account() {
   const pvpLeaderboardPreview = useMemo(() => {
     const isRanked = userPvpRank?.status === 'ranked' && userPvpRank.rank != null
     const rk = isRanked ? userPvpRank.rank : null
-    const inTop3 = rk != null && rk >= 1 && rk <= 3
+    const inTop1 = rk === 1
     const cobble = rk != null ? PVP_DAILY_REWARD_BY_RANK[rk] ?? 0 : 0
     const tickets = rk != null ? PVP_DAILY_TICKETS_BY_RANK[rk] ?? 0 : 0
-    return { rk, inTop3, cobble, tickets, isRanked }
+    return { rk, inTop1, cobble, tickets, isRanked }
   }, [userPvpRank])
 
   const rewardsBreakdown = useMemo(() => {
@@ -413,7 +393,7 @@ export function Account() {
     const canClaimDaily = Boolean(daily.eligible && !claimedToday)
     const rb = daily.dailyRankBonus
     const nr = daily.streak?.nextReward
-    const streakLadderCobble = nr?.kind === 'cobbledollars' ? nr.amount : 0
+    const streakLadderCobble = (nr?.kind === 'asterynpoints' || nr?.kind === 'cobbledollars') ? nr.amount : 0
     const roleFlatCobble = rb?.flatCobbleBonusPerClaim ?? 0
     const roleTickets = rb?.ticketBonusPerClaim ?? 0
     const nextClaimCobbleTotal = rb?.nextClaimCobbleTotal ?? null
@@ -531,7 +511,7 @@ export function Account() {
         ])
         setDaily(d)
         setInventory(inv.inventory ?? [])
-        setCobbleBalance(currencies.currencies.find((c) => c.currency_type === 'cobbledollars')?.balance ?? 0)
+        setCobbleBalance(websitePointsBalance(currencies.currencies))
         setUserPvpRank(pvpRank)
       } catch {
         /* ignore refresh errors */
@@ -575,60 +555,11 @@ export function Account() {
       setShopSuccess(`Purchased ${item.label} x${res.quantityPurchased}`)
       const [inv, currencies] = await Promise.all([fetchUserInventory(), fetchUserCurrencies()])
       setInventory(inv.inventory ?? [])
-      setCobbleBalance(currencies.currencies.find((c) => c.currency_type === 'cobbledollars')?.balance ?? 0)
+      setCobbleBalance(websitePointsBalance(currencies.currencies))
     } catch (err) {
       setShopError(err instanceof Error ? err.message : 'Purchase failed')
     } finally {
       setShopBusyItem(null)
-    }
-  }
-
-  const refreshPokemonShop = async () => {
-    const [offers, purchases] = await Promise.all([fetchPokemonShopOffers(), fetchPokemonShopPurchases(20)])
-    setPokemonOffers(offers.offers ?? [])
-    setShopDiscountPercent(offers.shopDiscountPercent ?? 0)
-    setShopEventDiscountPercent(offers.shopEventDiscountPercent ?? 0)
-    setPokemonWindowEnd(offers.windowEnd ?? null)
-    setPokemonPurchases(purchases.purchases ?? [])
-  }
-
-  const handleBuyPokemon = async (offer: PokemonShopOffer) => {
-    if (!canUseWebsiteShop) {
-      setPokemonError('Account verification required to buy from the shop.')
-      return
-    }
-    setPokemonError(null)
-    setPokemonSuccess(null)
-    setPokemonBusy(`buy-${offer.slot}`)
-    try {
-      const res = await buyPokemonShopOffer(offer.slot)
-      setPokemonSuccess(
-        `Purchased ${res.shiny ? 'Shiny' : 'Normal'} ${displayItemName(res.species)}. Claim it from the list below.`
-      )
-      const [currencies] = await Promise.all([fetchUserCurrencies(), refreshPokemonShop()])
-      setCobbleBalance(currencies.currencies.find((c) => c.currency_type === 'cobbledollars')?.balance ?? 0)
-    } catch (err) {
-      setPokemonError(err instanceof Error ? err.message : 'Pokemon purchase failed')
-    } finally {
-      setPokemonBusy(null)
-    }
-  }
-
-  const handleClaimPokemon = async (purchaseId: number) => {
-    setPokemonError(null)
-    setPokemonSuccess(null)
-    setPokemonBusy(`claim-${purchaseId}`)
-    try {
-      await claimPokemonShopPurchase(purchaseId)
-      setPokemonClaimedToServerAt((prev) => ({
-        ...prev,
-        [purchaseId]: new Date().toISOString(),
-      }))
-      await refreshPokemonShop()
-    } catch (err) {
-      setPokemonError(err instanceof Error ? err.message : 'Pokemon claim failed')
-    } finally {
-      setPokemonBusy(null)
     }
   }
 
@@ -656,13 +587,7 @@ export function Account() {
       return
     }
     if (!entry.canBuyNow) {
-      if (entry.meetsBadgeRequirement === false && entry.badgeRequirementLabel) {
-        setRankError(
-          `${entry.badgeRequirementLabel} (you have ${roleCat?.crimsonBadgeCount ?? 0} crimson, ${roleCat?.goldBadgeCount ?? 0} gold, ${roleCat?.mythicBadgeCount ?? 0} mythic).`
-        )
-      } else {
-        setRankError('You must buy ranks one step at a time, starting from the next tier.')
-      }
+      setRankError('You must buy ranks one step at a time, starting from the next tier.')
       return
     }
     setRankError(null)
@@ -672,41 +597,108 @@ export function Account() {
       const out = await buyRank(entry.key)
       setRankSuccess(
         entry.freeRank
-          ? `Claimed rank ${entry.label}. It should apply in-game within a few seconds.`
-          : `Purchased rank ${entry.label}. It should apply in-game within a few seconds.`
+          ? `Claimed ${entry.label} into your inventory. Open Inventory to choose in-game display.`
+          : `Purchased ${entry.label} into your inventory. Open Inventory to choose in-game display.`
       )
       setCobbleBalance(out.newBalance)
       void refreshUser()
-      const [shopUp, pOffersUp, rs, rolesUp] = await Promise.all([
+      const [shopUp, rs, rolesUp] = await Promise.all([
         fetchShopItems(),
-        fetchPokemonShopOffers(),
         fetchRoleRequestStatus().catch(() => null),
         fetchRoleCatalog().catch(() => null),
       ])
       setShopItems(shopUp.items ?? [])
       setBattlePassShopItems(shopUp.battlePassItems ?? [])
-      setShopDiscountPercent(shopUp.shopDiscountPercent ?? pOffersUp.shopDiscountPercent ?? 0)
-      setShopEventDiscountPercent(shopUp.shopEventDiscountPercent ?? pOffersUp.shopEventDiscountPercent ?? 0)
-      setPokemonOffers(pOffersUp.offers ?? [])
-      setPokemonWindowEnd(pOffersUp.windowEnd ?? null)
+      setShopDiscountPercent(shopUp.shopDiscountPercent ?? 0)
+      setShopEventDiscountPercent(shopUp.shopEventDiscountPercent ?? 0)
       if (rs) setRoleStatus(rs)
-      if (rolesUp) {
-        setRoleCat({
-          defaultRole: rolesUp.defaultRole,
-          memberPerks: rolesUp.memberPerks,
-          purchasable: rolesUp.purchasable,
-          grantOnly: rolesUp.grantOnly,
-          currentRole: rolesUp.currentRole,
-          nextPurchasableRoleKey: rolesUp.nextPurchasableRoleKey,
-          crimsonBadgeCount: rolesUp.crimsonBadgeCount,
-          goldBadgeCount: rolesUp.goldBadgeCount,
-          mythicBadgeCount: rolesUp.mythicBadgeCount,
-          profileBadgeCounts: rolesUp.profileBadgeCounts,
-          purchasableTierOrder: rolesUp.purchasableTierOrder,
-        })
-      }
+      if (rolesUp) setRoleCat(roleCatFromApi(rolesUp))
     } catch (err) {
       setRankError(err instanceof Error ? err.message : 'Rank purchase failed')
+    } finally {
+      setRankBusyKey(null)
+    }
+  }
+
+  const handleActivateRank = async (roleKey: string, label: string) => {
+    setRankError(null)
+    setRankSuccess(null)
+    setRankBusyKey(`activate:${roleKey}`)
+    try {
+      const out = await activateOwnedRank(roleKey)
+      // Optimistic UI so Displaying / Active updates immediately.
+      setRoleCat((prev) => {
+        if (!prev) return prev
+        const k = roleKey.trim().toLowerCase()
+        return {
+          ...prev,
+          currentRole: k,
+          activeDisplayRole: k,
+          ownedInventory: (prev.ownedInventory ?? []).map((row) => ({
+            ...row,
+            active: row.key === k,
+          })),
+          purchasable: prev.purchasable.map((e) => ({ ...e, active: e.key === k })),
+          vip: prev.vip.map((e) => ({ ...e, active: e.key === k })),
+          grantOnly: prev.grantOnly.map((e) => ({ ...e, active: e.key === k })),
+        }
+      })
+      if (out.alreadyActive) {
+        setRankSuccess(`${label} is already your active display.`)
+      } else if (roleKey === 'player') {
+        setRankSuccess(
+          `Display set to PLAYER — in-game icon uses LuckPerms group "player" (pack glyph U+E00D).`
+        )
+      } else {
+        setRankSuccess(
+          `Switched display to ${label}${out.lpGroup ? ` (LuckPerms: ${out.lpGroup})` : ''}.`
+        )
+      }
+      void refreshUser()
+      const rolesUp = await fetchRoleCatalog().catch(() => null)
+      if (rolesUp) setRoleCat(roleCatFromApi(rolesUp))
+      const rs = await fetchRoleRequestStatus().catch(() => null)
+      if (rs) setRoleStatus(rs)
+    } catch (err) {
+      setRankError(err instanceof Error ? err.message : 'Could not switch rank')
+    } finally {
+      setRankBusyKey(null)
+    }
+  }
+
+  const handleClaimVip = async (entry: VipCatalogEntry) => {
+    if (!canUseWebsiteShop) {
+      setRankError('Account verification required to claim VIP.')
+      return
+    }
+    if (!entry.canClaimNow) {
+      if (entry.meetsBadgeRequirement === false && entry.badgeRequirementLabel) {
+        setRankError(
+          `${entry.badgeRequirementLabel} (you have ${roleCat?.mythicBadgeCount ?? 0} mythic, ${roleCat?.goldBadgeCount ?? 0} gold, ${roleCat?.legendBadgeCount ?? 0} legend).`
+        )
+      } else {
+        setRankError('Claim VIP tiers one step at a time.')
+      }
+      return
+    }
+    setRankError(null)
+    setRankSuccess(null)
+    setRankBusyKey(`vip:${entry.key}`)
+    try {
+      await claimVipTier(entry.key)
+      setRankSuccess(`Claimed VIP ${entry.label} into inventory. Open Inventory to display it in-game.`)
+      void refreshUser()
+      const [shopUp, rolesUp] = await Promise.all([
+        fetchShopItems().catch(() => null),
+        fetchRoleCatalog().catch(() => null),
+      ])
+      if (shopUp) {
+        setShopDiscountPercent(shopUp.shopDiscountPercent ?? 0)
+        setShopEventDiscountPercent(shopUp.shopEventDiscountPercent ?? 0)
+      }
+      if (rolesUp) setRoleCat(roleCatFromApi(rolesUp))
+    } catch (err) {
+      setRankError(err instanceof Error ? err.message : 'VIP claim failed')
     } finally {
       setRankBusyKey(null)
     }
@@ -813,24 +805,24 @@ export function Account() {
                     'Unranked'
                   )
                 }
-                sub="Top 3 only"
+                sub="Top 1 only"
               />
               <DailyRewardStatCard
                 accent="amber"
-                label="Cobble$ reward"
+                label="AsterynPoints reward"
                 value={
-                  pvpLeaderboardPreview.inTop3 ? (
+                  pvpLeaderboardPreview.inTop1 ? (
                     <span className="text-[#fbbf24]">{pvpLeaderboardPreview.cobble.toLocaleString()}</span>
                   ) : (
                     '—'
                   )
                 }
-                sub={pvpLeaderboardPreview.inTop3 ? 'If still top 3 at reset' : 'Not in top 3'}
+                sub={pvpLeaderboardPreview.inTop1 ? 'If still #1 at reset' : 'Not #1'}
               />
               <DailyRewardStatCard
                 accent="sky"
                 label="Tickets"
-                value={pvpLeaderboardPreview.inTop3 && pvpLeaderboardPreview.tickets > 0 ? `+${pvpLeaderboardPreview.tickets}` : '—'}
+                value={pvpLeaderboardPreview.inTop1 && pvpLeaderboardPreview.tickets > 0 ? `+${pvpLeaderboardPreview.tickets}` : '—'}
                 sub="Normal tickets"
               />
             </div>
@@ -851,7 +843,7 @@ export function Account() {
                     Today&apos;s bundle
                   </p>
                   <p className="text-sm text-[#e2e8f0] m-0">
-                    Streak + role perks — one claim per day after you join in-game
+                    Streak check-in — VIP Point + rank tickets, one claim per day after you join in-game
                   </p>
                 </div>
                 <p className="text-xs text-muted m-0 shrink-0 tabular-nums">
@@ -874,15 +866,11 @@ export function Account() {
                   accent="violet"
                   label="Streak"
                   value={`Day ${daily.streak.nextDay}`}
-                  sub={
-                    rewardsBreakdown.nr?.kind === 'cobbledollars'
-                      ? `+${rewardsBreakdown.streakLadderCobble.toLocaleString()} CD`
-                      : (rewardsBreakdown.nr?.label ?? 'Next reward')
-                  }
+                  sub={rewardsBreakdown.streakLadderCobble > 0 ? `+${rewardsBreakdown.streakLadderCobble.toLocaleString()} AP` : 'Check-in'}
                 />
                 <DailyRewardStatCard
                   accent="amber"
-                  label="Role Cobble$"
+                  label="VIP AsterynPoints"
                   value={
                     rewardsBreakdown.roleFlatCobble > 0 ? (
                       <span className="text-[#fbbf24]">+{rewardsBreakdown.roleFlatCobble.toLocaleString()}</span>
@@ -893,18 +881,26 @@ export function Account() {
                   sub={
                     rewardsBreakdown.rb ? (
                       <span className="inline-flex items-center justify-center gap-1.5 flex-wrap">
-                        <RoleBadge roleKey={rewardsBreakdown.rb.minecraftRole} />
+                        <RoleBadge roleKey={rewardsBreakdown.rb.vipTier ?? 'player'} />
                       </span>
                     ) : (
-                      'No rank bonus'
+                      'No VIP bonus'
                     )
                   }
                 />
                 <DailyRewardStatCard
                   accent="sky"
-                  label="Role tickets"
+                  label="Rank tickets"
                   value={rewardsBreakdown.roleTickets > 0 ? `+${rewardsBreakdown.roleTickets}` : '—'}
-                  sub="Normal tickets"
+                  sub={
+                    rewardsBreakdown.rb ? (
+                      <span className="inline-flex items-center justify-center gap-1.5 flex-wrap">
+                        <RoleBadge roleKey={rewardsBreakdown.rb.minecraftRole} />
+                      </span>
+                    ) : (
+                      'Normal tickets'
+                    )
+                  }
                 />
                 <DailyRewardStatCard
                   accent="emerald"
@@ -916,6 +912,13 @@ export function Account() {
                   valueClassName=""
                 />
               </div>
+              {(rewardsBreakdown.rb?.items?.length ?? 0) > 0 ? (
+                <p className="text-sm text-slate-300 m-0">
+                  <span className="text-[10px] uppercase tracking-wide text-slate-500 mr-2">Daily items</span>
+                  {rewardsBreakdown.rb!.items!.map((it) => `${it.label} ×${it.amount}`).join(' · ')}
+                  <span className="text-slate-500 text-xs block mt-1">Goes to Inventory — claim in-game while online</span>
+                </p>
+              ) : null}
 
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted">
                 <span>
@@ -950,6 +953,79 @@ export function Account() {
 
       {activeTab === 'inventory' && (
         <>
+          <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-2">Ranks &amp; VIPs</h2>
+          <p className="text-xs text-muted m-0 mb-3">
+            Everything you own (bought, claimed, or granted). Choose which one to display in-game. Defaults: MEMBER and
+            PLAYER (both have pack icons when LuckPerms groups + prefixes are set).
+          </p>
+          <div className="mb-6 pixel-well p-4 space-y-2">
+            {(roleCat?.ownedInventory?.length ?? 0) === 0 ? (
+              <p className="text-sm text-muted m-0">
+                No ranks or VIPs owned yet. Buy ranks, claim VIP, or wait for a staff grant.
+              </p>
+            ) : (
+              (roleCat?.ownedInventory ?? []).map((row) => {
+                const label =
+                  row.key === 'member'
+                    ? 'MEMBER'
+                    : row.key === 'player'
+                      ? 'PLAYER'
+                      : roleCat?.purchasable.find((e) => e.key === row.key)?.label ??
+                        roleCat?.vip.find((e) => e.key === row.key)?.label ??
+                        roleCat?.grantOnly.find((e) => e.key === row.key)?.label ??
+                        row.key.toUpperCase()
+                const kindLabel =
+                  row.key === 'member'
+                    ? 'Default rank'
+                    : row.key === 'player'
+                      ? 'Default VIP'
+                      : row.kind === 'shop'
+                        ? 'Rank'
+                        : row.kind === 'vip'
+                          ? 'VIP'
+                          : row.kind === 'grant'
+                            ? 'Granted'
+                            : 'Other'
+                return (
+                  <div
+                    key={row.key}
+                    className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5 ${
+                      row.active
+                        ? 'border-emerald-500/45 bg-emerald-950/25'
+                        : 'border-border/70 bg-[#0a0f18]/40'
+                    }`}
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <RoleBadge roleKey={row.key} />
+                      <div className="min-w-0">
+                        <p className="m-0 text-sm font-semibold text-[#e2e8f0]">{label}</p>
+                        <p className="m-0 text-[10px] uppercase tracking-wide text-muted">{kindLabel}</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleActivateRank(row.key, label)}
+                      disabled={row.active || rankBusyKey === `activate:${row.key}`}
+                      className="shrink-0 px-3 py-2 text-sm pixel-btn-primary disabled:opacity-50"
+                    >
+                      {row.active
+                        ? 'Displaying'
+                        : rankBusyKey === `activate:${row.key}`
+                          ? 'Switching…'
+                          : 'Display in-game'}
+                    </button>
+                  </div>
+                )
+              })
+            )}
+            {rankSuccess && activeTab === 'inventory' ? (
+              <p className="text-sm text-emerald-300 m-0 pt-1">{rankSuccess}</p>
+            ) : null}
+            {rankError && activeTab === 'inventory' ? (
+              <p className="text-sm text-error m-0 pt-1">{rankError}</p>
+            ) : null}
+          </div>
+
           <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-3">Website inventory</h2>
           <div className="mb-6 pixel-well p-4">
             {inventory.length === 0 ? (
@@ -995,7 +1071,7 @@ export function Account() {
       {activeTab === 'shop' && (
         <>
           <p className="text-sm text-muted m-0 mb-3">
-            Cobble$ balance:{' '}
+            AsterynPoints balance:{' '}
             <span className="text-[#fbbf24] font-semibold tabular-nums">{cobbleBalance.toLocaleString()}</span>
           </p>
           {!canUseWebsiteShop ? (
@@ -1005,7 +1081,7 @@ export function Account() {
             >
               <p className="m-0 font-medium">Shop available after account verification</p>
               <p className="m-0 mt-1 text-xs text-amber-100/90">
-                If not verified, you cannot buy on the website (Shop, Battle pass, Pokemon Shop). Submit a verification request in the
+                If not verified, you cannot buy on the website (Shop, Battle pass). Submit a verification request in the
                 Account tab.
               </p>
             </div>
@@ -1014,14 +1090,14 @@ export function Account() {
           <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-3">Shop</h2>
           {shopEventDiscountPercent > 0 ? (
             <p className="text-sm text-amber-200/95 m-0 mb-3 rounded-lg border border-amber-500/35 bg-amber-950/25 px-3 py-2">
-              Special event: <strong>-{shopEventDiscountPercent}%</strong> on item shop, battle pass, Pokémon shop, and
+              Special event: <strong>-{shopEventDiscountPercent}%</strong> on item shop, battle pass, and
               rank purchases
-              {shopDiscountPercent > 0 ? ` (stacks with your -${shopDiscountPercent}% rank discount on items & Pokémon)` : ''}.
+              {shopDiscountPercent > 0 ? ` (stacks with your -${shopDiscountPercent}% rank discount)` : ''}.
             </p>
           ) : null}
           {shopDiscountPercent > 0 ? (
             <p className="text-sm text-emerald-300/95 m-0 mb-3">
-              Rank discount: -{shopDiscountPercent}% on Cobble$ (item shop, battle pass, and Pokemon shop).
+              Rank discount: -{shopDiscountPercent}% on AsterynPoints (item shop and battle pass).
             </p>
           ) : null}
           <div className="mb-6 pixel-well p-4">
@@ -1034,10 +1110,10 @@ export function Account() {
                       {item.discountedCost < item.cost ? (
                         <>
                           <span className="line-through opacity-70">{item.cost.toLocaleString()}</span>{' '}
-                          <span className="text-[#fbbf24] tabular-nums">{item.discountedCost.toLocaleString()} Cobble$</span>
+                          <span className="text-[#fbbf24] tabular-nums">{item.discountedCost.toLocaleString()} AsterynPoints</span>
                         </>
                       ) : (
-                        <>Cost: {item.cost.toLocaleString()} Cobble$</>
+                        <>Cost: {item.cost.toLocaleString()} AsterynPoints</>
                       )}
                     </p>
                   </div>
@@ -1078,10 +1154,10 @@ export function Account() {
                       ) : item.discountedCost < item.cost ? (
                         <>
                           <span className="line-through opacity-70">{item.cost.toLocaleString()}</span>{' '}
-                          <span className="text-[#fbbf24] tabular-nums">{item.discountedCost.toLocaleString()} Cobble$</span>
+                          <span className="text-[#fbbf24] tabular-nums">{item.discountedCost.toLocaleString()} AsterynPoints</span>
                         </>
                       ) : (
-                        <>Cost: {item.cost.toLocaleString()} Cobble$</>
+                        <>Cost: {item.cost.toLocaleString()} AsterynPoints</>
                       )}
                     </p>
                   </div>
@@ -1109,117 +1185,56 @@ export function Account() {
             )}
             {battlePassShopError && <p className="text-sm text-error mt-3 mb-0">{battlePassShopError}</p>}
           </div>
-
-          <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-3">Pokemon Shop</h2>
-          <div className="mb-6 pixel-well p-4">
-            <p className="text-sm text-muted m-0 mb-3">
-              Refresh in: {pokemonCountdown}. Each slot is <strong className="text-slate-300">one copy site-wide</strong>{' '}
-              per rotation - 6 slots; first buyer takes each. Each slot rolls shiny or normal (~35% shiny).
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              {pokemonOffers.map((offer) => (
-                <div
-                  key={offer.slot}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-border/70 px-3 py-2"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm text-[#e2e8f0] m-0">
-                      {offer.shiny ? 'Shiny ' : 'Normal '}
-                      {displayItemName(offer.species)}
-                    </p>
-                    <p className="text-xs text-muted m-0">
-                      {formatPokemonShopCategory(offer.category)}  | {' '}
-                      {offer.price < offer.listPrice ? (
-                        <>
-                          <span className="line-through opacity-70">{offer.listPrice.toLocaleString()}</span>{' '}
-                          <span className="text-[#fbbf24] tabular-nums">{offer.price.toLocaleString()} Cobble$</span>
-                        </>
-                      ) : (
-                        <span className="tabular-nums">{offer.price.toLocaleString()} Cobble$</span>
-                      )}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleBuyPokemon(offer)}
-                    disabled={
-                      !canUseWebsiteShop ||
-                      offer.soldOut ||
-                      pokemonBusy === `buy-${offer.slot}` ||
-                      cobbleBalance < offer.price
-                    }
-                    className="shrink-0 py-2 px-3 pixel-btn-primary disabled:opacity-50 text-base"
-                  >
-                    {offer.soldOut && !offer.purchasedByYou
-                      ? 'Sold out'
-                      : offer.purchasedByYou
-                        ? 'Yours'
-                        : pokemonBusy === `buy-${offer.slot}`
-                          ? 'Buying...'
-                          : 'Buy'}
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            <p className="text-sm text-muted mt-4 mb-2">Purchased Pokemon</p>
-            <div className="space-y-2">
-              {pokemonPurchases.length === 0 ? (
-                <p className="text-sm text-muted m-0">No Pokemon purchases yet.</p>
-              ) : (
-                pokemonPurchases.map((p) => (
-                  <div key={p.id} className="flex items-center justify-between gap-3 rounded-lg border border-border/70 px-3 py-2">
-                    <div className="min-w-0">
-                      <p className="text-sm text-[#e2e8f0] m-0">
-                        {p.shiny ? 'Shiny ' : 'Normal '}
-                        {displayItemName(p.species)}
-                      </p>
-                      <p className="text-xs text-muted m-0">
-                        {new Date(p.purchasedAt).toLocaleString()}  |  {p.price.toLocaleString()} Cobble$
-                      </p>
-                      {(p.claimedAt || pokemonClaimedToServerAt[p.id]) && (
-                        <p className="text-xs text-emerald-300 m-0 mt-1">
-                          {displayItemName(p.species)} delivered in-game at{' '}
-                          {new Date(pokemonClaimedToServerAt[p.id] ?? p.claimedAt ?? '').toLocaleTimeString()}.
-                        </p>
-                      )}
-                    </div>
-                    {p.claimedAt ? null : (
-                      <button
-                        type="button"
-                        onClick={() => handleClaimPokemon(p.id)}
-                        disabled={pokemonBusy === `claim-${p.id}`}
-                        className="shrink-0 py-2 px-3 pixel-btn-primary disabled:opacity-50 text-base"
-                      >
-                        {pokemonBusy === `claim-${p.id}` ? 'Claiming...' : 'Claim'}
-                      </button>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-
-            {pokemonSuccess && <p className="text-sm text-emerald-300 mt-3 mb-0">{pokemonSuccess}</p>}
-            {pokemonError && <p className="text-sm text-error mt-3 mb-0">{pokemonError}</p>}
-          </div>
         </>
       )}
 
       {activeTab === 'ranks' && (
         <>
           <p className="text-sm text-muted m-0 mb-2">
-            Cobble$ balance:{' '}
+            AsterynPoints balance:{' '}
             <span className="text-[#fbbf24] font-semibold tabular-nums">{cobbleBalance.toLocaleString()}</span>
           </p>
           <p className="text-sm text-muted m-0 mb-3">
-            Current rank:{' '}
+            Active in-game display:{' '}
             <span className="inline-flex align-middle mr-1">
-              <RoleBadge roleKey={roleStatus?.currentRole ?? user?.minecraft_role ?? 'member'} />
+              <RoleBadge roleKey={roleCat?.activeDisplayRole ?? roleStatus?.currentRole ?? user?.minecraft_role ?? 'member'} />
             </span>
             <span className="text-[#e2e8f0] font-medium">
-              {(roleStatus?.currentRole ?? user?.minecraft_role ?? 'member').toUpperCase()}
+              {(
+                roleCat?.activeDisplayRole ??
+                roleStatus?.currentRole ??
+                user?.minecraft_role ??
+                'member'
+              ).toUpperCase()}
             </span>
+            <span className="text-muted"> · switch in Inventory</span>
           </p>
+          {roleCat ? (
+            <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div className="rounded-lg border border-sky-500/30 bg-sky-950/25 px-3 py-2.5">
+                <p className="m-0 mb-1 text-[10px] font-semibold uppercase tracking-wide text-sky-300/90">
+                  Your current highest rank
+                </p>
+                <div className="flex items-center gap-2">
+                  <RoleBadge roleKey={roleCat.highestShopRank ?? 'member'} />
+                  <span className="text-sm font-semibold text-[#e2e8f0]">
+                    {(roleCat.highestShopRank ?? 'member').toUpperCase()}
+                  </span>
+                </div>
+              </div>
+              <div className="rounded-lg border border-violet-500/30 bg-violet-950/25 px-3 py-2.5">
+                <p className="m-0 mb-1 text-[10px] font-semibold uppercase tracking-wide text-violet-300/90">
+                  Your current highest VIP
+                </p>
+                <div className="flex items-center gap-2">
+                  <RoleBadge roleKey={roleCat.highestVip ?? 'player'} />
+                  <span className="text-sm font-semibold text-[#e2e8f0]">
+                    {(roleCat.highestVip ?? 'player').toUpperCase()}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ) : null}
           {!canUseWebsiteShop ? (
             <div
               className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100"
@@ -1232,14 +1247,14 @@ export function Account() {
             </div>
           ) : null}
 
-          <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-3">Buy rank (Cobble$)</h2>
+          <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-3">Buy rank (AsterynPoints)</h2>
           {shopEventDiscountPercent > 0 ? (
             <p className="text-sm text-amber-200/95 m-0 mb-3">
               Rank shop event: -{shopEventDiscountPercent}% on all purchasable ranks.
             </p>
           ) : null}
           <p className="text-xs text-muted m-0 mb-3">
-            Below are perks for your current rank. Use the cards to view or purchase higher ranks.
+            Below are perks for your active display. Buy/claim adds to Inventory — switch display under Inventory.
           </p>
           {roleCat ? (
             <div className="mb-4 rounded-lg border border-emerald-600/40 bg-emerald-950/25 px-3 py-2">
@@ -1270,27 +1285,32 @@ export function Account() {
                     How it works
                   </p>
                   <p className="m-0 text-xs leading-relaxed text-slate-300">
-                    Purchase ranks one step at a time — only the next tier above your current shop rank can be bought.
+                    Buy ranks with AsterynPoints one step at a time. Purchases go to Inventory — pick display there. VIP
+                    is claimed with profile badges.
                   </p>
                 </div>
                 <div className="rounded-lg border border-white/[0.07] bg-black/25 px-3 py-2.5">
                   <p className="m-0 mb-2 text-[10px] font-medium uppercase tracking-wide text-slate-500">
-                    Your profile badges
+                    Your profile badges (for VIP)
                   </p>
                   <div className="flex flex-wrap gap-2">
-                    <span className="inline-flex items-center gap-1.5 rounded-md border border-rose-500/40 bg-rose-950/45 px-2.5 py-1 text-xs shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                      <span className="font-bold tabular-nums text-rose-100">{roleCat.crimsonBadgeCount ?? 0}</span>
-                      <span className="text-rose-200/80">crimson</span>
+                    <span className="inline-flex items-center gap-1.5 rounded-md border border-violet-500/40 bg-violet-950/45 px-2.5 py-1 text-xs shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                      <span className="font-bold tabular-nums text-violet-100">{roleCat.mythicBadgeCount ?? 0}</span>
+                      <span className="text-violet-200/80">mythic</span>
                     </span>
                     <span className="inline-flex items-center gap-1.5 rounded-md border border-amber-500/40 bg-amber-950/45 px-2.5 py-1 text-xs shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                       <span className="font-bold tabular-nums text-amber-100">{roleCat.goldBadgeCount ?? 0}</span>
                       <span className="text-amber-200/80">gold</span>
                     </span>
-                    <span className="inline-flex items-center gap-1.5 rounded-md border border-violet-500/40 bg-violet-950/45 px-2.5 py-1 text-xs shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                      <span className="font-bold tabular-nums text-violet-100">{roleCat.mythicBadgeCount ?? 0}</span>
-                      <span className="text-violet-200/80">mythic</span>
+                    <span className="inline-flex items-center gap-1.5 rounded-md border border-orange-500/40 bg-orange-950/45 px-2.5 py-1 text-xs shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                      <span className="font-bold tabular-nums text-orange-100">{roleCat.legendBadgeCount ?? 0}</span>
+                      <span className="text-orange-200/80">legend</span>
                     </span>
                   </div>
+                  <p className="m-0 mt-2 text-[10px] text-slate-500">
+                    VIP: {(roleCat.websiteVipTier ?? 'player').toUpperCase()}
+                    {roleCat.nextVipClaimKey ? ` · next ${roleCat.nextVipClaimKey.toUpperCase()}` : ' · max'}
+                  </p>
                 </div>
                 <div className="rounded-lg border border-amber-500/35 bg-amber-950/30 px-3 py-2.5">
                   <p className="m-0 mb-2 text-[10px] font-medium uppercase tracking-wide text-amber-200/75">
@@ -1315,7 +1335,7 @@ export function Account() {
               </div>
             </div>
           ) : null}
-          <p className="text-xs text-muted m-0 mb-3">After payment, your rank updates in-game within a few seconds.</p>
+          <p className="text-xs text-muted m-0 mb-3">After payment, the rank is added to Inventory (not auto-equipped).</p>
           <div className="mb-6 pixel-well p-4 space-y-3">
             {roleCat?.purchasable?.length ? (
               roleCat.purchasable.map((entry) => (
@@ -1338,10 +1358,10 @@ export function Account() {
                               <span className="line-through opacity-70 text-muted mr-1.5">
                                 {entry.listCost.toLocaleString()}
                               </span>
-                              {entry.cost.toLocaleString()} Cobble$
+                              {entry.cost.toLocaleString()} AsterynPoints
                             </>
                           ) : (
-                            <>{(entry.cost ?? 0).toLocaleString()} Cobble$</>
+                            <>{(entry.cost ?? 0).toLocaleString()} AsterynPoints</>
                           )}
                         </p>
                         {entry.badgeRequirementLabel ? (
@@ -1356,31 +1376,35 @@ export function Account() {
                         ) : null}
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleBuyRank(entry)}
-                      disabled={
-                        !canUseWebsiteShop ||
-                        rankBusyKey === entry.key ||
-                        !entry.canBuyNow ||
-                        entry.owned ||
-                        entry.meetsBadgeRequirement === false ||
-                        (!entry.freeRank && cobbleBalance < (entry.cost ?? 0))
-                      }
-                      className="shrink-0 self-start px-4 py-2 text-base pixel-btn-primary disabled:opacity-50"
-                    >
-                      {entry.owned
-                        ? 'Owned'
-                        : entry.locked || entry.meetsBadgeRequirement === false
-                          ? 'Locked'
-                          : rankBusyKey === entry.key
-                            ? entry.freeRank
-                              ? 'Claiming…'
-                              : 'Buying...'
-                            : entry.freeRank
-                              ? 'Claim'
-                              : 'Buy'}
-                    </button>
+                    <div className="flex shrink-0 flex-col items-stretch gap-2 self-start">
+                      {entry.owned ? (
+                        <span className="px-4 py-2 text-sm font-semibold text-emerald-300/95 border border-emerald-500/35 rounded-lg bg-emerald-950/20 text-center">
+                          Owned
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleBuyRank(entry)}
+                          disabled={
+                            !canUseWebsiteShop ||
+                            rankBusyKey === entry.key ||
+                            !entry.canBuyNow ||
+                            (!entry.freeRank && cobbleBalance < (entry.cost ?? 0))
+                          }
+                          className="px-4 py-2 text-base pixel-btn-primary disabled:opacity-50"
+                        >
+                          {entry.locked
+                            ? 'Locked'
+                            : rankBusyKey === entry.key
+                              ? entry.freeRank
+                                ? 'Claiming…'
+                                : 'Buying...'
+                              : entry.freeRank
+                                ? 'Claim'
+                                : 'Buy'}
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className="w-full border-t border-border/45 pt-3">
                     <RolePerksSummary perks={entry.perks} />
@@ -1392,50 +1416,134 @@ export function Account() {
             )}
           </div>
 
+          <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-2">VIP (profile badges)</h2>
+          <p className="text-xs text-muted m-0 mb-3">
+            Claim VIP tiers with achievements — no AsterynPoints. After claiming, choose display in Inventory.
+            Daily Point follows VIP. Daily tickets follow shop rank. Daily items stack from shop rank and VIP.
+          </p>
+          <div className="mb-6 pixel-well p-4 space-y-3">
+            {roleCat?.vip?.length ? (
+              roleCat.vip.map((entry) => (
+                <div
+                  key={entry.key}
+                  className="flex flex-col gap-3 rounded-lg border border-violet-500/25 bg-[#0a0f18]/40 px-3 py-3 sm:px-4 sm:py-3"
+                >
+                  <div className="flex flex-row items-start justify-between gap-3">
+                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                      <div className="shrink-0">
+                        <RoleBadge roleKey={entry.key} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="m-0 text-sm font-semibold text-[#e2e8f0]">{entry.label}</p>
+                        <p className="m-0 mt-0.5 text-[10px] uppercase tracking-wide text-violet-200/75">VIP track</p>
+                        {entry.badgeRequirementLabel ? (
+                          <p className="m-0 mt-1 text-xs text-rose-200/90">
+                            {entry.badgeRequirementLabel}
+                            {entry.meetsBadgeRequirement === false ? (
+                              <span className="text-muted"> — not met yet</span>
+                            ) : (
+                              <span className="text-emerald-300/90"> — OK</span>
+                            )}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 flex-col gap-2">
+                      {entry.owned ? (
+                        <span className="px-4 py-2 text-sm font-semibold text-emerald-300/95 border border-emerald-500/35 rounded-lg bg-emerald-950/20 text-center">
+                          Owned
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleClaimVip(entry)}
+                          disabled={
+                            !canUseWebsiteShop ||
+                            rankBusyKey === `vip:${entry.key}` ||
+                            !entry.canClaimNow ||
+                            entry.meetsBadgeRequirement === false
+                          }
+                          className="px-4 py-2 text-base pixel-btn-primary disabled:opacity-50"
+                        >
+                          {entry.locked || entry.meetsBadgeRequirement === false
+                            ? 'Locked'
+                            : rankBusyKey === `vip:${entry.key}`
+                              ? 'Claiming…'
+                              : 'Claim'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {entry.perks ? (
+                    <div className="border-t border-violet-500/20 pt-3">
+                      <RolePerksSummary perks={entry.perks} />
+                    </div>
+                  ) : null}
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted m-0">VIP catalog unavailable. Run users_owned_roles_and_vip.sql if needed.</p>
+            )}
+          </div>
+
           <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-2">Rank requests</h2>
           <p className="text-xs text-muted m-0 mb-3">
-            Premium and partner ranks are not available for direct purchase. Submit a request for staff review.
+            Premium and partner ranks are request-only. After staff accept, the rank goes into your Inventory — you choose
+            what to display in-game.
           </p>
           <div className="mb-4 space-y-3">
             {(roleCat?.grantOnly ?? []).map((g) => {
               const isSelected = grantRolePick === g.key
               return (
-              <button
+              <div
                 key={g.key}
-                type="button"
-                onClick={() => setGrantRolePick(g.key)}
-                className={`w-full text-left flex flex-col gap-3 rounded-xl border px-3 py-3 sm:px-4 transition-[border-color,background,box-shadow] duration-150 ${
-                  isSelected
-                    ? 'border-emerald-500/55 bg-emerald-950/20 ring-2 ring-emerald-500/25'
-                    : 'border-border/70 bg-[#0a0f18]/40 hover:border-emerald-500/30 hover:bg-[#0a0f18]/70'
+                className={`w-full flex flex-col gap-3 rounded-xl border px-3 py-3 sm:px-4 transition-[border-color,background,box-shadow] duration-150 ${
+                  g.owned
+                    ? 'border-emerald-500/40 bg-emerald-950/15'
+                    : isSelected
+                      ? 'border-emerald-500/55 bg-emerald-950/20 ring-2 ring-emerald-500/25'
+                      : 'border-border/70 bg-[#0a0f18]/40'
                 }`}
               >
                 <div className="flex flex-row items-start justify-between gap-3">
-                  <div className="flex min-w-0 flex-1 items-start gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setGrantRolePick(g.key)}
+                    disabled={Boolean(g.owned)}
+                    className="flex min-w-0 flex-1 items-start gap-3 text-left bg-transparent border-0 p-0 cursor-pointer disabled:cursor-default"
+                  >
                     <div className="shrink-0">
                       <RoleBadge roleKey={g.key} />
                     </div>
                     <div className="min-w-0">
                       <p className="m-0 text-sm font-semibold text-[#e2e8f0]">{g.label}</p>
                       <p className="m-0 mt-0.5 text-[10px] uppercase tracking-wide text-amber-200/75">
-                        By request
+                        {g.owned ? 'Owned · set display in Inventory' : 'By request'}
                       </p>
                     </div>
-                  </div>
-                  <span
-                    className={`shrink-0 self-start px-3 py-1.5 text-xs font-semibold rounded-full border ${
-                      isSelected
-                        ? 'border-emerald-400/60 bg-emerald-500/15 text-emerald-200'
-                        : 'border-border/80 bg-[#0f172a]/80 text-muted'
-                    }`}
-                  >
-                    {isSelected ? 'Selected' : 'Select'}
-                  </span>
+                  </button>
+                  {g.owned ? (
+                    <span className="shrink-0 self-start px-3 py-1.5 text-xs font-semibold rounded-full border border-emerald-400/60 bg-emerald-500/15 text-emerald-200">
+                      Owned
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setGrantRolePick(g.key)}
+                      className={`shrink-0 self-start px-3 py-1.5 text-xs font-semibold rounded-full border ${
+                        isSelected
+                          ? 'border-emerald-400/60 bg-emerald-500/15 text-emerald-200'
+                          : 'border-border/80 bg-[#0f172a]/80 text-muted'
+                      }`}
+                    >
+                      {isSelected ? 'Selected' : 'Select'}
+                    </button>
+                  )}
                 </div>
                 <div className="w-full border-t border-border/45 pt-3">
                   <RolePerksSummary perks={g.perks} />
                 </div>
-              </button>
+              </div>
               )
             })}
           </div>

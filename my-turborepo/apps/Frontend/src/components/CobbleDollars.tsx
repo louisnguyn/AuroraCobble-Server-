@@ -60,18 +60,18 @@ export function CobbleDollars({
   }, [yourIndex, data?.top10])
 
   const panelClass = 'p-8 text-center pixel-panel'
-  const currency = kind === 'pco' ? 'PCO' : 'Cobble$'
+  const currency = kind === 'pco' ? 'PCO' : kind === 'website_cobble' ? 'AsterynPoints' : 'Cobble$'
   const title =
     kind === 'pco'
       ? 'In-game PCO (top 10)'
       : kind === 'website_cobble'
-        ? 'Website Cobble$ (top 10)'
+        ? 'Website AsterynPoints (top 10)'
         : 'In-game Cobble$ (top 10)'
   const subtitle =
     kind === 'pco'
       ? 'Richest players by in-game PCO.'
       : kind === 'website_cobble'
-        ? 'Highest balances on this site (wallet Cobble$, not Minecraft).'
+        ? 'Highest balances on this site (wallet AsterynPoints, not Minecraft).'
         : 'Richest players by in-game Cobble$.'
   const balanceClass =
     kind === 'pco' ? 'text-cyan-300' : 'text-[#fbbf24]'
@@ -104,7 +104,7 @@ export function CobbleDollars({
       ) : data.top10.length === 0 ? (
         <div className="p-8 text-center pixel-panel-soft text-muted text-base">
           {kind === 'website_cobble'
-            ? `No website ${currency} balances yet — earn Cobble$ from streaks, PvP payouts, and other site rewards.`
+            ? `No website ${currency} balances yet — earn AsterynPoints from streaks, PvP payouts, and other site rewards.`
             : `No ${currency} balances returned yet. Play on the server to appear on the leaderboard.`}
         </div>
       ) : (

@@ -1,6 +1,9 @@
 import type { Express, Request, Response } from "express";
 import { supabase } from "./supabase.js";
 import {
+  ASTERYN_POINTS_CURRENCY,
+} from "./websiteCurrency.js";
+import {
   buildBracketView,
   getWinner,
   otherParticipantInMatch,
@@ -8,7 +11,7 @@ import {
   type ParticipantRow,
 } from "./tournamentBracket.js";
 
-const COBBLEDOLLARS = "cobbledollars";
+const COBBLEDOLLARS = ASTERYN_POINTS_CURRENCY;
 const SETTINGS_ID = 1;
 
 export type TournamentPredictionSettingsRow = {
@@ -744,7 +747,7 @@ export function registerTournamentPredictionRoutes(app: Express, deps: RouteDeps
     const validateStake = (s: number, label: string): string | null => {
       if (s === 0) return null;
       if (!Number.isInteger(s) || s < minStake || s > maxStake) {
-        return `${label} must be 0 or ${minStake}–${maxStake} Cobble$`;
+        return `${label} must be 0 or ${minStake}–${maxStake} Asteryn Point`;
       }
       return null;
     };
@@ -793,7 +796,7 @@ export function registerTournamentPredictionRoutes(app: Express, deps: RouteDeps
     const totalStake = stakeChampion + stakeRunnerUp;
     if (!wallet || wallet.balance < totalStake) {
       res.status(400).json({
-        error: "Not enough website Cobble$",
+        error: "Not enough website Asteryn Point",
         balance: wallet?.balance ?? 0,
         required: totalStake,
       });

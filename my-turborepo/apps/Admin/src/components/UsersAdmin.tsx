@@ -17,7 +17,9 @@ import {
   verifyUserIngame,
   revokeUserIngameVerification,
   fetchAdminMinecraftRoles,
+  fetchAdminUserOwnedRoles,
   grantAdminUserMinecraftRole,
+  removeAdminUserOwnedRole,
   type AdminUser,
   type UserCurrencyRow,
   type AdminHistoryEntry,
@@ -28,6 +30,14 @@ type UsersTab = 'account' | 'rewards' | 'bulkCobble' | 'bulkTickets' | 'bulkItem
 
 export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
   const [users, setUsers] = useState<AdminUser[]>([])
+  const [ownedInventory, setOwnedInventory] = useState<
+    { key: string; kind: string; active: boolean }[]
+  >([])
+  const [ownedMeta, setOwnedMeta] = useState<{
+    activeDisplayRole: string
+    highestShopRank: string
+    highestVip: string
+  } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null)
@@ -75,6 +85,7 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
   const [minecraftRoleKeys, setMinecraftRoleKeys] = useState<string[]>([])
   const [grantRolePick, setGrantRolePick] = useState('')
   const [grantRoleBusy, setGrantRoleBusy] = useState(false)
+  const [removeRoleBusyKey, setRemoveRoleBusyKey] = useState<string | null>(null)
 
   const filteredUsers = useMemo(() => {
     const q = userSearchQuery.trim().toLowerCase()
@@ -90,11 +101,24 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
   }, [users, userSearchQuery])
 
   const roleSelectOptions = useMemo(() => {
-    const base = minecraftRoleKeys.length > 0 ? minecraftRoleKeys : ['member']
-    const cur = (selectedUser?.minecraft_role || '').trim().toLowerCase()
-    if (cur && !base.includes(cur)) return [cur, ...base]
-    return base
-  }, [minecraftRoleKeys, selectedUser?.minecraft_role])
+    const base = minecraftRoleKeys.length > 0 ? minecraftRoleKeys : []
+    return base.filter((k) => k !== 'member' && k !== 'player')
+  }, [minecraftRoleKeys])
+
+  const loadOwnedForUser = async (userId: number) => {
+    try {
+      const o = await fetchAdminUserOwnedRoles(userId)
+      setOwnedInventory(o.ownedInventory ?? [])
+      setOwnedMeta({
+        activeDisplayRole: o.activeDisplayRole,
+        highestShopRank: o.highestShopRank,
+        highestVip: o.highestVip,
+      })
+    } catch {
+      setOwnedInventory([])
+      setOwnedMeta(null)
+    }
+  }
 
   useEffect(() => {
     fetchAdminUsers()
@@ -108,6 +132,15 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
       .then(({ keys }) => setMinecraftRoleKeys(keys))
       .catch(() => setMinecraftRoleKeys([]))
   }, [])
+
+  useEffect(() => {
+    if (!selectedUser) {
+      setOwnedInventory([])
+      setOwnedMeta(null)
+      return
+    }
+    void loadOwnedForUser(selectedUser.id)
+  }, [selectedUser?.id])
 
   useEffect(() => {
     fetchGrantableInventoryItems()
@@ -151,8 +184,8 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
     setEditIsAdmin(selectedUser.is_admin)
     setNewPassword('')
     setConfirmPassword('')
-    setGrantRolePick((selectedUser.minecraft_role || 'member').trim().toLowerCase())
-  }, [selectedUser])
+    setGrantRolePick(roleSelectOptions[0] ?? 'vip')
+  }, [selectedUser, roleSelectOptions])
 
   const mergeUserIntoList = (u: AdminUser) => {
     setUsers((prev) => prev.map((x) => (x.id === u.id ? u : x)))
@@ -197,7 +230,7 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
       return
     }
     if (!Number.isFinite(n) || n <= 0 || !Number.isInteger(n)) {
-      setError('Enter a positive whole number for Cobble$.')
+      setError('Enter a positive whole number for Asteryn Point.')
       return
     }
     setBulkConfirmOpen(true)
@@ -221,7 +254,7 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
           ? ` ${res.failures.length} failed (${res.failures.slice(0, 3).map((f) => `#${f.user_id}`).join(', ')}${res.failures.length > 3 ? '…' : ''}).`
           : ''
       setSuccessMessage(
-        `Added ${res.amount_per_user.toLocaleString()} Cobble$ to ${res.granted} of ${res.requested} accounts.${failMsg}`
+        `Added ${res.amount_per_user.toLocaleString()} Asteryn Point to ${res.granted} of ${res.requested} accounts.${failMsg}`
       )
       if (selectedUser && bulkCobbleTargetIds.includes(selectedUser.id)) {
         const { currencies: c } = await fetchAdminUserCurrency(selectedUser.id)
@@ -453,15 +486,43 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
     setError(null)
     setSuccessMessage(null)
     try {
-      const { user } = await grantAdminUserMinecraftRole(selectedUser.id, grantRolePick)
-      mergeUserIntoList(user)
-      const applied = (user.minecraft_role ?? grantRolePick).trim().toLowerCase()
-      setGrantRolePick(applied)
-      setSuccessMessage(`In-game and website rank set to ${applied} for ${user.username}.`)
+      const out = await grantAdminUserMinecraftRole(selectedUser.id, grantRolePick)
+      setOwnedInventory(out.ownedInventory ?? [])
+      setOwnedMeta({
+        activeDisplayRole: out.activeDisplayRole,
+        highestShopRank: out.highestShopRank,
+        highestVip: out.highestVip,
+      })
+      setSuccessMessage(
+        `Granted ${out.grantedRoleKey} to ${selectedUser.username}'s inventory. They choose what to display in-game.`
+      )
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not set Minecraft rank')
+      setError(err instanceof Error ? err.message : 'Could not grant rank/VIP')
     } finally {
       setGrantRoleBusy(false)
+    }
+  }
+
+  const handleRemoveOwnedRole = async (roleKey: string) => {
+    if (!selectedUser || removeRoleBusyKey) return
+    if (roleKey === 'member' || roleKey === 'player') return
+    if (!window.confirm(`Remove ${roleKey} from ${selectedUser.username}'s inventory?`)) return
+    setRemoveRoleBusyKey(roleKey)
+    setError(null)
+    setSuccessMessage(null)
+    try {
+      const out = await removeAdminUserOwnedRole(selectedUser.id, roleKey)
+      setOwnedInventory(out.ownedInventory ?? [])
+      setOwnedMeta({
+        activeDisplayRole: out.activeDisplayRole,
+        highestShopRank: out.highestShopRank,
+        highestVip: out.highestVip,
+      })
+      setSuccessMessage(`Removed ${out.removedRoleKey} from ${selectedUser.username}'s inventory.`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not remove rank/VIP')
+    } finally {
+      setRemoveRoleBusyKey(null)
     }
   }
 
@@ -748,7 +809,7 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
                   : 'text-muted hover:text-[#f5efe6] border border-transparent'
               }`}
             >
-              Bulk Cobble$
+              Bulk Asteryn Point
             </button>
             <button
               type="button"
@@ -783,10 +844,10 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
           {tab === 'bulkCobble' && (
             <div className="rounded-lg bg-surface border border-border p-4 space-y-4">
               <div>
-                <h2 className="text-sm font-semibold text-[#f5efe6] m-0 mb-1">Bulk Cobble$ (website wallet)</h2>
+                <h2 className="text-sm font-semibold text-[#f5efe6] m-0 mb-1">Bulk Asteryn Point (website wallet)</h2>
                 <p className="text-xs text-muted m-0">
                   Choose users with the checkboxes in the list, enter an amount, and confirm. Each selected account
-                  receives the same balance increase. Entries appear in the Cobble$ ledger like single-user grants.
+                  receives the same balance increase. Entries appear in the Asteryn Point ledger like single-user grants.
                 </p>
               </div>
               <label className="inline-flex items-center gap-2 text-xs text-muted">
@@ -847,7 +908,7 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
               <div>
                 <h2 className="text-sm font-semibold text-[#f5efe6] m-0 mb-1">Bulk tickets (website wallet)</h2>
                 <p className="text-xs text-muted m-0">
-                  Same checkboxes as Cobble$: each selected account gets the same ticket balance increase (exchange
+                  Same checkboxes as Asteryn Point: each selected account gets the same ticket balance increase (exchange
                   types: mythic / paradox / shiny, etc.).
                 </p>
               </div>
@@ -930,7 +991,7 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
               <div>
                 <h2 className="text-sm font-semibold text-[#f5efe6] m-0 mb-1">Bulk items (website inventory)</h2>
                 <p className="text-xs text-muted m-0">
-                  Same checkboxes as Cobble$: each selected account receives the same item stack in their website
+                  Same checkboxes as Asteryn Point: each selected account receives the same item stack in their website
                   inventory (claim in-game per your server setup).
                 </p>
               </div>
@@ -1114,22 +1175,71 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
                   </div>
 
                   <div className="rounded-lg bg-surface border border-border p-4">
-                    <h2 className="text-sm font-semibold text-[#f5efe6] m-0 mb-2">Minecraft rank</h2>
+                    <h2 className="text-sm font-semibold text-[#f5efe6] m-0 mb-2">Ranks / VIP inventory</h2>
                     <p className="text-xs text-muted m-0 mb-3">
-                      Sets this account&apos;s in-game rank on the server and updates the rank shown on the website.
-                      Same options as the public rank shop — use it to assign a role right away, without a user request.
+                      View what this player owns. Grant adds to inventory; Remove deletes from inventory (defaults
+                      member/player stay). Does not set their display — they pick that on the website.
                     </p>
-                    <div className="flex flex-wrap items-center gap-2 mb-3">
-                      <span className="text-xs text-muted">Current:</span>
-                      <RoleBadge roleKey={selectedUser.minecraft_role ?? 'member'} />
-                      <span className="text-xs text-[#f5efe6] font-mono">
-                        {(selectedUser.minecraft_role ?? 'member').toLowerCase()}
-                      </span>
+                    <div className="flex flex-wrap gap-3 mb-3 text-xs">
+                      <div className="rounded-md border border-border/80 bg-black/20 px-2.5 py-1.5">
+                        <span className="text-muted">Display: </span>
+                        <span className="text-[#f5efe6] font-mono">
+                          {(ownedMeta?.activeDisplayRole ?? selectedUser.minecraft_role ?? 'member').toLowerCase()}
+                        </span>
+                      </div>
+                      <div className="rounded-md border border-border/80 bg-black/20 px-2.5 py-1.5">
+                        <span className="text-muted">Highest shop: </span>
+                        <span className="text-[#f5efe6] font-mono">
+                          {(ownedMeta?.highestShopRank ?? 'member').toLowerCase()}
+                        </span>
+                      </div>
+                      <div className="rounded-md border border-violet-500/30 bg-violet-950/20 px-2.5 py-1.5">
+                        <span className="text-muted">Highest VIP: </span>
+                        <span className="text-[#f5efe6] font-mono">
+                          {(ownedMeta?.highestVip ?? 'player').toLowerCase()}
+                        </span>
+                      </div>
                     </div>
+                    {ownedInventory.length > 0 ? (
+                      <div className="mb-3 space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                        {ownedInventory.map((row) => {
+                          const isDefault = row.key === 'member' || row.key === 'player'
+                          return (
+                            <div
+                              key={row.key}
+                              className={`flex items-center justify-between gap-2 rounded-md border px-2 py-1.5 text-[11px] ${
+                                row.active
+                                  ? 'border-emerald-500/50 bg-emerald-950/30 text-emerald-100'
+                                  : 'border-border/70 bg-black/25 text-[#f5efe6]'
+                              }`}
+                            >
+                              <div className="flex min-w-0 items-center gap-1.5">
+                                <RoleBadge roleKey={row.key} compact />
+                                <span className="font-mono truncate">{row.key}</span>
+                                <span className="text-muted uppercase tracking-wide">{row.kind}</span>
+                                {row.active ? <span className="text-emerald-300">· display</span> : null}
+                                {isDefault ? <span className="text-muted">· default</span> : null}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => void handleRemoveOwnedRole(row.key)}
+                                disabled={isDefault || removeRoleBusyKey === row.key || grantRoleBusy}
+                                className="shrink-0 px-2 py-1 rounded border border-red-500/40 text-red-200/90 hover:bg-red-950/40 disabled:opacity-35"
+                                title={isDefault ? 'Defaults cannot be removed' : `Remove ${row.key}`}
+                              >
+                                {removeRoleBusyKey === row.key ? '…' : 'Remove'}
+                              </button>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted m-0 mb-3">No owned ranks/VIPs in inventory yet.</p>
+                    )}
                     <div className="flex flex-wrap items-end gap-2">
                       <div className="min-w-[200px] flex-1">
                         <label htmlFor="grant-mc-role" className="block text-xs text-muted mb-1">
-                          Set rank to
+                          Grant into inventory
                         </label>
                         <select
                           id="grant-mc-role"
@@ -1147,14 +1257,10 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
                       <button
                         type="button"
                         onClick={() => void handleGrantMinecraftRole()}
-                        disabled={
-                          grantRoleBusy ||
-                          !grantRolePick ||
-                          grantRolePick === (selectedUser.minecraft_role ?? 'member').trim().toLowerCase()
-                        }
+                        disabled={grantRoleBusy || !grantRolePick || Boolean(removeRoleBusyKey)}
                         className="px-3 py-1.5 rounded-lg bg-accent text-[#1a1510] text-sm font-medium hover:bg-accent/90 disabled:opacity-50"
                       >
-                        {grantRoleBusy ? 'Applying…' : 'Apply rank'}
+                        {grantRoleBusy ? 'Granting…' : 'Grant to inventory'}
                       </button>
                     </div>
                   </div>
@@ -1477,16 +1583,16 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
             onClick={(e) => e.stopPropagation()}
           >
             <h3 id="bulk-cobble-title" className="text-lg font-semibold text-[#f5efe6] m-0 mb-2">
-              Grant Cobble$ to {bulkCobbleTargetIds.length} accounts{bulkAllUsers ? ' (all users)' : ''}?
+              Grant Asteryn Point to {bulkCobbleTargetIds.length} accounts{bulkAllUsers ? ' (all users)' : ''}?
             </h3>
             <p className="text-sm text-muted m-0 mb-4">
               Each account will receive{' '}
               <span className="text-[#f5efe6] font-medium">
-                {Number(bulkAmount).toLocaleString()} Cobble$
+                {Number(bulkAmount).toLocaleString()} Asteryn Point
               </span>
               . Total credits:{' '}
               <span className="text-[#f5efe6] font-medium">
-                {(Number(bulkAmount) * bulkCobbleTargetIds.length).toLocaleString()} Cobble$
+                {(Number(bulkAmount) * bulkCobbleTargetIds.length).toLocaleString()} Asteryn Point
               </span>
               .
               {bulkNote.trim() ? (
