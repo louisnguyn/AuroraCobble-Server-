@@ -128,9 +128,9 @@ export function Poker() {
   }, [isAuthenticated])
 
   const handleWsEvent = useCallback(
-    (data: { type?: string; room?: HoldemRoomState; message?: string }) => {
+    (data: { type?: string; room?: unknown; message?: string }) => {
       if (data.type === 'room_state' && data.room) {
-        setRoom(data.room)
+        setRoom(data.room as HoldemRoomState)
         setError(null)
         loadWallet()
       } else if (data.type === 'error') {

@@ -1656,8 +1656,9 @@ export function Clan() {
                   return bElo - aElo
                 })
                 .map((m) => {
-                  const isRanked = m.elo != null
-                  const tier = isRanked ? getPvpTierFromElo(m.elo) : null
+                  const elo = m.elo
+                  const isRanked = elo != null
+                  const tier = isRanked ? getPvpTierFromElo(elo) : null
                   const isYou = user?.id === m.user_id
                   return (
                     <li

@@ -72,7 +72,7 @@ function DailyRewardStatCard({
 }: {
   label: string
   value: ReactNode
-  sub?: string
+  sub?: ReactNode
   accent?: DailyStatAccent
   valueClassName?: string
 }) {

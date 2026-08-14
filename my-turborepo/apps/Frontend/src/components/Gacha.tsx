@@ -258,13 +258,6 @@ export function Gacha() {
     fetchUserCurrencies().then(({ currencies: c }) => setCurrencies(c)).catch(() => setCurrencies([]))
   }, [isAuthenticated])
 
-  const refetchCurrencies = () => {
-    fetchUserCurrencies().then(({ currencies: c }) => setCurrencies(c)).catch(() => {})
-    if (selectedPool) {
-      fetchPoolCurrency(selectedPool.id).then(({ balance: b }) => setBalance(b)).catch(() => {})
-    }
-  }
-
   const executeClaim = async () => {
     if (!claimPending) return
     if (!canUseGacha) {
