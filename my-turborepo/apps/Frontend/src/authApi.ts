@@ -465,7 +465,7 @@ export interface DailyLoginStatus {
   date: string
   timeZone: string
   eligible: boolean
-  /** VIP Point (+1 if VIP+) + rank tickets (1–5) + rank/VIP items for daily claim. */
+  /** VIP overlay Point (+1, including PLAYER) + rank tickets (1–5) + rank/VIP items for daily claim. */
   dailyRankBonus?: {
     minecraftRole: string
     vipTier?: string

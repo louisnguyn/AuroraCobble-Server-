@@ -340,13 +340,12 @@ export function getWebsiteShopDiscountPercent(roleKey: string): number {
 }
 
 /**
- * Daily Asteryn Point from VIP overlay only (+1). Shop ranks do not add Point.
- * `player` (no VIP) gets 0.
+ * Daily Asteryn Point from VIP overlay (+1 for player through titan). Shop ranks do not add Point.
  */
 export function getDailyLoginFlatCobbleBonusPerClaim(roleKey: string): number {
   const k = normalizeRoleKey(roleKey);
-  if (k === DEFAULT_VIP_TIER) return 0;
   const byVip: Record<string, number> = {
+    [DEFAULT_VIP_TIER]: 1,
     vip: 1,
     mvip: 1,
     svip: 1,
