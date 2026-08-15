@@ -31,10 +31,9 @@ WITH shop AS (
     (2, 'pro'),
     (3, 'master'),
     (4, 'hero'),
-    (5, 'onichan'),
-    (6, 'ultimate'),
-    (7, 'overlord'),
-    (8, 'god')
+    (5, 'ultimate'),
+    (6, 'overlord'),
+    (7, 'god')
   ) AS t(idx, key)
 ),
 legacy_equiv AS (
@@ -43,6 +42,7 @@ legacy_equiv AS (
       WHEN 'zeus' THEN 'pro'
       WHEN 'knight' THEN 'pro'
       WHEN 'legend' THEN 'ultimate'
+      WHEN 'onichan' THEN 'hero'
       ELSE lower(trim(u.minecraft_role))
     END AS progress_key
   FROM users u

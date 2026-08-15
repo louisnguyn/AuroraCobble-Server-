@@ -1,0 +1,8 @@
+# Remove Oniichan from the shop rank ladder (hero → ultimate).
+# Run after updating website shop: npx tsx scripts/rcon-batch.ts scripts/luckperms/12-remove-onichan.txt
+#
+# Players whose website role was onichan should be remapped to hero via
+# supabase/remove-onichan-rank.sql, then re-sync LP (parent set hero) if needed.
+
+lp group ultimate parent add hero
+lp group ultimate parent remove onichan

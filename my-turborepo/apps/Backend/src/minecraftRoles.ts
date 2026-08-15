@@ -67,12 +67,11 @@ export type RoleCatalogEntry = {
 
 /**
  * Shop ladder (Asteryn Point, step-by-step):
- * noob → elite → pro → master → hero → onichan → ultimate → overlord → god
+ * noob → elite → pro → master → hero → ultimate → overlord → god
  * VIP track (separate): player → vip → mvip → svip → uvip → legend → titan
  *
- * `cost` is paid for that one next step only — cannot skip. Daily AP is 1–3.
- * Early steps are a few days of login; later steps are weeks. Oniichan is free
- * after Hero so the ladder still has a checkpoint before Ultimate+.
+ * `cost` is paid for that one next step only — cannot skip. Daily AP is +1 from VIP.
+ * Early steps are a few days of login; later steps are weeks.
  */
 const PURCHASABLE: { key: string; label: string; cost: number }[] = [
   { key: "noob", label: "NOOB", cost: 4 },
@@ -80,7 +79,6 @@ const PURCHASABLE: { key: string; label: string; cost: number }[] = [
   { key: "pro", label: "PRO", cost: 10 },
   { key: "master", label: "MASTER", cost: 15 },
   { key: "hero", label: "HERO", cost: 20 },
-  { key: "onichan", label: "ONIICHAN", cost: 0 },
   { key: "ultimate", label: "ULTIMATE", cost: 28 },
   { key: "overlord", label: "OVERLORD", cost: 38 },
   { key: "god", label: "GOD", cost: 50 },
@@ -110,12 +108,14 @@ const GRANT_ONLY_FLAT_SHOP_DISCOUNT_15 = new Set([
 
 /**
  * Old shop ranks removed from the ladder → treat as this shop tier for "next buy" / owned checks.
- * zeus/knight sat between pro and master; legend sat between ultimate and overlord.
+ * zeus/knight sat between pro and master; legend sat between ultimate and overlord;
+ * onichan sat between hero and ultimate (free checkpoint).
  */
 const LEGACY_SHOP_EQUIV: Record<string, string> = {
   zeus: "pro",
   knight: "pro",
   legend: "ultimate",
+  onichan: "hero",
 };
 
 const ALL_KNOWN_KEYS = new Set<string>([
@@ -340,19 +340,20 @@ export function getWebsiteShopDiscountPercent(roleKey: string): number {
 }
 
 /**
- * Daily Asteryn Point from VIP overlay only (1–3). Shop ranks do not add Point.
+ * Daily Asteryn Point from VIP overlay only (+1). Shop ranks do not add Point.
+ * `player` (no VIP) gets 0.
  */
 export function getDailyLoginFlatCobbleBonusPerClaim(roleKey: string): number {
   const k = normalizeRoleKey(roleKey);
+  if (k === DEFAULT_VIP_TIER) return 0;
   const byVip: Record<string, number> = {
-    [DEFAULT_VIP_TIER]: 1,
-    vip: 2,
-    mvip: 2,
-    svip: 2,
-    uvip: 3,
-    legend: 3,
-    titan: 3,
-    donator: 2,
+    vip: 1,
+    mvip: 1,
+    svip: 1,
+    uvip: 1,
+    legend: 1,
+    titan: 1,
+    donator: 1,
   };
   return byVip[k] ?? 0;
 }

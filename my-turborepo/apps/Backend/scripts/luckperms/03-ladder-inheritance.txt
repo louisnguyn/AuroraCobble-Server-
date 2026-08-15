@@ -3,7 +3,7 @@
 # Website uses `lp user <name> parent set <role>` (replaces parents). With this
 # chain, one parent is enough to keep lower-tier perms.
 #
-# Shop: member → noob → elite → pro → master → hero → onichan → ultimate → overlord → god
+# Shop: member → noob → elite → pro → master → hero → ultimate → overlord → god
 # VIP (separate overlay groups): player → vip → mvip → svip → uvip → legend → titan
 #
 # Run: npx tsx scripts/rcon-batch.ts scripts/luckperms/03-ladder-inheritance.txt
@@ -13,8 +13,7 @@ lp group elite parent add noob
 lp group pro parent add elite
 lp group master parent add pro
 lp group hero parent add master
-lp group onichan parent add hero
-lp group ultimate parent add onichan
+lp group ultimate parent add hero
 lp group overlord parent add ultimate
 lp group god parent add overlord
 
