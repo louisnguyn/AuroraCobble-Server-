@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { login as apiLogin, signup as apiSignup } from '../authApi'
 
 type Mode = 'login' | 'signup'
+type MinecraftClientChoice = 'premium' | 'crack'
 
 interface AuthModalProps {
   onClose: () => void
@@ -15,6 +16,7 @@ export function AuthModal({ onClose, defaultMode = 'login' }: AuthModalProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [username, setUsername] = useState('')
+  const [minecraftClient, setMinecraftClient] = useState<MinecraftClientChoice | ''>('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -27,7 +29,12 @@ export function AuthModal({ onClose, defaultMode = 'login' }: AuthModalProps) {
         const res = await apiLogin(email.trim(), password)
         login(res.token, res.user)
       } else {
-        const res = await apiSignup(email.trim(), password, username.trim())
+        if (minecraftClient !== 'premium' && minecraftClient !== 'crack') {
+          setError('Choose Premium or Crack for your Minecraft account')
+          setLoading(false)
+          return
+        }
+        const res = await apiSignup(email.trim(), password, username.trim(), minecraftClient)
         login(res.token, res.user)
       }
       onClose()
@@ -105,6 +112,54 @@ export function AuthModal({ onClose, defaultMode = 'login' }: AuthModalProps) {
                 />
               </div>
             )}
+            {!isLogin && (
+              <fieldset className="m-0 p-0 border-0">
+                <legend className="block text-left text-base font-medium text-muted mb-2">
+                  Minecraft account type
+                </legend>
+                <p className="text-xs text-muted m-0 mb-2">
+                  Select how you join the server — official Mojang/Microsoft (Premium) or cracked launcher.
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <label
+                    className={`flex cursor-pointer items-center justify-center gap-2 rounded-sm border-2 px-3 py-3 text-sm font-semibold transition-colors ${
+                      minecraftClient === 'premium'
+                        ? 'border-accent bg-accent/15 text-[#e2e8f0]'
+                        : 'border-border/80 bg-[#0a0f18]/50 text-muted hover:border-accent/40'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="minecraft-client"
+                      value="premium"
+                      checked={minecraftClient === 'premium'}
+                      onChange={() => setMinecraftClient('premium')}
+                      className="sr-only"
+                      required={!isLogin}
+                    />
+                    Premium
+                  </label>
+                  <label
+                    className={`flex cursor-pointer items-center justify-center gap-2 rounded-sm border-2 px-3 py-3 text-sm font-semibold transition-colors ${
+                      minecraftClient === 'crack'
+                        ? 'border-accent bg-accent/15 text-[#e2e8f0]'
+                        : 'border-border/80 bg-[#0a0f18]/50 text-muted hover:border-accent/40'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="minecraft-client"
+                      value="crack"
+                      checked={minecraftClient === 'crack'}
+                      onChange={() => setMinecraftClient('crack')}
+                      className="sr-only"
+                      required={!isLogin}
+                    />
+                    Crack
+                  </label>
+                </div>
+              </fieldset>
+            )}
             <div>
               <label htmlFor="auth-password" className="block text-left text-base font-medium text-muted mb-1">
                 Password
@@ -134,7 +189,11 @@ export function AuthModal({ onClose, defaultMode = 'login' }: AuthModalProps) {
             {isLogin ? "Don't have an account? " : 'Already have an account? '}
             <button
               type="button"
-              onClick={() => { setMode(isLogin ? 'signup' : 'login'); setError(null); }}
+              onClick={() => {
+                setMode(isLogin ? 'signup' : 'login')
+                setError(null)
+                setMinecraftClient('')
+              }}
               className="text-accent font-medium hover:underline"
             >
               {isLogin ? 'Sign up' : 'Log in'}

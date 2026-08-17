@@ -15,8 +15,18 @@ import {
   normalizeRoleKey,
   normalizeVipTierKey,
   type VipTierKey,
-  type UserProfileBadgeCounts,
 } from "./minecraftRoles.js";
+
+/** Minimum profile badge score (violet=1 … legend=5 per badge) to claim each VIP step. */
+export const VIP_CLAIM_BADGE_SCORE: Record<VipTierKey, number> = {
+  player: 0,
+  vip: 3,
+  mvip: 7,
+  svip: 10,
+  uvip: 15,
+  legend: 20,
+  titan: 30,
+};
 
 export type OwnedRoleSource = "shop" | "grant" | "admin" | "vip_claim" | "backfill";
 
@@ -94,8 +104,8 @@ export async function removeOwnedRole(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const k = normalizeRoleKey(roleKey);
   if (!k) return { ok: false, error: "Invalid role key" };
-  if (k === DEFAULT_MINECRAFT_ROLE || k === DEFAULT_VIP_TIER) {
-    return { ok: false, error: "Default member/player cannot be removed from inventory." };
+  if (k === DEFAULT_MINECRAFT_ROLE) {
+    return { ok: false, error: "Default member cannot be removed from inventory." };
   }
   const { error } = await supabase
     .from("user_owned_roles")
@@ -193,48 +203,20 @@ export async function setWebsiteVipTier(
   return { ok: true };
 }
 
-/** Achievement gates for VIP claim (step must be next above current VIP). */
-export function meetsVipClaimBadgeRequirement(
-  tier: VipTierKey,
-  badges: UserProfileBadgeCounts
-): boolean {
-  switch (tier) {
-    case "player":
-      return true;
-    case "vip":
-      return badges.gold >= 1;
-    case "mvip":
-      return badges.gold >= 2;
-    case "svip":
-      return badges.gold >= 3 || badges.mythic >= 1;
-    case "uvip":
-      return badges.mythic >= 1;
-    case "legend":
-      return badges.legend >= 1 || badges.mythic >= 3;
-    case "titan":
-      return badges.legend >= 2 || badges.mythic >= 5;
-    default:
-      return false;
-  }
+/** Badge-score gates for VIP claim (step must be next above current VIP). */
+export function getVipClaimRequiredBadgeScore(tier: VipTierKey): number {
+  return VIP_CLAIM_BADGE_SCORE[tier] ?? 0;
+}
+
+export function meetsVipClaimBadgeRequirement(tier: VipTierKey, badgeScore: number): boolean {
+  if (tier === "player") return true;
+  return badgeScore >= getVipClaimRequiredBadgeScore(tier);
 }
 
 export function getVipClaimBadgeRequirementLabel(tier: VipTierKey): string | null {
-  switch (tier) {
-    case "vip":
-      return "Requires 1 gold profile badge";
-    case "mvip":
-      return "Requires 2 gold profile badges";
-    case "svip":
-      return "Requires 3 gold badges, or 1 mythic badge";
-    case "uvip":
-      return "Requires 1 mythic profile badge";
-    case "legend":
-      return "Requires 1 legend badge, or 3 mythic badges";
-    case "titan":
-      return "Requires 2 legend badges, or 5 mythic badges";
-    default:
-      return null;
-  }
+  const need = getVipClaimRequiredBadgeScore(tier);
+  if (tier === "player" || need <= 0) return null;
+  return `Requires ${need} Badge Score`;
 }
 
 export function getNextVipClaimKey(currentVip: VipTierKey): VipTierKey | null {
@@ -247,14 +229,14 @@ export function getNextVipClaimKey(currentVip: VipTierKey): VipTierKey | null {
 export function buildVipCatalogEntries(
   currentVip: VipTierKey,
   ownedKeys: Set<string>,
-  badges: UserProfileBadgeCounts,
+  badgeScore: number,
   activeRoleKey?: string
 ) {
   const next = getNextVipClaimKey(currentVip);
   const active = normalizeRoleKey(activeRoleKey ?? "");
   return VIP_TIER_KEYS.filter((k) => k !== DEFAULT_VIP_TIER).map((key) => {
     const owned = ownedKeys.has(key) || getVipTierIndex(key) <= getVipTierIndex(currentVip);
-    const canClaimNow = key === next && meetsVipClaimBadgeRequirement(key, badges);
+    const canClaimNow = key === next && meetsVipClaimBadgeRequirement(key, badgeScore);
     const label = getVipClaimBadgeRequirementLabel(key);
     return {
       key,
@@ -263,7 +245,8 @@ export function buildVipCatalogEntries(
       canClaimNow,
       locked: !owned && !canClaimNow,
       badgeRequirementLabel: label,
-      meetsBadgeRequirement: meetsVipClaimBadgeRequirement(key, badges),
+      requiredBadgeScore: getVipClaimRequiredBadgeScore(key),
+      meetsBadgeRequirement: meetsVipClaimBadgeRequirement(key, badgeScore),
       canActivate: owned,
       active: active === key,
       perks: getRoleWebsitePerks(key),
@@ -279,7 +262,7 @@ export function classifyOwnedRoleKey(roleKey: string): "shop" | "vip" | "grant" 
   return "other";
 }
 
-/** Inventory rows for owned ranks / VIPs (player picks display). Always includes defaults. */
+/** Inventory rows for owned ranks / VIPs (player picks display). Always includes MEMBER. */
 export function buildOwnedInventoryEntries(
   ownedKeys: string[],
   activeRoleKey: string
@@ -290,11 +273,11 @@ export function buildOwnedInventoryEntries(
 }[] {
   const active = normalizeRoleKey(activeRoleKey);
   const uniq = new Set(
-    ownedKeys.map(normalizeRoleKey).filter((k) => Boolean(k))
+    ownedKeys.map(normalizeRoleKey).filter((k) => Boolean(k) && k !== DEFAULT_VIP_TIER)
   );
-  // Defaults are always owned / selectable in inventory.
   uniq.add(DEFAULT_MINECRAFT_ROLE);
-  uniq.add(DEFAULT_VIP_TIER);
+  // PLAYER is not a default inventory item. Only show it if it is the current display.
+  if (active === DEFAULT_VIP_TIER) uniq.add(DEFAULT_VIP_TIER);
 
   const kindOrder = { shop: 0, vip: 1, grant: 2, other: 3 } as const;
   return [...uniq]

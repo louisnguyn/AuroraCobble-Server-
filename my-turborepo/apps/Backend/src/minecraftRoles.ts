@@ -70,18 +70,17 @@ export type RoleCatalogEntry = {
  * noob → elite → pro → master → hero → ultimate → overlord → god
  * VIP track (separate): player → vip → mvip → svip → uvip → legend → titan
  *
- * `cost` is paid for that one next step only — cannot skip. Daily AP is +1 from VIP.
- * Early steps are a few days of login; later steps are weeks.
+ * `cost` is paid for that one next step only — cannot skip. Daily VIP AP: 1–5 by tier.
  */
 const PURCHASABLE: { key: string; label: string; cost: number }[] = [
-  { key: "noob", label: "NOOB", cost: 4 },
-  { key: "elite", label: "ELITE", cost: 7 },
-  { key: "pro", label: "PRO", cost: 10 },
-  { key: "master", label: "MASTER", cost: 15 },
-  { key: "hero", label: "HERO", cost: 20 },
-  { key: "ultimate", label: "ULTIMATE", cost: 28 },
-  { key: "overlord", label: "OVERLORD", cost: 38 },
-  { key: "god", label: "GOD", cost: 50 },
+  { key: "noob", label: "NOOB", cost: 5 },
+  { key: "elite", label: "ELITE", cost: 20 },
+  { key: "pro", label: "PRO", cost: 75 },
+  { key: "master", label: "MASTER", cost: 100 },
+  { key: "hero", label: "HERO", cost: 200 },
+  { key: "ultimate", label: "ULTIMATE", cost: 300 },
+  { key: "overlord", label: "OVERLORD", cost: 500 },
+  { key: "god", label: "GOD", cost: 1000 },
 ];
 
 const GRANT_ONLY_LABELS: Record<string, string> = {
@@ -340,7 +339,8 @@ export function getWebsiteShopDiscountPercent(roleKey: string): number {
 }
 
 /**
- * Daily Asteryn Point from VIP overlay (+1 for player through titan). Shop ranks do not add Point.
+ * Daily Asteryn Point from VIP overlay. Shop ranks do not add Point.
+ * player: 1 · vip/mvip: 1 · svip: 2 · uvip: 3 · legend: 4 · titan: 5
  */
 export function getDailyLoginFlatCobbleBonusPerClaim(roleKey: string): number {
   const k = normalizeRoleKey(roleKey);
@@ -348,10 +348,10 @@ export function getDailyLoginFlatCobbleBonusPerClaim(roleKey: string): number {
     [DEFAULT_VIP_TIER]: 1,
     vip: 1,
     mvip: 1,
-    svip: 1,
-    uvip: 1,
-    legend: 1,
-    titan: 1,
+    svip: 2,
+    uvip: 3,
+    legend: 4,
+    titan: 5,
     donator: 1,
   };
   return byVip[k] ?? 0;

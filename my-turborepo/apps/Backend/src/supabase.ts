@@ -16,6 +16,8 @@ export type UserRow = {
   minecraft_verified_at?: string | null;
   /** LuckPerms parent group key mirrored from purchases / staff grants. */
   minecraft_role?: string | null;
+  /** `premium` (official) or `crack` — chosen at signup; staff may change. */
+  minecraft_client?: string | null;
   created_at: string;
   updated_at: string;
 };

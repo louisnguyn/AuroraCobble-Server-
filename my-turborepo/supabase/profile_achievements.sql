@@ -7,9 +7,6 @@ CREATE TABLE IF NOT EXISTS profile_achievement_definitions (
   description text NOT NULL,
   tier text NOT NULL CHECK (
     tier IN (
-      'silver',
-      'cyan',
-      'emerald',
       'violet',
       'rose',
       'gold',

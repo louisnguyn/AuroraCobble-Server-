@@ -31,9 +31,6 @@ function formatPvpFormatLabel(raw: string): string {
 }
 
 const PROFILE_AC_TIER_CLASS: Record<string, string> = {
-  silver: 'profile-ac-card profile-ac-silver',
-  cyan: 'profile-ac-card profile-ac-cyan',
-  emerald: 'profile-ac-card profile-ac-emerald',
   violet: 'profile-ac-card profile-ac-violet',
   rose: 'profile-ac-card profile-ac-rose',
   gold: 'profile-ac-card profile-ac-gold',
@@ -42,7 +39,7 @@ const PROFILE_AC_TIER_CLASS: Record<string, string> = {
 }
 
 function achievementCardClass(tier: string) {
-  return PROFILE_AC_TIER_CLASS[tier] ?? 'profile-ac-card profile-ac-cyan'
+  return PROFILE_AC_TIER_CLASS[tier] ?? 'profile-ac-card profile-ac-violet'
 }
 
 type ProfileProps = {

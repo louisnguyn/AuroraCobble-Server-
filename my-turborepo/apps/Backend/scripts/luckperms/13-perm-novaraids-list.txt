@@ -1,0 +1,45 @@
+# Grant novaraids.list to every rank group.
+#
+# Set per-group on purpose: the website assigns ranks with
+# `lp user <name> parent set <role>`, which replaces all parents, so a ranked
+# player no longer inherits LuckPerms' `default` group. Granting only on
+# `default` would miss everyone who owns a rank.
+#
+# Also run 07-parent-add-default.txt so future perms on `default` inherit.
+#
+# Run: npx tsx scripts/rcon-batch.ts scripts/luckperms/13-perm-novaraids-list.txt
+
+lp group default permission set novaraids.list true
+
+# --- Defaults ---
+lp group member permission set novaraids.list true
+lp group player permission set novaraids.list true
+
+# --- Shop ladder ---
+lp group noob permission set novaraids.list true
+lp group elite permission set novaraids.list true
+lp group pro permission set novaraids.list true
+lp group master permission set novaraids.list true
+lp group hero permission set novaraids.list true
+lp group ultimate permission set novaraids.list true
+lp group overlord permission set novaraids.list true
+lp group god permission set novaraids.list true
+
+# --- VIP ladder ---
+lp group vip permission set novaraids.list true
+lp group mvip permission set novaraids.list true
+lp group svip permission set novaraids.list true
+lp group uvip permission set novaraids.list true
+lp group legend permission set novaraids.list true
+lp group titan permission set novaraids.list true
+
+# --- Grant / staff / partner ---
+lp group champion permission set novaraids.list true
+lp group helper permission set novaraids.list true
+lp group mod permission set novaraids.list true
+lp group tiktok permission set novaraids.list true
+lp group youtuber permission set novaraids.list true
+lp group builder permission set novaraids.list true
+lp group admin permission set novaraids.list true
+lp group owner permission set novaraids.list true
+lp group donator permission set novaraids.list true

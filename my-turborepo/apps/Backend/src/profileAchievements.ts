@@ -45,7 +45,6 @@ async function loadUserGrantedBadgeDefinitionTiers(
     .from("profile_achievement_definitions")
     .select("tier")
     .in("id", ids)
-    .in("tier", ["mythic", "gold", "legend", "crimson"])
     .eq("active", true);
   const missingDefs = Boolean(
     defErr && /profile_achievement_definitions|relation|does not exist|schema cache/i.test(defErr.message)
@@ -55,6 +54,25 @@ async function loadUserGrantedBadgeDefinitionTiers(
     return [];
   }
   return (defs ?? []).map((d) => (d as { tier: string }).tier);
+}
+
+/** Same weight as achievements leaderboard: violet=1 … legend=5. */
+export function badgeTierScoreWeight(tier: string): number {
+  const parsed = parseAchievementTier(tier);
+  if (!parsed) return 0;
+  return achievementTierRank(parsed) + 1;
+}
+
+export async function sumUserProfileBadgeScore(
+  supabase: SupabaseClient,
+  userId: number
+): Promise<number> {
+  try {
+    const tiers = await loadUserGrantedBadgeDefinitionTiers(supabase, userId);
+    return tiers.reduce((sum, tier) => sum + badgeTierScoreWeight(tier), 0);
+  } catch {
+    return 0;
+  }
 }
 
 export async function countUserProfileBadgesByTier(
@@ -170,7 +188,7 @@ export type AchievementLeaderboardRow = {
   gold: number;
 };
 
-/** Public ranking: higher-tier badges score more (silver=1 … legend=8). */
+/** Public ranking: higher-tier badges score more (violet=1 … legend=5). */
 export async function fetchAchievementLeaderboard(
   supabase: SupabaseClient,
   limit = 50

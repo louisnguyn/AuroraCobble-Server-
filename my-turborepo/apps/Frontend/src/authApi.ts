@@ -12,6 +12,8 @@ export interface AuthUser {
   minecraft_verified_at?: string | null
   /** LuckPerms parent group mirrored on the site (e.g. member, pro). */
   minecraft_role?: string
+  /** Official Minecraft (`premium`) or cracked launcher (`crack`). */
+  minecraft_client?: 'premium' | 'crack' | null
 }
 
 export interface AuthResponse {
@@ -68,10 +70,15 @@ function clientLocaleViHeaders(): HeadersInit {
   return {}
 }
 
-export async function signup(email: string, password: string, username: string): Promise<AuthResponse> {
+export async function signup(
+  email: string,
+  password: string,
+  username: string,
+  minecraftClient: 'premium' | 'crack'
+): Promise<AuthResponse> {
   return fetchApi<AuthResponse>('/auth/signup', {
     method: 'POST',
-    body: JSON.stringify({ email, password, username }),
+    body: JSON.stringify({ email, password, username, minecraftClient }),
     skipAuth: true,
   })
 }
@@ -465,7 +472,7 @@ export interface DailyLoginStatus {
   date: string
   timeZone: string
   eligible: boolean
-  /** VIP overlay Point (+1, including PLAYER) + rank tickets (1–5) + rank/VIP items for daily claim. */
+  /** VIP overlay Point (player/vip/mvip 1 → titan 5) + rank tickets (1–5) + rank/VIP items. */
   dailyRankBonus?: {
     minecraftRole: string
     vipTier?: string
@@ -658,6 +665,7 @@ export type VipCatalogEntry = {
   canClaimNow: boolean
   locked: boolean
   badgeRequirementLabel: string | null
+  requiredBadgeScore?: number
   meetsBadgeRequirement: boolean
   canActivate: boolean
   active: boolean
@@ -683,6 +691,7 @@ export async function fetchRoleCatalog(): Promise<{
   ownedInventory: OwnedRoleInventoryEntry[]
   websiteVipTier: string
   nextVipClaimKey: string | null
+  badgeScore: number
   mythicBadgeCount: number
   goldBadgeCount: number
   legendBadgeCount: number
@@ -936,9 +945,6 @@ export type PublicProfileAchievement = {
   title: string
   description: string
   tier:
-    | 'silver'
-    | 'cyan'
-    | 'emerald'
     | 'violet'
     | 'rose'
     | 'gold'

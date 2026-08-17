@@ -8,6 +8,8 @@ import {
   createUser,
   findUserByEmail,
   findUserById,
+  parseMinecraftClientType,
+  readMinecraftClientField,
   verifyPassword,
   signToken,
   verifyToken,
@@ -73,6 +75,7 @@ import {
   getNextVipClaimKey,
   getShopProgressRoleKey,
   getVipClaimBadgeRequirementLabel,
+  getVipClaimRequiredBadgeScore,
   isActivatableOwnedRole,
   listOwnedRoleKeys,
   meetsVipClaimBadgeRequirement,
@@ -196,6 +199,7 @@ import {
   parseAchievementTier,
   countUserProfileBadgesByTier,
   fetchAchievementLeaderboard,
+  sumUserProfileBadgeScore,
 } from "./profileAchievements.js";
 
 function readMinecraftRoleField(row: { minecraft_role?: string | null } | null | undefined): string {
@@ -1463,8 +1467,13 @@ app.get("/spawn/boss", async (req, res) => {
 
 // --- Auth (users table, no Supabase built-in auth) ---
 app.post("/auth/signup", async (req, res) => {
-  const { email, password, username } = req.body ?? {};
-  const result = await createUser({ email, password, username });
+  const { email, password, username, minecraftClient } = req.body ?? {};
+  const client = parseMinecraftClientType(minecraftClient);
+  if (!client) {
+    res.status(400).json({ error: "Choose Premium or Crack for your Minecraft account" });
+    return;
+  }
+  const result = await createUser({ email, password, username, minecraftClient: client });
   if ("error" in result) {
     res.status(400).json({ error: result.error });
     return;
@@ -1494,6 +1503,7 @@ app.post("/auth/signup", async (req, res) => {
       is_admin: isAdmin,
       minecraft_verified_at: mcVerified,
       minecraft_role: readMinecraftRoleField(result as { minecraft_role?: string | null }),
+      minecraft_client: readMinecraftClientField(result),
     },
   });
 });
@@ -1532,6 +1542,7 @@ app.post("/auth/login", async (req, res) => {
       is_admin: isAdmin,
       minecraft_verified_at: mcVerified,
       minecraft_role: readMinecraftRoleField(user as { minecraft_role?: string | null }),
+      minecraft_client: readMinecraftClientField(user),
     },
   });
 });
@@ -1545,7 +1556,7 @@ app.get("/auth/me", requireAuth, async (req, res) => {
   if (supabase) {
     const { data: row, error } = await supabase
       .from("users")
-      .select("id, email, username, is_admin, minecraft_verified_at, minecraft_role")
+      .select("id, email, username, is_admin, minecraft_verified_at, minecraft_role, minecraft_client")
       .eq("id", tokenUser.userId)
       .maybeSingle();
     if (!error && row) {
@@ -1556,6 +1567,7 @@ app.get("/auth/me", requireAuth, async (req, res) => {
         is_admin: boolean;
         minecraft_verified_at: string | null;
         minecraft_role?: string | null;
+        minecraft_client?: string | null;
       };
       const user = {
         id: r.id,
@@ -1564,6 +1576,7 @@ app.get("/auth/me", requireAuth, async (req, res) => {
         is_admin: !!r.is_admin,
         minecraft_verified_at: r.minecraft_verified_at ?? null,
         minecraft_role: readMinecraftRoleField(r),
+        minecraft_client: readMinecraftClientField(r),
       };
       const staleJwt =
         jwtPayload != null &&
@@ -1594,6 +1607,7 @@ app.get("/auth/me", requireAuth, async (req, res) => {
       is_admin: tokenUser.isAdmin ?? false,
       minecraft_verified_at: null as string | null,
       minecraft_role: DEFAULT_MINECRAFT_ROLE,
+      minecraft_client: null as string | null,
     },
   });
 });
@@ -2405,8 +2419,9 @@ app.get("/roles/catalog", requireAuth, async (_req, res) => {
   const profileBadgeCounts = supabase
     ? await countUserProfileBadgesByTier(supabase, userId)
     : { mythic: 0, gold: 0, legend: 0 };
+  const badgeScore = supabase ? await sumUserProfileBadgeScore(supabase, userId) : 0;
   const catalog = getRoleCatalog();
-  const vip = buildVipCatalogEntries(websiteVipTier, ownedSet, profileBadgeCounts, currentRole);
+  const vip = buildVipCatalogEntries(websiteVipTier, ownedSet, badgeScore, currentRole);
   const ownedInventory = buildOwnedInventoryEntries([...ownedSet], currentRole);
   res.json({
     currency: COBBLEDOLLARS_CURRENCY,
@@ -2424,6 +2439,7 @@ app.get("/roles/catalog", requireAuth, async (_req, res) => {
     ownedInventory,
     websiteVipTier,
     nextVipClaimKey: getNextVipClaimKey(websiteVipTier),
+    badgeScore,
     mythicBadgeCount: profileBadgeCounts.mythic,
     goldBadgeCount: profileBadgeCounts.gold,
     legendBadgeCount: profileBadgeCounts.legend,
@@ -2537,11 +2553,12 @@ app.post("/roles/vip/claim", requireAuth, async (req, res) => {
     });
     return;
   }
-  const badges = await countUserProfileBadgesByTier(supabase, user.userId);
-  if (!meetsVipClaimBadgeRequirement(next, badges)) {
+  const badgeScore = await sumUserProfileBadgeScore(supabase, user.userId);
+  if (!meetsVipClaimBadgeRequirement(next, badgeScore)) {
     res.status(400).json({
-      error: getVipClaimBadgeRequirementLabel(next) ?? "Profile badge requirements not met.",
-      profileBadgeCounts: badges,
+      error: getVipClaimBadgeRequirementLabel(next) ?? "Profile badge score requirement not met.",
+      badgeScore,
+      requiredBadgeScore: getVipClaimRequiredBadgeScore(next),
     });
     return;
   }
@@ -2561,7 +2578,7 @@ app.post("/roles/vip/claim", requireAuth, async (req, res) => {
     tierKey: next,
     websiteVipTier: next,
     owned: true,
-    profileBadgeCounts: badges,
+    badgeScore,
   });
 });
 
@@ -5045,7 +5062,7 @@ app.get("/admin/users", requireAuth, requireAdmin, async (req, res) => {
   const searchMode = typeof req.query.q === "string";
   let qb = supabase
     .from("users")
-    .select("id, email, username, is_admin, created_at, minecraft_verified_at, minecraft_role");
+    .select("id, email, username, is_admin, created_at, minecraft_verified_at, minecraft_role, minecraft_client");
   if (searchMode) {
     if (qRaw.length < 1) {
       res.json({ users: [] });
@@ -5118,7 +5135,7 @@ app.post("/admin/profile-achievement-definitions", requireAuth, requireAdmin, as
   if (!title || !description || !tier) {
     res.status(400).json({
       error:
-        "title, description, and a valid tier are required (silver|cyan|emerald|violet|rose|gold|mythic|legend).",
+        "title, description, and a valid tier are required (violet|rose|gold|mythic|legend).",
     });
     return;
   }
@@ -5176,7 +5193,7 @@ app.patch("/admin/profile-achievement-definitions/:id", requireAuth, requireAdmi
     if (!t) {
       res.status(400).json({
         error:
-          "tier must be silver, cyan, emerald, violet, rose, gold, mythic, or legend (run migrate-badge-tiers-mythic-legend.sql if the DB rejects new tiers).",
+          "tier must be violet, rose, gold, mythic, or legend (run migrate-badge-tiers-five.sql if the DB rejects).",
       });
       return;
     }
@@ -5292,7 +5309,7 @@ app.get("/admin/profile-achievement-grants", requireAuth, requireAdmin, async (r
         granted_at: g.granted_at,
         slug: d?.slug ?? "",
         title: d?.title ?? "(deleted badge)",
-        tier: d?.tier ?? "cyan",
+        tier: d?.tier ?? "violet",
         definition_active: d?.active ?? false,
       };
     }),
@@ -6146,8 +6163,8 @@ app.delete("/admin/users/:userId/owned-roles/:roleKey", requireAuth, requireAdmi
     res.status(400).json({ error: "Invalid role key" });
     return;
   }
-  if (roleKey === DEFAULT_MINECRAFT_ROLE || roleKey === DEFAULT_VIP_TIER) {
-    res.status(400).json({ error: "Default member/player cannot be removed." });
+  if (roleKey === DEFAULT_MINECRAFT_ROLE) {
+    res.status(400).json({ error: "Default member cannot be removed." });
     return;
   }
 
@@ -6326,8 +6343,9 @@ app.patch("/admin/users/:userId", requireAuth, requireAdmin, async (req, res) =>
   const hasEmail = Object.prototype.hasOwnProperty.call(body, "email");
   const hasUsername = Object.prototype.hasOwnProperty.call(body, "username");
   const hasIsAdmin = Object.prototype.hasOwnProperty.call(body, "is_admin");
-  if (!hasEmail && !hasUsername && !hasIsAdmin) {
-    res.status(400).json({ error: "No changes: provide email, username, and/or is_admin" });
+  const hasMinecraftClient = Object.prototype.hasOwnProperty.call(body, "minecraft_client");
+  if (!hasEmail && !hasUsername && !hasIsAdmin && !hasMinecraftClient) {
+    res.status(400).json({ error: "No changes: provide email, username, is_admin, and/or minecraft_client" });
     return;
   }
 
@@ -6398,13 +6416,33 @@ app.patch("/admin/users/:userId", requireAuth, requireAdmin, async (req, res) =>
     patch.is_admin = nextAdmin;
   }
 
+  if (hasMinecraftClient) {
+    const raw = (body as { minecraft_client?: unknown }).minecraft_client;
+    if (raw === null || raw === "") {
+      patch.minecraft_client = null;
+    } else {
+      const client = parseMinecraftClientType(raw);
+      if (!client) {
+        res.status(400).json({ error: "minecraft_client must be premium or crack" });
+        return;
+      }
+      patch.minecraft_client = client;
+    }
+  }
+
   const { data: updated, error: updErr } = await supabase
     .from("users")
     .update(patch)
     .eq("id", userId)
-    .select("id, email, username, is_admin, created_at, minecraft_verified_at, minecraft_role")
+    .select("id, email, username, is_admin, created_at, minecraft_verified_at, minecraft_role, minecraft_client")
     .single();
   if (updErr) {
+    if (/minecraft_client|column.*does not exist/i.test(updErr.message)) {
+      res.status(503).json({
+        error: "Database missing minecraft_client — run supabase/users_minecraft_client.sql",
+      });
+      return;
+    }
     res.status(500).json({ error: updErr.message });
     return;
   }
@@ -6443,7 +6481,7 @@ app.post("/admin/users/:userId/verify-ingame", requireAuth, requireAdmin, async 
     .from("users")
     .update({ minecraft_verified_at: verifiedAt, updated_at: verifiedAt })
     .eq("id", userId)
-    .select("id, email, username, is_admin, created_at, minecraft_verified_at, minecraft_role")
+    .select("id, email, username, is_admin, created_at, minecraft_verified_at, minecraft_role, minecraft_client")
     .single();
   if (updErr) {
     res.status(500).json({ error: updErr.message });
@@ -6477,7 +6515,7 @@ app.post("/admin/users/:userId/revoke-ingame-verification", requireAuth, require
     .from("users")
     .update({ minecraft_verified_at: null, updated_at: now })
     .eq("id", userId)
-    .select("id, email, username, is_admin, created_at, minecraft_verified_at, minecraft_role")
+    .select("id, email, username, is_admin, created_at, minecraft_verified_at, minecraft_role, minecraft_client")
     .maybeSingle();
   if (updErr) {
     res.status(500).json({ error: updErr.message });

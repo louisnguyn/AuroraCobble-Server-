@@ -7,9 +7,6 @@ ALTER TABLE profile_achievement_definitions
 ALTER TABLE profile_achievement_definitions
   ADD CONSTRAINT profile_achievement_definitions_tier_check CHECK (
     tier IN (
-      'silver',
-      'cyan',
-      'emerald',
       'violet',
       'rose',
       'gold',

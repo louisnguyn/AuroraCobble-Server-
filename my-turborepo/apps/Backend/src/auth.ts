@@ -15,6 +15,23 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 
 export type JwtPayload = { userId: number; email: string; username: string; isAdmin?: boolean };
 
+/** Official Minecraft vs cracked launcher — stored on `users.minecraft_client`. */
+export type MinecraftClientType = "premium" | "crack";
+
+export function parseMinecraftClientType(raw: unknown): MinecraftClientType | null {
+  const s = String(raw ?? "")
+    .trim()
+    .toLowerCase();
+  if (s === "premium" || s === "crack") return s;
+  return null;
+}
+
+export function readMinecraftClientField(
+  row: { minecraft_client?: string | null } | null | undefined
+): MinecraftClientType | null {
+  return parseMinecraftClientType(row?.minecraft_client);
+}
+
 export function signToken(payload: JwtPayload): string {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
 }
@@ -50,6 +67,7 @@ export async function createUser(params: {
   email: string;
   password: string;
   username: string;
+  minecraftClient: MinecraftClientType;
 }): Promise<UserRow | { error: string }> {
   if (!supabase) return { error: "Database not configured" };
   const email = params.email.trim().toLowerCase();
@@ -57,6 +75,7 @@ export async function createUser(params: {
   if (!email || !params.password || !username)
     return { error: "Email, password, and username are required" };
   if (params.password.length < 8) return { error: "Password must be at least 8 characters" };
+  if (!params.minecraftClient) return { error: "Choose Premium or Crack for your Minecraft account" };
 
   const existing = await findUserByEmail(email);
   if (existing) return { error: "An account with this email already exists" };
@@ -69,11 +88,19 @@ export async function createUser(params: {
       password_hash,
       username,
       is_admin: false,
+      minecraft_client: params.minecraftClient,
     })
     .select()
     .single();
 
-  if (error) return { error: error.message };
+  if (error) {
+    if (/minecraft_client|column.*does not exist/i.test(error.message)) {
+      return {
+        error: "Database missing minecraft_client — run supabase/users_minecraft_client.sql",
+      };
+    }
+    return { error: error.message };
+  }
   return data as UserRow;
 }
 

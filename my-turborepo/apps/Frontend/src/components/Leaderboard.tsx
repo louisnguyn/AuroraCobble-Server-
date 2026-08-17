@@ -512,7 +512,7 @@ export function Leaderboard() {
             Top achievements
           </h2>
           <p className="text-sm text-muted m-0 max-w-3xl">
-            Ranked by profile badge score (higher tiers count more: silver 1 → legend 8). Shows the top 50 players with
+            Ranked by profile badge score (higher tiers count more: violet 1 → legend 5). Shows the top 50 players with
             at least one active badge.
           </p>
           {achLoading && !achData ? (

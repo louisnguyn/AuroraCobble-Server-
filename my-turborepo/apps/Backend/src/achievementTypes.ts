@@ -1,8 +1,5 @@
-/** Ordered roughly from subtle to standout (legend = animated on the website). */
+/** Ordered from lowest to highest leaderboard weight (violet=1 … legend=5). */
 export const ACHIEVEMENT_TIERS = [
-  "silver",
-  "cyan",
-  "emerald",
   "violet",
   "rose",
   "gold",
@@ -14,12 +11,15 @@ export type AchievementTier = (typeof ACHIEVEMENT_TIERS)[number];
 
 const TIER_SET = new Set<string>(ACHIEVEMENT_TIERS);
 
-/** Legacy DB values accepted when reading (run migrate-badge-tiers-mythic-legend.sql). */
+/** Legacy DB values accepted when reading (run migrate-badge-tiers-five.sql). */
 const TIER_ALIASES: Record<string, AchievementTier> = {
   crimson: "mythic",
+  silver: "violet",
+  cyan: "violet",
+  emerald: "violet",
 };
 
-/** Lower = earlier in lists (silver → legend). Unknown tiers sort last. */
+/** Lower = earlier in lists (violet → legend). Unknown tiers sort last. */
 export function achievementTierRank(tier: string): number {
   const t = normalizeAchievementTierKey(tier) ?? "";
   const i = (ACHIEVEMENT_TIERS as readonly string[]).indexOf(t);

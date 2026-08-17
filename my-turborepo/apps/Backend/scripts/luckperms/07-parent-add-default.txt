@@ -17,7 +17,6 @@ lp group pro parent add default
 lp group master parent add default
 lp group hero parent add default
 lp group ultimate parent add default
-lp group onichan parent add default
 lp group overlord parent add default
 lp group god parent add default
 

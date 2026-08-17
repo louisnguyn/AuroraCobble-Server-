@@ -641,7 +641,7 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
             Top achievements
           </h3>
           <p className="text-sm text-slate-400 m-0 max-w-3xl">
-            Ranked by profile badge score (higher tiers count more: silver 1 â†’ legend 8). Top 50 with at least one
+            Ranked by profile badge score (higher tiers count more: violet 1 → legend 5). Top 50 with at least one
             active badge.
           </p>
           {achLoading && !achData ? (

@@ -119,6 +119,7 @@ type RoleCatState = {
   nextVipClaimKey?: string | null
   ownedRoles?: string[]
   ownedInventory?: { key: string; kind: string; active: boolean }[]
+  badgeScore?: number
   mythicBadgeCount?: number
   goldBadgeCount?: number
   legendBadgeCount?: number
@@ -143,6 +144,7 @@ function roleCatFromApi(roles: Awaited<ReturnType<typeof fetchRoleCatalog>>): Ro
     nextVipClaimKey: roles.nextVipClaimKey,
     ownedRoles: roles.ownedRoles,
     ownedInventory: roles.ownedInventory ?? [],
+    badgeScore: roles.badgeScore ?? 0,
     mythicBadgeCount: roles.mythicBadgeCount,
     goldBadgeCount: roles.goldBadgeCount,
     legendBadgeCount: roles.legendBadgeCount,
@@ -231,6 +233,7 @@ export function Account() {
   const [claimBusyItem, setClaimBusyItem] = useState<string | null>(null)
   const [claimError, setClaimError] = useState<string | null>(null)
   const [claimedToServerAt, setClaimedToServerAt] = useState<Record<string, string>>({})
+  const claimBusy = claimBusyItem != null
   const [activeTab, setActiveTab] = useState<AccountTab>('daily')
   const [userPvpRank, setUserPvpRank] = useState<UserPvpRank | null>(null)
   const [vStatus, setVStatus] = useState<VerificationStatusResponse | null>(null)
@@ -563,11 +566,17 @@ export function Account() {
     }
   }
 
-  const handleClaimItem = async (itemKey: string) => {
+  const handleClaimItem = async (itemKey: string, quantity = 1) => {
+    if (quantity < 1) return
     setClaimError(null)
     setClaimBusyItem(itemKey)
     try {
-      await claimInventoryItem(itemKey, 1)
+      let left = quantity
+      while (left > 0) {
+        const chunk = Math.min(left, 999)
+        await claimInventoryItem(itemKey, chunk)
+        left -= chunk
+      }
       setClaimedToServerAt((prev) => ({
         ...prev,
         [itemKey]: new Date().toISOString(),
@@ -576,6 +585,12 @@ export function Account() {
       setInventory(inv.inventory ?? [])
     } catch (err) {
       setClaimError(err instanceof Error ? err.message : 'Claim failed')
+      try {
+        const inv = await fetchUserInventory()
+        setInventory(inv.inventory ?? [])
+      } catch {
+        /* ignore refresh errors after claim failure */
+      }
     } finally {
       setClaimBusyItem(null)
     }
@@ -674,7 +689,7 @@ export function Account() {
     if (!entry.canClaimNow) {
       if (entry.meetsBadgeRequirement === false && entry.badgeRequirementLabel) {
         setRankError(
-          `${entry.badgeRequirementLabel} (you have ${roleCat?.mythicBadgeCount ?? 0} mythic, ${roleCat?.goldBadgeCount ?? 0} gold, ${roleCat?.legendBadgeCount ?? 0} legend).`
+          `${entry.badgeRequirementLabel} (you have ${roleCat?.badgeScore ?? 0} Badge Score).`
         )
       } else {
         setRankError('Claim VIP tiers one step at a time.')
@@ -735,6 +750,11 @@ export function Account() {
             <span className="inline-flex items-center gap-1.5 flex-wrap align-middle">
               <RoleBadge roleKey={user?.minecraft_role ?? 'member'} />
               <span className="text-[#e2e8f0]">{user?.username}</span>
+              {user?.minecraft_client === 'premium' || user?.minecraft_client === 'crack' ? (
+                <span className="text-xs text-muted">
+                  · {user.minecraft_client === 'premium' ? 'Premium' : 'Crack'}
+                </span>
+              ) : null}
               {user && isAccountVerified(user) ? <VerifiedAccountBadge className="w-5 h-5" /> : null}
             </span>
             {user?.email ? (
@@ -955,8 +975,8 @@ export function Account() {
         <>
           <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-2">Ranks &amp; VIPs</h2>
           <p className="text-xs text-muted m-0 mb-3">
-            Everything you own (bought, claimed, or granted). Choose which one to display in-game. Defaults: MEMBER and
-            PLAYER (both have pack icons when LuckPerms groups + prefixes are set).
+            Everything you own (bought, claimed, or granted). Choose which one to display in-game. MEMBER is
+            always in inventory; PLAYER is not added by default.
           </p>
           <div className="mb-6 pixel-well p-4 space-y-2">
             {(roleCat?.ownedInventory?.length ?? 0) === 0 ? (
@@ -977,15 +997,13 @@ export function Account() {
                 const kindLabel =
                   row.key === 'member'
                     ? 'Default rank'
-                    : row.key === 'player'
-                      ? 'Default VIP'
-                      : row.kind === 'shop'
-                        ? 'Rank'
-                        : row.kind === 'vip'
-                          ? 'VIP'
-                          : row.kind === 'grant'
-                            ? 'Granted'
-                            : 'Other'
+                    : row.kind === 'shop'
+                      ? 'Rank'
+                      : row.kind === 'vip'
+                        ? 'VIP'
+                        : row.kind === 'grant'
+                          ? 'Granted'
+                          : 'Other'
                 return (
                   <div
                     key={row.key}
@@ -1037,14 +1055,24 @@ export function Account() {
                     <span>
                       {displayItemName(it.item_key)}: <span className="tabular-nums">{it.quantity}</span>
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => handleClaimItem(it.item_key)}
-                      disabled={it.quantity < 1 || claimBusyItem === it.item_key}
-                      className="shrink-0 py-2 px-3 pixel-btn-primary disabled:opacity-50 text-base"
-                    >
-                      {claimBusyItem === it.item_key ? 'Claiming...' : 'Claim'}
-                    </button>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void handleClaimItem(it.item_key, 1)}
+                        disabled={it.quantity < 1 || claimBusy}
+                        className="py-2 px-3 pixel-btn-primary disabled:opacity-50 text-base"
+                      >
+                        {claimBusyItem === it.item_key ? 'Claiming...' : 'Claim'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleClaimItem(it.item_key, it.quantity)}
+                        disabled={it.quantity < 1 || claimBusy}
+                        className="py-2 px-3 pixel-btn-primary disabled:opacity-50 text-base"
+                      >
+                        {claimBusyItem === it.item_key ? 'Claiming...' : 'Claim all'}
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -1286,25 +1314,17 @@ export function Account() {
                   </p>
                   <p className="m-0 text-xs leading-relaxed text-slate-300">
                     Buy ranks with AsterynPoints one step at a time. Purchases go to Inventory — pick display there. VIP
-                    is claimed with profile badges.
+                    is claimed with Badge Score.
                   </p>
                 </div>
                 <div className="rounded-lg border border-white/[0.07] bg-black/25 px-3 py-2.5">
                   <p className="m-0 mb-2 text-[10px] font-medium uppercase tracking-wide text-slate-500">
-                    Your profile badges (for VIP)
+                    Your Badge Score (for VIP)
                   </p>
                   <div className="flex flex-wrap gap-2">
                     <span className="inline-flex items-center gap-1.5 rounded-md border border-violet-500/40 bg-violet-950/45 px-2.5 py-1 text-xs shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                      <span className="font-bold tabular-nums text-violet-100">{roleCat.mythicBadgeCount ?? 0}</span>
-                      <span className="text-violet-200/80">mythic</span>
-                    </span>
-                    <span className="inline-flex items-center gap-1.5 rounded-md border border-amber-500/40 bg-amber-950/45 px-2.5 py-1 text-xs shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                      <span className="font-bold tabular-nums text-amber-100">{roleCat.goldBadgeCount ?? 0}</span>
-                      <span className="text-amber-200/80">gold</span>
-                    </span>
-                    <span className="inline-flex items-center gap-1.5 rounded-md border border-orange-500/40 bg-orange-950/45 px-2.5 py-1 text-xs shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                      <span className="font-bold tabular-nums text-orange-100">{roleCat.legendBadgeCount ?? 0}</span>
-                      <span className="text-orange-200/80">legend</span>
+                      <span className="font-bold tabular-nums text-violet-100">{roleCat.badgeScore ?? 0}</span>
+                      <span className="text-violet-200/80">Badge Score</span>
                     </span>
                   </div>
                   <p className="m-0 mt-2 text-[10px] text-slate-500">
@@ -1416,9 +1436,9 @@ export function Account() {
             )}
           </div>
 
-          <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-2">VIP (profile badges)</h2>
+          <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-2">VIP (Badge Score)</h2>
           <p className="text-xs text-muted m-0 mb-3">
-            Claim VIP tiers with achievements — no AsterynPoints. After claiming, choose display in Inventory.
+            Claim VIP tiers with Badge Score — no AsterynPoints. After claiming, choose display in Inventory.
             Daily Point follows VIP. Daily tickets follow shop rank. Daily items stack from shop rank and VIP.
           </p>
           <div className="mb-6 pixel-well p-4 space-y-3">

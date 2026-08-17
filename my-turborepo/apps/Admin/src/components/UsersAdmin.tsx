@@ -56,6 +56,7 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
   const [editEmail, setEditEmail] = useState('')
   const [editUsername, setEditUsername] = useState('')
   const [editIsAdmin, setEditIsAdmin] = useState(false)
+  const [editMinecraftClient, setEditMinecraftClient] = useState<'premium' | 'crack' | ''>('')
   const [savingAccount, setSavingAccount] = useState(false)
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -176,12 +177,18 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
       setEditEmail('')
       setEditUsername('')
       setEditIsAdmin(false)
+      setEditMinecraftClient('')
       setGrantRolePick('')
       return
     }
     setEditEmail(selectedUser.email)
     setEditUsername(selectedUser.username)
     setEditIsAdmin(selectedUser.is_admin)
+    setEditMinecraftClient(
+      selectedUser.minecraft_client === 'premium' || selectedUser.minecraft_client === 'crack'
+        ? selectedUser.minecraft_client
+        : ''
+    )
     setNewPassword('')
     setConfirmPassword('')
     setGrantRolePick(roleSelectOptions[0] ?? 'vip')
@@ -391,11 +398,20 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
         email: editEmail.trim().toLowerCase(),
         username: editUsername.trim(),
         is_admin: editIsAdmin,
+        minecraft_client:
+          editMinecraftClient === 'premium' || editMinecraftClient === 'crack'
+            ? editMinecraftClient
+            : null,
       })
       mergeUserIntoList(user)
       setEditEmail(user.email)
       setEditUsername(user.username)
       setEditIsAdmin(user.is_admin)
+      setEditMinecraftClient(
+        user.minecraft_client === 'premium' || user.minecraft_client === 'crack'
+          ? user.minecraft_client
+          : ''
+      )
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save account')
     } finally {
@@ -755,6 +771,21 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
                         Admin
                       </span>
                     )}
+                    <span
+                      className={`inline-block mt-1 ml-1 text-xs px-1.5 py-0.5 rounded ${
+                        u.minecraft_client === 'premium'
+                          ? 'bg-sky-500/20 text-sky-200'
+                          : u.minecraft_client === 'crack'
+                            ? 'bg-amber-500/20 text-amber-200'
+                            : 'bg-white/10 text-muted'
+                      }`}
+                    >
+                      {u.minecraft_client === 'premium'
+                        ? 'Premium'
+                        : u.minecraft_client === 'crack'
+                          ? 'Crack'
+                          : 'Client unset'}
+                    </span>
                     {u.minecraft_verified_at != null && u.minecraft_verified_at !== '' && (
                       <span className="inline-block mt-1 ml-1 text-xs px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-200">
                         MC ✓
@@ -1115,6 +1146,43 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
                           className="w-full px-2 py-1.5 rounded bg-[#0f0d0b] border border-border text-sm text-[#f5efe6]"
                         />
                       </div>
+                      <div>
+                        <p className="block text-xs text-muted mb-1.5">Minecraft client</p>
+                        <p className="text-[11px] text-muted m-0 mb-2">
+                          Switch anytime. Current:{' '}
+                          <span className="text-[#f5efe6] font-medium">
+                            {editMinecraftClient === 'premium'
+                              ? 'Premium'
+                              : editMinecraftClient === 'crack'
+                                ? 'Crack'
+                                : 'Unset'}
+                          </span>
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setEditMinecraftClient('premium')}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                              editMinecraftClient === 'premium'
+                                ? 'border-sky-400/60 bg-sky-500/20 text-sky-100'
+                                : 'border-border text-muted hover:bg-surface-hover hover:text-[#f5efe6]'
+                            }`}
+                          >
+                            Premium
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditMinecraftClient('crack')}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                              editMinecraftClient === 'crack'
+                                ? 'border-amber-400/60 bg-amber-500/20 text-amber-100'
+                                : 'border-border text-muted hover:bg-surface-hover hover:text-[#f5efe6]'
+                            }`}
+                          >
+                            Crack
+                          </button>
+                        </div>
+                      </div>
                       <label className="flex items-center gap-2 cursor-pointer text-sm text-[#f5efe6]">
                         <input
                           type="checkbox"
@@ -1203,7 +1271,7 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
                     {ownedInventory.length > 0 ? (
                       <div className="mb-3 space-y-1.5 max-h-56 overflow-y-auto pr-1">
                         {ownedInventory.map((row) => {
-                          const isDefault = row.key === 'member' || row.key === 'player'
+                          const isDefault = row.key === 'member'
                           return (
                             <div
                               key={row.key}

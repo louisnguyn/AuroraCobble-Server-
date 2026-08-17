@@ -96,6 +96,8 @@ export interface AdminUser {
   minecraft_verified_at?: string | null
   /** LuckPerms primary group mirrored on the site. */
   minecraft_role?: string | null
+  /** Official Minecraft (`premium`) or cracked launcher (`crack`). */
+  minecraft_client?: 'premium' | 'crack' | null
 }
 
 export async function fetchAdminUsers(q?: string): Promise<{ users: AdminUser[] }> {
@@ -105,7 +107,12 @@ export async function fetchAdminUsers(q?: string): Promise<{ users: AdminUser[] 
 
 export async function patchAdminUser(
   userId: number,
-  body: { email?: string; username?: string; is_admin?: boolean }
+  body: {
+    email?: string
+    username?: string
+    is_admin?: boolean
+    minecraft_client?: 'premium' | 'crack' | null
+  }
 ): Promise<{ user: AdminUser }> {
   return fetchJson<{ user: AdminUser }>(`/admin/users/${userId}`, {
     method: 'PATCH',
@@ -833,9 +840,6 @@ export async function fetchRankedBattleStaffHistory(params?: {
 /** Public-profile achievement badges (definitions + grants). */
 /** Must match backend `ACHIEVEMENT_TIERS` / DB check. */
 export type ProfileAchievementTier =
-  | 'silver'
-  | 'cyan'
-  | 'emerald'
   | 'violet'
   | 'rose'
   | 'gold'

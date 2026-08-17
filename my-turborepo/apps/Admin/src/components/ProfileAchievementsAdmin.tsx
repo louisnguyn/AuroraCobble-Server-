@@ -14,9 +14,6 @@ import {
 } from '../authApi'
 
 const TIERS: ProfileAchievementTier[] = [
-  'silver',
-  'cyan',
-  'emerald',
   'violet',
   'rose',
   'gold',
@@ -30,9 +27,6 @@ function achievementTierRank(tier: string): number {
 }
 
 const TIER_LABELS: Record<ProfileAchievementTier, string> = {
-  silver: 'Silver',
-  cyan: 'Cyan',
-  emerald: 'Emerald',
   violet: 'Violet',
   rose: 'Rose',
   gold: 'Gold',
@@ -48,16 +42,13 @@ const btnPrimary =
 
 function adminAcPreviewClass(tier: string): string {
   const map: Record<string, string> = {
-    silver: 'admin-ac-preview admin-ac-silver',
-    cyan: 'admin-ac-preview admin-ac-cyan',
-    emerald: 'admin-ac-preview admin-ac-emerald',
     violet: 'admin-ac-preview admin-ac-violet',
     rose: 'admin-ac-preview admin-ac-rose',
     gold: 'admin-ac-preview admin-ac-gold',
     mythic: 'admin-ac-preview admin-ac-mythic',
     legend: 'admin-ac-preview admin-ac-legend',
   }
-  return map[tier] ?? 'admin-ac-preview admin-ac-cyan'
+  return map[tier] ?? 'admin-ac-preview admin-ac-violet'
 }
 
 function BadgeMiniPreview({ title, tier }: { title: string; tier: string }) {
@@ -96,14 +87,14 @@ export function ProfileAchievementsAdmin() {
 
   const [createTitle, setCreateTitle] = useState('')
   const [createDesc, setCreateDesc] = useState('')
-  const [createTier, setCreateTier] = useState<ProfileAchievementTier>('cyan')
+  const [createTier, setCreateTier] = useState<ProfileAchievementTier>('violet')
   const [createSlug, setCreateSlug] = useState('')
   const [createSort, setCreateSort] = useState('0')
 
   const [editing, setEditing] = useState<ProfileAchievementDefinition | null>(null)
   const [editTitle, setEditTitle] = useState('')
   const [editDesc, setEditDesc] = useState('')
-  const [editTier, setEditTier] = useState<ProfileAchievementTier>('cyan')
+  const [editTier, setEditTier] = useState<ProfileAchievementTier>('violet')
   const [editSort, setEditSort] = useState('0')
 
   const [busy, setBusy] = useState(false)
@@ -330,7 +321,7 @@ export function ProfileAchievementsAdmin() {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <h2 className="text-lg font-semibold m-0 text-[#f5efe6]">Badge types</h2>
           <p className="text-xs text-slate-500 m-0 max-w-md">
-            Preview matches the public profile. Lists order by tier (silver → legend), then sort order within the same tier.
+            Preview matches the public profile. Lists order by tier (violet → legend), then sort order within the same tier.
           </p>
         </div>
 
