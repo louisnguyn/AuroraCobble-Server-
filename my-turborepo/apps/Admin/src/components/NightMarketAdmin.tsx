@@ -87,14 +87,10 @@ export function NightMarketAdmin() {
   }
 
   return (
-    <div className="rounded-2xl border border-indigo-400/25 bg-indigo-950/20 p-4 sm:p-5 space-y-4">
+    <div className="h-full flex flex-col rounded-2xl border border-indigo-400/25 bg-indigo-950/20 p-4 sm:p-5 space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h4 className="text-base font-semibold m-0 text-indigo-100">Night Market</h4>
-          <p className="text-xs text-slate-400 m-0 mt-1">
-            Runs <code className="text-indigo-200/90">nightmarket admin open spawn &lt;minutes&gt;</code> ·{' '}
-            <code className="text-indigo-200/90">nightmarket admin close spawn</code>
-          </p>
         </div>
         {closesAt != null && (
           <span className="rounded-lg border border-indigo-400/30 bg-indigo-500/10 px-3 py-1.5 text-xs font-medium text-indigo-100 tabular-nums">

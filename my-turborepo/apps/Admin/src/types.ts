@@ -72,11 +72,29 @@ export interface LeaderboardEntry {
   [key: string]: unknown
 }
 
-/** GET /minecraft/cobbledollars-leaderboard, /minecraft/pco-leaderboard, /leaderboard/website-cobbledollars */
+/** GET /minecraft/cobbledollars-leaderboard, /minecraft/pco-leaderboard, /minecraft/asterynpoint-leaderboard, /leaderboard/website-asterynpoints */
 export interface CobbleDollarsLeaderboardResponse {
   ok: boolean
   disabled?: boolean
   top10: { name: string; balance: number }[]
+  error: string | null
+  updatedAt: string | null
+}
+
+/** GET /minecraft/world-hunt-leaderboard */
+export interface WorldHuntLeaderboardRow {
+  rank: number
+  name: string
+  points: number
+}
+
+export interface WorldHuntLeaderboardResponse {
+  ok: boolean
+  disabled?: boolean
+  pokemon: string | null
+  shownCount: number | null
+  totalSlots: number | null
+  rows: WorldHuntLeaderboardRow[]
   error: string | null
   updatedAt: string | null
 }

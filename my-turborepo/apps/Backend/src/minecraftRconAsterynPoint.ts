@@ -8,15 +8,17 @@ import {
 } from "./minecraftRconCobbledollars.js";
 
 /**
- * Runs PCO top leaderboard via RCON (no leading slash by default).
- * Uses the same line parser as Cobble$ — adjust if your plugin prints a different format.
+ * In-game Asteryn Point board via RCON (`asterynpoint leaderboard`).
+ * Chat looks like:
+ *   ====== ASTERYN POINT TOP 20 ======
+ *   #1 PlayerName - 1 AsterynPoints
  *
  * Env:
- * - MC_PCO_DISABLE=true — return empty map
- * - MC_PCO_TOP_COMMAND — default `pco top`
+ * - MC_ASTERYNPOINT_DISABLE=true — return empty map
+ * - MC_ASTERYNPOINT_LEADERBOARD_COMMAND — default `asterynpoint leaderboard`
  */
-export async function fetchPcoTopViaRcon(): Promise<CobbledollarsRconResult> {
-  if (process.env.MC_PCO_DISABLE === "true") {
+export async function fetchAsterynPointLeaderboardViaRcon(): Promise<CobbledollarsRconResult> {
+  if (process.env.MC_ASTERYNPOINT_DISABLE === "true") {
     return { balances: new Map() };
   }
 
@@ -38,7 +40,7 @@ export async function fetchPcoTopViaRcon(): Promise<CobbledollarsRconResult> {
   );
 
   const primary =
-    process.env.MC_PCO_TOP_COMMAND?.trim() || "pco top";
+    process.env.MC_ASTERYNPOINT_LEADERBOARD_COMMAND?.trim() || "asterynpoint leaderboard";
 
   const rcon = new RCON();
   try {
@@ -49,12 +51,16 @@ export async function fetchPcoTopViaRcon(): Promise<CobbledollarsRconResult> {
     let balances = parseCobbledollarsLeaderboardOutput(out);
 
     if (balances.size === 0 && !isEmptyEconomyLeaderboardText(out)) {
-      const alts = ["/pco top", "pco top 10", "pco leaderboard", "/pco leaderboard"] as const;
+      const alts = [
+        "/asterynpoint leaderboard",
+        "asterynpoint leaderboardprint",
+        "/asterynpoint leaderboardprint",
+      ] as const;
       for (const cmd of alts) {
         if (cmd === primary) continue;
         const altOut = await rcon.execute(cmd);
         const b = parseCobbledollarsLeaderboardOutput(altOut);
-        if (b.size > 0) {
+        if (b.size > 0 || isEmptyEconomyLeaderboardText(altOut)) {
           balances = b;
           out = altOut;
           break;
@@ -73,11 +79,11 @@ export async function fetchPcoTopViaRcon(): Promise<CobbledollarsRconResult> {
     }
     return {
       balances,
-      error: `Could not parse PCO leaderboard from RCON: ${preview}`,
+      error: `Could not parse Asteryn Point leaderboard from RCON: ${preview}`,
     };
   } catch (err) {
     const raw = err instanceof Error ? err.message : String(err);
-    console.warn("[MC RCON] pco top:", raw);
+    console.warn("[MC RCON] asterynpoint leaderboard:", raw);
     try {
       rcon.close();
     } catch {

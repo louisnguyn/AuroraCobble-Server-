@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  fetchAsterynPointLeaderboard,
   fetchCobbleDollarsLeaderboard,
   fetchPcoLeaderboard,
   fetchWebsiteCobbledollarsLeaderboard,
@@ -7,9 +8,9 @@ import {
 import type { CobbleDollarsLeaderboardResponse } from '../types'
 import { ignNamesMatch, scrollElementIntoViewCentered } from '../ignMatch'
 
-export type EconomyLeaderboardKind = 'cobble' | 'website_cobble' | 'pco'
+export type EconomyLeaderboardKind = 'cobble' | 'website_cobble' | 'pco' | 'asteryn_ingame'
 
-/** In-game economy top 10 — Leaderboard → Economy. */
+/** In-game economy top 10 / top 20 — Leaderboard → Economy. */
 export function CobbleDollars({
   viewerIgn,
   kind = 'cobble',
@@ -30,7 +31,9 @@ export function CobbleDollars({
         ? fetchPcoLeaderboard
         : kind === 'website_cobble'
           ? fetchWebsiteCobbledollarsLeaderboard
-          : fetchCobbleDollarsLeaderboard
+          : kind === 'asteryn_ingame'
+            ? fetchAsterynPointLeaderboard
+            : fetchCobbleDollarsLeaderboard
     api()
       .then((d) => {
         if (!cancelled) setData(d)
@@ -60,22 +63,32 @@ export function CobbleDollars({
   }, [yourIndex, data?.top10])
 
   const panelClass = 'p-8 text-center pixel-panel'
-  const currency = kind === 'pco' ? 'PCO' : kind === 'website_cobble' ? 'AsterynPoints' : 'Cobble$'
+  const isIngameAp = kind === 'asteryn_ingame'
+  const currency = kind === 'pco' ? 'PCO' : kind === 'cobble' ? 'Cobble$' : 'AsterynPoints'
   const title =
     kind === 'pco'
       ? 'In-game PCO (top 10)'
       : kind === 'website_cobble'
         ? 'Website AsterynPoints (top 10)'
-        : 'In-game Cobble$ (top 10)'
+        : isIngameAp
+          ? 'In-game AsterynPoints (top 20)'
+          : 'In-game Cobble$ (top 10)'
   const subtitle =
     kind === 'pco'
       ? 'Richest players by in-game PCO.'
       : kind === 'website_cobble'
         ? 'Highest balances on this site (wallet AsterynPoints, not Minecraft).'
-        : 'Richest players by in-game Cobble$.'
+        : isIngameAp
+          ? 'Richest players by in-game AsterynPoints (`/asterynpoint leaderboard`).'
+          : 'Richest players by in-game Cobble$.'
   const balanceClass =
-    kind === 'pco' ? 'text-cyan-300' : 'text-[#fbbf24]'
-  const ringClass = kind === 'pco' ? 'ring-cyan-400/50' : 'ring-amber-400/60'
+    kind === 'pco' ? 'text-cyan-300' : isIngameAp || kind === 'website_cobble' ? 'text-violet-300' : 'text-[#fbbf24]'
+  const ringClass =
+    kind === 'pco'
+      ? 'ring-cyan-400/50'
+      : isIngameAp || kind === 'website_cobble'
+        ? 'ring-violet-400/50'
+        : 'ring-amber-400/60'
 
   if (loading) {
     return (
@@ -105,7 +118,9 @@ export function CobbleDollars({
         <div className="p-8 text-center pixel-panel-soft text-muted text-base">
           {kind === 'website_cobble'
             ? `No website ${currency} balances yet — earn AsterynPoints from streaks, PvP payouts, and other site rewards.`
-            : `No ${currency} balances returned yet. Play on the server to appear on the leaderboard.`}
+            : isIngameAp
+              ? 'No player has earned AsterynPoints yet.'
+              : `No ${currency} balances returned yet. Play on the server to appear on the leaderboard.`}
         </div>
       ) : (
         <>

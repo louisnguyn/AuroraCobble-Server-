@@ -12,22 +12,28 @@ import type {
   PvpRankDailyRewardsMeta,
 } from '../types'
 import { CobbleDollars } from './CobbleDollars.tsx'
+import { WorldHuntLeaderboard } from './WorldHuntLeaderboard.tsx'
 import { getPvpTierFromElo, normalizePvpTierSlugForAssets, PvPTierBadge } from './PvPTierBadge.tsx'
 import { RankedApiFeed } from './RankedApiFeed.tsx'
 import { PageHeader, PageNotice, PageShell, PageTabBar } from './PageLayout.tsx'
 
-type MainSection = 'ranks' | 'economy' | 'achievements' | 'ranked'
+type MainSection = 'ranks' | 'economy' | 'achievements' | 'world_hunt' | 'ranked'
 type RankFormatId = 'singles' | 'doubles'
-type EconomyKind = 'cobble' | 'website_cobble' | 'pco'
+type EconomyKind = 'cobble' | 'website_cobble' | 'pco' | 'asteryn_ingame'
 
 const MAIN_SECTIONS: { id: MainSection; label: string; description: string }[] = [
   { id: 'ranks', label: 'Ranks', description: 'PvP ELO & tiers' },
   {
     id: 'economy',
     label: 'Economy',
-    description: 'Website AsterynPoints, in-game Cobble$, or PCO top 10',
+    description: 'Website AsterynPoints, in-game AsterynPoints, Cobble$, or PCO',
   },
   { id: 'achievements', label: 'Achievements', description: 'Profile badges ranked by tier score' },
+  {
+    id: 'world_hunt',
+    label: 'World Hunt',
+    description: 'Current hunt event scores from /hunt event',
+  },
   {
     id: 'ranked',
     label: 'Ranked feed',
@@ -483,7 +489,10 @@ export function Leaderboard() {
           </h2>
           <div className="flex flex-wrap gap-2" role="tablist" aria-label="Economy currency">
             <SubTab active={economyKind === 'website_cobble'} onClick={() => setEconomyKind('website_cobble')}>
-              AsterynPoints
+              Website AP
+            </SubTab>
+            <SubTab active={economyKind === 'asteryn_ingame'} onClick={() => setEconomyKind('asteryn_ingame')}>
+              In-game AP
             </SubTab>
             <SubTab active={economyKind === 'cobble'} onClick={() => setEconomyKind('cobble')}>
               In-game C$
@@ -495,6 +504,8 @@ export function Leaderboard() {
           <p className="text-sm text-muted m-0">
             {economyKind === 'website_cobble' ? (
               <>Top site wallet balances (same AsterynPoints you see under Account).</>
+            ) : economyKind === 'asteryn_ingame' ? (
+              <>Top 20 in-game AsterynPoints from <span className="font-mono">/asterynpoint leaderboard</span>.</>
             ) : economyKind === 'cobble' ? (
               <>Richest players by in-game Cobble$ (Minecraft server). Deposit from your website wallet under Account.</>
             ) : (
@@ -574,6 +585,19 @@ export function Leaderboard() {
               </ol>
             </>
           )}
+        </section>
+      )}
+
+      {mainSection === 'world_hunt' && (
+        <section className="space-y-4" aria-labelledby="world-hunt-heading">
+          <h2 id="world-hunt-heading" className="text-lg font-semibold m-0 text-[#e2e8f0]">
+            World Hunt
+          </h2>
+          <p className="text-sm text-muted m-0">
+            Top scores for the current hunt event from <span className="font-mono">/hunt event</span> on the Minecraft
+            server.
+          </p>
+          <WorldHuntLeaderboard viewerIgn={viewerIgn} />
         </section>
       )}
 

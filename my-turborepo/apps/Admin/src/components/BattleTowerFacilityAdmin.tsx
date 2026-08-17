@@ -137,12 +137,7 @@ export function BattleTowerFacilityAdmin() {
   return (
     <div className="rounded-2xl border border-violet-400/25 bg-violet-950/20 p-4 sm:p-5 space-y-4">
       <div>
-        <h4 className="text-base font-semibold m-0 text-violet-100">Facility admin</h4>
-        <p className="text-xs text-slate-400 m-0 mt-1">
-          Runs SBF RCON:{' '}
-          <code className="text-violet-200/90">sbf admin forcewin …</code> ·{' '}
-          <code className="text-violet-200/90">sbf admin setstage … tower|classic …</code>
-        </p>
+        <h4 className="text-base font-semibold m-0 text-violet-100">Endless Tower</h4>
       </div>
 
       <div ref={pickWrapRef} className="relative max-w-md space-y-1.5">

@@ -26,7 +26,17 @@ import {
 } from "./minecraftRoster.js";
 import { syncAndEnrichPresence } from "./minecraftPresence.js";
 import { fetchCobbledollarsViaRcon, topBalancesFromMap } from "./minecraftRconCobbledollars.js";
+import { fetchAsterynPointLeaderboardViaRcon } from "./minecraftRconAsterynPoint.js";
 import { fetchPcoTopViaRcon } from "./minecraftRconPcoTop.js";
+import { fetchWorldHuntLeaderboardViaRcon } from "./minecraftRconWorldHunt.js";
+import {
+  isKnownSkindexSkinId,
+  listSkindexCatalog,
+} from "./minecraftSkindexCatalog.js";
+import {
+  applyAsterynPointMigration,
+  planAsterynPointMigration,
+} from "./minecraftAsterynPointMigrate.js";
 import {
   fetchBattleTowerLeaderboardViaRcon,
   normalizeBattleTowerMode,
@@ -308,6 +318,31 @@ let pcoPublicCache: {
     ok: boolean;
     disabled: boolean;
     top10: { name: string; balance: number }[];
+    error: string | null;
+    updatedAt: string | null;
+  };
+} | null = null;
+
+let asterynPointPublicCache: {
+  at: number;
+  body: {
+    ok: boolean;
+    disabled: boolean;
+    top10: { name: string; balance: number }[];
+    error: string | null;
+    updatedAt: string | null;
+  };
+} | null = null;
+
+let worldHuntPublicCache: {
+  at: number;
+  body: {
+    ok: boolean;
+    disabled: boolean;
+    pokemon: string | null;
+    shownCount: number | null;
+    totalSlots: number | null;
+    rows: { rank: number; name: string; points: number }[];
     error: string | null;
     updatedAt: string | null;
   };
@@ -1255,6 +1290,102 @@ app.get("/minecraft/pco-leaderboard", async (_req, res) => {
       ok: false,
       disabled: false,
       top10: [],
+      error: msg,
+      updatedAt: null,
+    });
+  }
+});
+
+/** Public in-game Asteryn Point top 20 from RCON (`asterynpoint leaderboard`). Cached ~90s. No auth. */
+app.get("/minecraft/asterynpoint-leaderboard", async (_req, res) => {
+  if (process.env.MC_ASTERYNPOINT_DISABLE === "true") {
+    res.json({
+      ok: false,
+      disabled: true,
+      top10: [],
+      error: null,
+      updatedAt: null,
+    });
+    return;
+  }
+  const now = Date.now();
+  if (
+    asterynPointPublicCache &&
+    now - asterynPointPublicCache.at < COBBLEDOLLARS_PUBLIC_CACHE_TTL_MS
+  ) {
+    res.json(asterynPointPublicCache.body);
+    return;
+  }
+  try {
+    const r = await fetchAsterynPointLeaderboardViaRcon();
+    const top10 = topBalancesFromMap(r.balances, 20);
+    const body = {
+      ok: !r.error,
+      disabled: false,
+      top10,
+      error: r.error ?? null,
+      updatedAt: new Date().toISOString(),
+    };
+    asterynPointPublicCache = { at: now, body };
+    res.json(body);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.json({
+      ok: false,
+      disabled: false,
+      top10: [],
+      error: msg,
+      updatedAt: null,
+    });
+  }
+});
+
+/** Public World Hunt event leaderboard from RCON (`hunt event`). Cached ~90s. No auth. */
+app.get("/minecraft/world-hunt-leaderboard", async (_req, res) => {
+  if (process.env.MC_WORLD_HUNT_DISABLE === "true") {
+    res.json({
+      ok: false,
+      disabled: true,
+      pokemon: null,
+      shownCount: null,
+      totalSlots: null,
+      rows: [],
+      error: null,
+      updatedAt: null,
+    });
+    return;
+  }
+  const now = Date.now();
+  if (
+    worldHuntPublicCache &&
+    now - worldHuntPublicCache.at < COBBLEDOLLARS_PUBLIC_CACHE_TTL_MS
+  ) {
+    res.json(worldHuntPublicCache.body);
+    return;
+  }
+  try {
+    const r = await fetchWorldHuntLeaderboardViaRcon();
+    const body = {
+      ok: !r.error,
+      disabled: false,
+      pokemon: r.parsed.pokemon,
+      shownCount: r.parsed.shownCount,
+      totalSlots: r.parsed.totalSlots,
+      rows: r.parsed.rows,
+      error: r.error ?? null,
+      updatedAt: new Date().toISOString(),
+    };
+    worldHuntPublicCache = { at: now, body };
+    res.json(body);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.json({
+      ok: false,
+      disabled: false,
+      pokemon: null,
+      shownCount: null,
+      totalSlots: null,
+      rows: [],
       error: msg,
       updatedAt: null,
     });
@@ -5842,6 +5973,68 @@ app.post("/admin/minecraft/nightmarket", requireAuth, requireAdmin, async (req, 
   res.status(400).json({ error: "action must be open or close" });
 });
 
+const HUNT_SPECIES_RE = /^[A-Za-z0-9][A-Za-z0-9_\-]{0,39}$/;
+
+/** World Hunt admin RCON: `hunt set <pokemon>` */
+app.post("/admin/minecraft/world-hunt", requireAuth, requireAdmin, async (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const pokemon = typeof body.pokemon === "string" ? body.pokemon.trim() : "";
+  if (!HUNT_SPECIES_RE.test(pokemon)) {
+    res.status(400).json({
+      error: "pokemon must be 1–40 characters of [A-Za-z0-9_-], e.g. gardevoir",
+    });
+    return;
+  }
+  const command = `hunt set ${pokemon}`;
+  const exec = await executeMinecraftRconCommand(command);
+  if (exec.ok) {
+    console.info(`[admin] hunt set ${pokemon}: ok`);
+    res.json({ ok: true, command, output: exec.output, pokemon });
+    return;
+  }
+  console.warn(`[admin] hunt set failed`, exec.error);
+  res.json({
+    ok: false,
+    error: exec.error ?? "Could not set the world hunt on the server.",
+    command,
+  });
+});
+
+/** Skindex skin catalog for admin UI dropdowns. */
+app.get("/admin/minecraft/skindex/catalog", requireAuth, requireAdmin, (_req, res) => {
+  res.json({ skins: listSkindexCatalog() });
+});
+
+/** Skindex admin RCON: `skindex give <player> <skin_id>` */
+app.post("/admin/minecraft/skindex/give", requireAuth, requireAdmin, async (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const player = typeof body.player === "string" ? body.player.trim() : "";
+  const skinId = typeof body.skinId === "string" ? body.skinId.trim() : "";
+  if (!isValidMinecraftIgn(player)) {
+    res.status(400).json({
+      error: "player must be a valid Minecraft username (2–16 letters, numbers, underscore)",
+    });
+    return;
+  }
+  if (!skinId || !isKnownSkindexSkinId(skinId)) {
+    res.status(400).json({ error: "skinId must be a known skindex skin id" });
+    return;
+  }
+  const command = `skindex give ${player} ${skinId}`;
+  const exec = await executeMinecraftRconCommand(command);
+  if (exec.ok) {
+    console.info(`[admin] skindex give ${player} ${skinId}: ok`);
+    res.json({ ok: true, command, output: exec.output, player, skinId });
+    return;
+  }
+  console.warn(`[admin] skindex give failed`, exec.error);
+  res.json({
+    ok: false,
+    error: exec.error ?? "Could not give skindex skin on the server.",
+    command,
+  });
+});
+
 /**
  * Website maintenance notice. Separate from the in-game maintenance mod:
  * this only gates the site, the Minecraft server keeps running.
@@ -6816,22 +7009,71 @@ app.post("/admin/pvp-rank/daily-payout", requireAuth, requireAdmin, async (_req,
   }
 });
 
-app.post("/admin/minecraft/boss-spawn/run-now", requireAuth, requireAdmin, async (_req, res) => {
+let asterynPointMigrateBusy = false;
+
+/** Preview in-game AP → website wallet mapping. Does not credit or clear. */
+app.get("/admin/minecraft/asterynpoint/migrate", requireAuth, requireAdmin, async (_req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
   try {
-    await runBossSpawnCycleNow();
-    res.json({
-      ok: true,
-      warningDelayMs: BOSS_SPAWN_WARNING_DELAY_MS,
-      warningCommands: BOSS_SPAWN_WARNING_COMMANDS.length,
-      spawnCommands: BOSS_SPAWN_COMMANDS.length,
-    });
+    const plan = await planAsterynPointMigration(supabase);
+    res.json({ ok: true, applied: false, ...plan });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    if (/already running/i.test(msg)) {
-      res.status(409).json({ error: msg });
+    res.status(500).json({ error: msg });
+  }
+});
+
+/** Credit matched website wallets from `/asterynpoint leaderboard`, then `asterynpoint bank clear`. */
+app.post("/admin/minecraft/asterynpoint/migrate", requireAuth, requireAdmin, async (req, res) => {
+  if (!supabase) {
+    res.status(503).json({ error: "Database not configured" });
+    return;
+  }
+  const apply = Boolean((req.body as { apply?: unknown } | undefined)?.apply);
+  if (!apply) {
+    try {
+      const plan = await planAsterynPointMigration(supabase);
+      res.json({ ok: true, applied: false, ...plan });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: msg });
+    }
+    return;
+  }
+  if (asterynPointMigrateBusy) {
+    res.status(409).json({ error: "A conversion is already running." });
+    return;
+  }
+  asterynPointMigrateBusy = true;
+  try {
+    const result = await applyAsterynPointMigration(supabase);
+    asterynPointPublicCache = {
+      at: Date.now(),
+      body: {
+        ok: true,
+        disabled: false,
+        top10: [],
+        error: null,
+        updatedAt: new Date().toISOString(),
+      },
+    };
+    if (!result.bankCleared) {
+      asterynPointPublicCache = null;
+      res.status(502).json({
+        error: result.bankClearError ?? "Website credits done, but bank clear failed.",
+        ...result,
+      });
       return;
     }
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: msg });
+  } finally {
+    asterynPointMigrateBusy = false;
   }
 });
 

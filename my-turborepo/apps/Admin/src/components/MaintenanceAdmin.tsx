@@ -111,7 +111,7 @@ export function MaintenanceAdmin() {
 
   return (
     <div
-      className={`rounded-2xl border p-4 sm:p-5 space-y-4 ${
+      className={`h-full flex flex-col rounded-2xl border p-4 sm:p-5 space-y-4 ${
         enabled === true ? 'border-red-400/40 bg-red-950/25' : 'border-slate-400/20 bg-slate-900/30'
       }`}
     >
@@ -120,12 +120,6 @@ export function MaintenanceAdmin() {
           <h4 className="text-base font-semibold m-0 text-slate-100">
             Minecraft server maintenance
           </h4>
-          <p className="text-xs text-slate-400 m-0 mt-1">
-            Blocks logins on the game server via{' '}
-            <code className="text-slate-200/90">maintenance on</code> /{' '}
-            <code className="text-slate-200/90">maintenance off</code>. Only players on the allow
-            list can still join. Does not affect the website.
-          </p>
         </div>
         <div className="flex items-center gap-2">
           <span className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${statusPill.cls}`}>
@@ -159,7 +153,7 @@ export function MaintenanceAdmin() {
             : 'Turn maintenance ON'}
       </button>
 
-      <div className="border-t border-white/10 pt-4 space-y-3">
+      <div className="border-t border-white/10 pt-4 space-y-3 flex-1">
         <div>
           <p className="text-sm font-medium text-slate-300 m-0">Allowed during maintenance</p>
           <p className="text-xs text-slate-500 m-0 mt-1">

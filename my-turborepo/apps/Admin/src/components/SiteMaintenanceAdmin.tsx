@@ -71,16 +71,13 @@ export function SiteMaintenanceAdmin() {
 
   return (
     <div
-      className={`rounded-2xl border p-4 sm:p-5 space-y-4 ${
+      className={`h-full flex flex-col rounded-2xl border p-4 sm:p-5 space-y-4 ${
         enabled ? 'border-amber-400/40 bg-amber-950/25' : 'border-slate-400/20 bg-slate-900/30'
       }`}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h4 className="text-base font-semibold m-0 text-slate-100">Website maintenance</h4>
-          <p className="text-xs text-slate-400 m-0 mt-1">
-            Shows a blocking popup on the player website. Does not affect the Minecraft server.
-          </p>
         </div>
         <div className="flex items-center gap-2">
           <span
@@ -118,7 +115,7 @@ export function SiteMaintenanceAdmin() {
         {busy === 'toggle' ? 'Applying…' : enabled ? 'Open website' : 'Close website for maintenance'}
       </button>
 
-      <div className="border-t border-white/10 pt-4 space-y-2">
+      <div className="border-t border-white/10 pt-4 space-y-2 flex-1">
         <label className="block space-y-1.5">
           <span className="text-xs font-medium text-slate-400 uppercase tracking-wide">
             Popup message (optional)
@@ -127,9 +124,9 @@ export function SiteMaintenanceAdmin() {
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             maxLength={MAX_MESSAGE}
-            rows={2}
+            rows={5}
             placeholder="Website đang bảo trì, quay lại sau nhé!"
-            className="w-full rounded-xl border border-white/15 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+            className="w-full min-h-[7.5rem] flex-1 rounded-xl border border-white/15 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-500/40 resize-y"
           />
         </label>
         <div className="flex items-center gap-3">

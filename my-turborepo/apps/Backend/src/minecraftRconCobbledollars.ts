@@ -22,6 +22,19 @@ export function rconTextPreview(text: string, max = 280): string {
     .slice(0, max);
 }
 
+/** True when the plugin printed an empty board (not a parse failure). */
+export function isEmptyEconomyLeaderboardText(text: string): boolean {
+  const t = stripMinecraftFormatCodes(text).replace(/\s+/g, " ").trim();
+  if (!t) return false;
+  return (
+    /no player has earned\s+asterynpoints\s+yet/i.test(t) ||
+    /no (?:player|players|one) (?:has|have) earned/i.test(t) ||
+    /leaderboard is empty/i.test(t) ||
+    /there (?:are|is) no .{0,40}(?:on the )?(?:leader)?board/i.test(t) ||
+    /no pco (?:balances?|players?)/i.test(t)
+  );
+}
+
 /**
  * Parse CobbleDollars (or similar) leaderboard text from RCON.
  * Handles: "1. PlayerName - 1,234", "1. Player $ 2.05M", "Name: 500", §-colored lines, K/M/B suffixes.
@@ -36,6 +49,7 @@ export function parseCobbledollarsLeaderboardOutput(text: string): Map<string, n
     const display = nameRaw.trim();
     const key = display.toLowerCase();
     if (!key || key.length > 48 || !Number.isFinite(n)) return;
+    if (/^(unknown|incomplete|command|error|here)$/i.test(key)) return;
     for (const existing of map.keys()) {
       if (existing.toLowerCase() === key) return;
     }
@@ -43,6 +57,8 @@ export function parseCobbledollarsLeaderboardOutput(text: string): Map<string, n
   };
 
   const cleaned = stripMinecraftFormatCodes(raw);
+  if (isEmptyEconomyLeaderboardText(cleaned)) return map;
+
   // RCON glues rows: "166K2. Name" / "PCo2. Name" / "):1. Name" / "---1. Name"
   const dollarGlobal =
     /(\d{1,3})\.\s+([A-Za-z0-9_]{1,36})\s+\$\s*([\d.,]+)\s*([KkMmBb])?/g;
@@ -53,18 +69,29 @@ export function parseCobbledollarsLeaderboardOutput(text: string): Map<string, n
   }
   if (map.size > 0) return map;
 
-  const pcoGlobal =
-    /(\d{1,3})\.\s+(.+?)\s+[-–—]\s*([\d.,]+)\s*([KkMmBb])?\s*PCo\b/gi;
-  for (const m of cleaned.matchAll(pcoGlobal)) {
-    if (!m[2] || m[3] == null) continue;
-    const name = m[2].replace(/^[-–—\s]+/, "").trim();
-    if (name.length > 48) continue;
-    const n = parseMoneyAmount(m[3], m[4]);
-    if (n != null) push(name, n);
+  // "1. name - 0 PCo2. other - 0 PCo" — IGN only, split glued ranks
+  const pcoSplit = cleaned.replace(/PCo(?=\s*\d{1,3}\s*[.)])/gi, "PCo\n").replace(/PCo(?=\d{1,3}\s*[.)])/gi, "PCo\n");
+  const pcoRow =
+    /(?:^|\n)\s*(?:#?\d{1,3}\s*[.)]\s*)?([A-Za-z0-9_]{1,16})\s*[-–—]\s*([\d.,]+)\s*([KkMmBb])?\s*PCo\b/gi;
+  for (const m of pcoSplit.matchAll(pcoRow)) {
+    if (!m[1] || m[2] == null) continue;
+    const n = parseMoneyAmount(m[2], m[3]);
+    if (n != null) push(m[1], n);
   }
   if (map.size > 0) return map;
 
-  const splitRaw = cleaned.replace(/((?:PCo)|[KkMmBb]|---+|:|\))(?=\d{1,3}\.\s)/gi, "$1\n");
+  const asterynGlobal =
+    /#(\d{1,3})\s+([A-Za-z0-9_]{1,36})\s+[-–—]\s*([\d.,]+)\s*([KkMmBb])?\s*AsterynPoints?\b/gi;
+  for (const m of cleaned.matchAll(asterynGlobal)) {
+    if (!m[2] || m[3] == null) continue;
+    const n = parseMoneyAmount(m[3], m[4]);
+    if (n != null) push(m[2], n);
+  }
+  if (map.size > 0) return map;
+
+  const splitRaw = cleaned
+    .replace(/((?:PCo)|(?:AsterynPoints?)|[KkMmBb]|---+|:|\))(?=\d{1,3}\.\s)/gi, "$1\n")
+    .replace(/(AsterynPoints?)(?=#\d)/gi, "$1\n");
 
   for (const line of splitRaw.split(/\r?\n/)) {
     let trimmed = stripMinecraftFormatCodes(line).trim();
@@ -77,11 +104,17 @@ export function parseCobbledollarsLeaderboardOutput(text: string): Map<string, n
     if (/^---+$/i.test(trimmed)) continue;
     if (/^there (are|is)\s+no\b/i.test(trimmed)) continue;
     if (/^pco\s+top\b/i.test(trimmed)) continue;
+    if (/=+\s*asteryn\s*point/i.test(trimmed)) continue;
+    if (/^asteryn\s*point\s+top\b/i.test(trimmed)) continue;
+    if (/no player has earned/i.test(trimmed)) continue;
+    if (/^unknown or incomplete command/i.test(trimmed)) continue;
+    if (/<--\[HERE\]/i.test(trimmed)) continue;
 
     trimmed = trimmed
       .replace(/\s+(?:cobble\s*dollars?|\bcd\b|coins?)\s*$/i, "")
       // PCO: in-game lines look like "1. notvel0 - 50000 PCo" — unit after amount breaks $-anchored regexes
       .replace(/\s+(?:PCo|PCO|pco)\s*$/i, "")
+      .replace(/\s+AsterynPoints?\s*$/i, "")
       .trim();
 
     // "1. lEOALE_ig_ $ 2.05M" / "6. Erishu21 $ 998K" (CobbleDollars RCON format)
@@ -108,9 +141,21 @@ export function parseCobbledollarsLeaderboardOutput(text: string): Map<string, n
       }
     }
 
+    // "#1 Name - 1 AsterynPoints" (no period after rank)
+    const hashRanked = trimmed.match(
+      /^#(\d{1,3})\s+([A-Za-z0-9_]{1,36})\s*[-–—]\s*\$?([\d,]+(?:\.\d+)?)\s*([KkMmBb])?\s*$/
+    );
+    if (hashRanked?.[2] && hashRanked[3] != null) {
+      const n = parseMoneyAmount(hashRanked[3], hashRanked[4]);
+      if (n != null) {
+        push(hashRanked[2], n);
+        continue;
+      }
+    }
+
     // "1. Name - 500" / "1. Name - 50000 PCo" (unit stripped above; optional K/M/B before end)
     const ranked = trimmed.match(
-      /^#?\d+\s*[.)]\s*(.+?)\s*[-–—|]\s*\$?([\d,]+(?:\.\d+)?)\s*([KkMmBb])?(?:\s+(?:PCo|PCO|pco))?\s*$/i
+      /^#?\d+\s*[.)]\s*(.+?)\s*[-–—|]\s*\$?([\d,]+(?:\.\d+)?)\s*([KkMmBb])?(?:\s+(?:PCo|PCO|pco|AsterynPoints?))?\s*$/i
     );
     if (ranked?.[1] && ranked[2]) {
       const name = ranked[1].trim();

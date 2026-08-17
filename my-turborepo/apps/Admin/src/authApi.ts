@@ -457,15 +457,35 @@ export async function fetchMinecraftDashboard(): Promise<MinecraftDashboardRespo
   return data as MinecraftDashboardResponse
 }
 
-export async function runAdminBossSpawnNow(): Promise<{
+export type AsterynPointMigrateMatch = {
+  ign: string
+  amount: number
+  userId: number
+  websiteName: string
+  walletAfter?: number
+}
+
+export type AsterynPointMigratePlan = {
   ok: boolean
-  warningDelayMs: number
-  warningCommands: number
-  spawnCommands: number
-}> {
-  return fetchJson('/admin/minecraft/boss-spawn/run-now', {
+  applied: boolean
+  boardCount: number
+  totalCredit: number
+  matched: AsterynPointMigrateMatch[]
+  unmatched: { ign: string; amount: number }[]
+  leaderboardError: string | null
+  bankCleared?: boolean
+  bankClearOutput?: string | null
+  bankClearError?: string | null
+}
+
+export async function previewAsterynPointMigrate(): Promise<AsterynPointMigratePlan> {
+  return fetchJson('/admin/minecraft/asterynpoint/migrate')
+}
+
+export async function applyAsterynPointMigrate(): Promise<AsterynPointMigratePlan> {
+  return fetchJson('/admin/minecraft/asterynpoint/migrate', {
     method: 'POST',
-    body: JSON.stringify({}),
+    body: JSON.stringify({ apply: true }),
   })
 }
 
@@ -760,6 +780,42 @@ export async function adminMinecraftNightMarket(
   minutes?: number
 }> {
   return fetchJson(`/admin/minecraft/nightmarket`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function adminMinecraftWorldHunt(body: { pokemon: string }): Promise<{
+  ok: boolean
+  error?: string
+  command?: string
+  output?: string
+  pokemon?: string
+}> {
+  return fetchJson('/admin/minecraft/world-hunt', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function fetchAdminSkindexCatalog(): Promise<{
+  skins: { id: string; species: string[] }[]
+}> {
+  return fetchJson('/admin/minecraft/skindex/catalog')
+}
+
+export async function adminMinecraftSkindexGive(body: {
+  player: string
+  skinId: string
+}): Promise<{
+  ok: boolean
+  error?: string
+  command?: string
+  output?: string
+  player?: string
+  skinId?: string
+}> {
+  return fetchJson('/admin/minecraft/skindex/give', {
     method: 'POST',
     body: JSON.stringify(body),
   })

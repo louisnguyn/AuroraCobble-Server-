@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   fetchMinecraftDashboard,
-  runAdminBossSpawnNow,
   type MinecraftDashboardResponse,
 } from '../authApi'
 import { DashboardLeaderboardPanel } from './DashboardLeaderboardPanel.tsx'
 import { MaintenanceAdmin } from './MaintenanceAdmin.tsx'
 import { NightMarketAdmin } from './NightMarketAdmin.tsx'
 import { SiteMaintenanceAdmin } from './SiteMaintenanceAdmin.tsx'
+import { WorldHuntAdmin } from './WorldHuntAdmin.tsx'
+import { SkindexAdmin } from './SkindexAdmin.tsx'
+import { BattleTowerFacilityAdmin } from './BattleTowerFacilityAdmin.tsx'
 
 function StatCard({
   label,
@@ -105,8 +107,6 @@ export function MinecraftDashboard({ viewerUsername }: { viewerUsername?: string
   const [hint, setHint] = useState<string | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
   const [search, setSearch] = useState('')
-  const [bossRunBusy, setBossRunBusy] = useState(false)
-  const [bossRunMessage, setBossRunMessage] = useState<string | null>(null)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -146,21 +146,6 @@ export function MinecraftDashboard({ viewerUsername }: { viewerUsername?: string
     return { on, off }
   }, [data?.players])
 
-  const handleRunBossNow = useCallback(async () => {
-    if (bossRunBusy) return
-    setBossRunBusy(true)
-    setBossRunMessage(null)
-    try {
-      await runAdminBossSpawnNow()
-      setBossRunMessage('Boss cycle started: warning sent now, spawn starts in 1 minute.')
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Could not run boss cycle now.'
-      setBossRunMessage(msg)
-    } finally {
-      setBossRunBusy(false)
-    }
-  }, [bossRunBusy])
-
   return (
     <div className="space-y-8 pb-12">
       {/* Header */}
@@ -171,15 +156,6 @@ export function MinecraftDashboard({ viewerUsername }: { viewerUsername?: string
           </h1>
         </div>
         <div className="shrink-0 flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => void handleRunBossNow()}
-            disabled={bossRunBusy}
-            className="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-red-700 to-rose-700 hover:from-red-600 hover:to-rose-600 border border-red-300/20 shadow-lg shadow-red-900/40 disabled:opacity-50 transition-all"
-            title="Send raid warning now and spawn bosses after 1 minute"
-          >
-            {bossRunBusy ? 'Running…' : 'Run boss now'}
-          </button>
           <button
             type="button"
             onClick={load}
@@ -198,23 +174,25 @@ export function MinecraftDashboard({ viewerUsername }: { viewerUsername?: string
           </button>
         </div>
       </div>
-      {bossRunMessage && (
-        <div className="rounded-xl border border-amber-500/25 bg-amber-950/20 px-4 py-3 text-sm text-amber-100/90">
-          {bossRunMessage}
-        </div>
-      )}
 
       <section className="space-y-3">
         <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400 m-0">
           Maintenance
         </h3>
-        <div className="grid gap-4 xl:grid-cols-2 xl:items-start">
+        <div className="grid gap-4 xl:grid-cols-2 xl:items-stretch">
           <SiteMaintenanceAdmin />
           <MaintenanceAdmin />
         </div>
       </section>
 
-      <NightMarketAdmin />
+      <div className="grid gap-4 xl:grid-cols-2 xl:items-stretch">
+        <NightMarketAdmin />
+        <WorldHuntAdmin />
+      </div>
+      <div className="grid gap-4 xl:grid-cols-1">
+        <SkindexAdmin />
+        <BattleTowerFacilityAdmin />
+      </div>
 
       {loading && !data && (
         <div className="rounded-2xl border border-white/10 bg-surface/50 p-16 text-center text-slate-400 animate-pulse">
