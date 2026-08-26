@@ -69,8 +69,14 @@ export function parseCobbledollarsLeaderboardOutput(text: string): Map<string, n
   }
   if (map.size > 0) return map;
 
-  // "1. name - 0 PCo2. other - 0 PCo" — IGN only, split glued ranks
-  const pcoSplit = cleaned.replace(/PCo(?=\s*\d{1,3}\s*[.)])/gi, "PCo\n").replace(/PCo(?=\d{1,3}\s*[.)])/gi, "PCo\n");
+  // "1. name - 0 PCo2. other - 0 PCo" — IGN only, split glued ranks.
+  // Also unstick #1 from headers like "--- Top PCo Holders ---1. _QAnn_ - 241200 PCo".
+  const pcoSplit = cleaned
+    .replace(/PCo(?=\s*\d{1,3}\s*[.)])/gi, "PCo\n")
+    .replace(/PCo(?=\d{1,3}\s*[.)])/gi, "PCo\n")
+    .replace(/(---+)\s*(?=\d{1,3}\.\s+[A-Za-z0-9_])/g, "$1\n")
+    .replace(/(holders?)\s*-+\s*(?=\d{1,3}\.\s+[A-Za-z0-9_])/gi, "$1\n")
+    .replace(/(?<=[^\n\d])(?=\d{1,3}\.\s+[A-Za-z0-9_]{1,16}\s*[-–—])/g, "\n");
   const pcoRow =
     /(?:^|\n)\s*(?:#?\d{1,3}\s*[.)]\s*)?([A-Za-z0-9_]{1,16})\s*[-–—]\s*([\d.,]+)\s*([KkMmBb])?\s*PCo\b/gi;
   for (const m of pcoSplit.matchAll(pcoRow)) {
@@ -104,6 +110,7 @@ export function parseCobbledollarsLeaderboardOutput(text: string): Map<string, n
     if (/^---+$/i.test(trimmed)) continue;
     if (/^there (are|is)\s+no\b/i.test(trimmed)) continue;
     if (/^pco\s+top\b/i.test(trimmed)) continue;
+    if (/top\s+pco\s+holders/i.test(trimmed)) continue;
     if (/=+\s*asteryn\s*point/i.test(trimmed)) continue;
     if (/^asteryn\s*point\s+top\b/i.test(trimmed)) continue;
     if (/no player has earned/i.test(trimmed)) continue;
