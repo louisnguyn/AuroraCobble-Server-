@@ -458,7 +458,9 @@ export async function fetchMinecraftDashboard(): Promise<MinecraftDashboardRespo
 }
 
 export type AsterynPointMigrateMatch = {
+  rank: number
   ign: string
+  ingamePoints: number
   amount: number
   userId: number
   websiteName: string
@@ -469,9 +471,10 @@ export type AsterynPointMigratePlan = {
   ok: boolean
   applied: boolean
   boardCount: number
+  eligibleCount: number
   totalCredit: number
   matched: AsterynPointMigrateMatch[]
-  unmatched: { ign: string; amount: number }[]
+  unmatched: { rank: number; ign: string; ingamePoints: number; reason: 'no_website_user' | 'beyond_rank_cap' }[]
   leaderboardError: string | null
   bankCleared?: boolean
   bankClearOutput?: string | null

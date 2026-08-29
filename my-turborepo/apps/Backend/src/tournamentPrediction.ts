@@ -747,7 +747,7 @@ export function registerTournamentPredictionRoutes(app: Express, deps: RouteDeps
     const validateStake = (s: number, label: string): string | null => {
       if (s === 0) return null;
       if (!Number.isInteger(s) || s < minStake || s > maxStake) {
-        return `${label} must be 0 or ${minStake}–${maxStake} Asteryn Point`;
+        return `${label} must be 0 or ${minStake}–${maxStake} Asteryn Coin`;
       }
       return null;
     };
@@ -796,7 +796,7 @@ export function registerTournamentPredictionRoutes(app: Express, deps: RouteDeps
     const totalStake = stakeChampion + stakeRunnerUp;
     if (!wallet || wallet.balance < totalStake) {
       res.status(400).json({
-        error: "Not enough website Asteryn Point",
+        error: "Not enough website Asteryn Coin",
         balance: wallet?.balance ?? 0,
         required: totalStake,
       });

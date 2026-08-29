@@ -7,6 +7,16 @@ import {
 } from '../api'
 import type { CobbleDollarsLeaderboardResponse } from '../types'
 import { ignNamesMatch, scrollElementIntoViewCentered } from '../ignMatch'
+import {
+  INGAME_ASTERYN_POINT_LABEL,
+  INGAME_ASTERYN_POINT_SINGULAR,
+  WEBSITE_CURRENCY_LABEL,
+  WEBSITE_CURRENCY_SINGULAR,
+} from '../currencyLabel'
+import {
+  INGAME_AP_TO_WEBSITE_COIN_TABLE,
+  websiteCoinRewardForIngameApRank,
+} from '../ingameAsterynPointCoinRewards'
 
 export type EconomyLeaderboardKind = 'cobble' | 'website_cobble' | 'pco' | 'asteryn_ingame'
 
@@ -64,22 +74,24 @@ export function CobbleDollars({
 
   const panelClass = 'p-8 text-center pixel-panel'
   const isIngameAp = kind === 'asteryn_ingame'
-  const currency = kind === 'pco' ? 'PCO' : kind === 'cobble' ? 'Cobble$' : 'AsterynPoints'
+  const isWebsite = kind === 'website_cobble'
+  const currency =
+    kind === 'pco' ? 'PCO' : kind === 'cobble' ? 'Cobble$' : isIngameAp ? INGAME_ASTERYN_POINT_LABEL : WEBSITE_CURRENCY_LABEL
   const title =
     kind === 'pco'
       ? 'In-game PCO (top 10)'
-      : kind === 'website_cobble'
-        ? 'Website AsterynPoints (top 10)'
+      : isWebsite
+        ? `Website ${WEBSITE_CURRENCY_LABEL} (top 10)`
         : isIngameAp
-          ? 'In-game AsterynPoints (top 20)'
+          ? `In-game ${INGAME_ASTERYN_POINT_LABEL} (top 20)`
           : 'In-game Cobble$ (top 10)'
   const subtitle =
     kind === 'pco'
       ? 'Richest players by in-game PCO.'
-      : kind === 'website_cobble'
-        ? 'Highest balances on this site (wallet AsterynPoints, not Minecraft).'
+      : isWebsite
+        ? `Highest balances on this site (wallet ${WEBSITE_CURRENCY_LABEL}, not Minecraft).`
         : isIngameAp
-          ? 'Richest players by in-game AsterynPoints (`/asterynpoint leaderboard`).'
+          ? `Richest players by in-game ${INGAME_ASTERYN_POINT_LABEL}. Top 20 ranks convert to website ${WEBSITE_CURRENCY_LABEL} (not 1:1).`
           : 'Richest players by in-game Cobble$.'
   const balanceClass =
     kind === 'pco' ? 'text-cyan-300' : isIngameAp || kind === 'website_cobble' ? 'text-violet-300' : 'text-[#fbbf24]'
@@ -117,9 +129,9 @@ export function CobbleDollars({
       ) : data.top10.length === 0 ? (
         <div className="p-8 text-center pixel-panel-soft text-muted text-base">
           {kind === 'website_cobble'
-            ? `No website ${currency} balances yet — earn AsterynPoints from streaks, PvP payouts, and other site rewards.`
+            ? `No website ${currency} balances yet — earn ${WEBSITE_CURRENCY_LABEL} from streaks, PvP payouts, and other site rewards.`
             : isIngameAp
-              ? 'No player has earned AsterynPoints yet.'
+              ? `No player has earned ${INGAME_ASTERYN_POINT_LABEL} yet.`
               : `No ${currency} balances returned yet. Play on the server to appear on the leaderboard.`}
         </div>
       ) : (
@@ -133,6 +145,25 @@ export function CobbleDollars({
               </p>
             )}
           </header>
+
+          {isIngameAp ? (
+            <div className="pixel-panel-soft px-4 py-3 text-sm text-muted">
+              <p className="m-0 mb-2 font-semibold text-[#e2e8f0]">
+                Website {WEBSITE_CURRENCY_LABEL} reward by rank
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 text-xs">
+                {INGAME_AP_TO_WEBSITE_COIN_TABLE.map((row) => (
+                  <span key={row.label} className="tabular-nums">
+                    Rank {row.label}:{' '}
+                    <strong className="text-violet-300">
+                      {row.coins} {WEBSITE_CURRENCY_SINGULAR}
+                      {row.coins === 1 ? '' : 's'}
+                    </strong>
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           {yourIndex >= 0 && data.top10[yourIndex] ? (
             <div
@@ -148,12 +179,26 @@ export function CobbleDollars({
                   {Number(data.top10[yourIndex].balance).toLocaleString()}
                 </strong>{' '}
                 {currency}
+                {isIngameAp && websiteCoinRewardForIngameApRank(yourIndex + 1) != null ? (
+                  <>
+                    {' '}
+                    →{' '}
+                    <strong className="tabular-nums text-violet-300">
+                      +{websiteCoinRewardForIngameApRank(yourIndex + 1)} {WEBSITE_CURRENCY_SINGULAR}
+                      {websiteCoinRewardForIngameApRank(yourIndex + 1) === 1 ? '' : 's'}
+                    </strong>{' '}
+                    on website
+                  </>
+                ) : null}
               </p>
             </div>
           ) : null}
 
           <ol className="list-none m-0 p-0 space-y-2">
-            {data.top10.map((row, i) => (
+            {data.top10.map((row, i) => {
+              const rank = i + 1
+              const coinReward = isIngameAp ? websiteCoinRewardForIngameApRank(rank) : null
+              return (
               <li
                 key={`${row.name}-${row.balance}-${i}`}
                 ref={i === yourIndex ? youRowRef : undefined}
@@ -163,17 +208,28 @@ export function CobbleDollars({
               >
                 <span className="flex min-w-0 items-center gap-3">
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center pixel-well text-base font-bold tabular-nums text-accent">
-                    {i + 1}
+                    {rank}
                   </span>
                   <span className="font-mono text-base text-[#e2e8f0] truncate" title={row.name}>
                     {row.name}
                   </span>
                 </span>
-                <span className={`shrink-0 text-base font-bold tabular-nums ${balanceClass}`}>
-                  {Number(row.balance).toLocaleString()}
+                <span className="shrink-0 text-right">
+                  <span className={`block text-base font-bold tabular-nums ${balanceClass}`}>
+                    {Number(row.balance).toLocaleString()}
+                    {isIngameAp ? (
+                      <span className="text-xs font-normal text-muted ml-1">{INGAME_ASTERYN_POINT_SINGULAR}</span>
+                    ) : null}
+                  </span>
+                  {coinReward != null ? (
+                    <span className="block text-xs font-semibold tabular-nums text-violet-300 mt-0.5">
+                      +{coinReward} {WEBSITE_CURRENCY_SINGULAR}
+                      {coinReward === 1 ? '' : 's'}
+                    </span>
+                  ) : null}
                 </span>
               </li>
-            ))}
+            )})}
           </ol>
         </>
       )}

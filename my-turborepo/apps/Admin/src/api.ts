@@ -56,7 +56,7 @@ export async function fetchPcoLeaderboard() {
   return get<import('./types').CobbleDollarsLeaderboardResponse>('/minecraft/pco-leaderboard')
 }
 
-/** In-game Asteryn Point top 20 — RCON `asterynpoint leaderboard`. */
+/** In-game Asteryn Coin top 20 — RCON `asterynpoint leaderboard`. */
 export async function fetchAsterynPointLeaderboard() {
   return get<import('./types').CobbleDollarsLeaderboardResponse>('/minecraft/asterynpoint-leaderboard')
 }
@@ -66,7 +66,7 @@ export async function fetchWorldHuntLeaderboard() {
   return get<import('./types').WorldHuntLeaderboardResponse>('/minecraft/world-hunt-leaderboard')
 }
 
-/** Website wallet Asteryn Point top 10 — same JSON shape as in-game economy boards. */
+/** Website wallet Asteryn Coin top 10 — same JSON shape as in-game economy boards. */
 export async function fetchWebsiteCobbledollarsLeaderboard() {
   return get<import('./types').CobbleDollarsLeaderboardResponse>('/leaderboard/website-asterynpoints')
 }

@@ -112,7 +112,7 @@ export function TournamentPredictionBetLedger({
           {summary.totalEntries === 1 ? '' : 's'}
         </span>
         <span className="rounded-lg border border-amber-500/30 bg-amber-950/25 px-3 py-1.5 text-xs tabular-nums text-[#fbbf24] font-semibold">
-          {summary.totalStaked.toLocaleString()} AsterynPoints staked
+          {summary.totalStaked.toLocaleString()} Asteryn Coins staked
         </span>
       </div>
 
@@ -238,7 +238,7 @@ export function TournamentPredictionBetLedger({
                       <p className="text-amber-200/90 font-medium m-0 mb-0.5">Champion</p>
                       <p className="text-[#e2e8f0] m-0">{row.pickChampionLabel}</p>
                       <div className="flex justify-between mt-1 gap-2">
-                        <span className="tabular-nums text-[#fbbf24]">{row.stakeChampion.toLocaleString()} AsterynPoints</span>
+                        <span className="tabular-nums text-[#fbbf24]">{row.stakeChampion.toLocaleString()} Asteryn Coins</span>
                         <span className={`rounded px-1.5 py-0.5 text-[10px] border ${champ.badgeClass}`}>
                           {champ.text}
                         </span>
@@ -250,7 +250,7 @@ export function TournamentPredictionBetLedger({
                       <p className="text-sky-200/90 font-medium m-0 mb-0.5">Runner-up</p>
                       <p className="text-[#e2e8f0] m-0">{row.pickRunnerUpLabel}</p>
                       <div className="flex justify-between mt-1 gap-2">
-                        <span className="tabular-nums text-[#fbbf24]">{row.stakeRunnerUp.toLocaleString()} AsterynPoints</span>
+                        <span className="tabular-nums text-[#fbbf24]">{row.stakeRunnerUp.toLocaleString()} Asteryn Coins</span>
                         <span className={`rounded px-1.5 py-0.5 text-[10px] border ${ru.badgeClass}`}>
                           {ru.text}
                         </span>
@@ -258,7 +258,7 @@ export function TournamentPredictionBetLedger({
                     </div>
                   ) : null}
                   <p className="text-[10px] text-muted m-0 flex justify-between">
-                    <span>Total {row.totalStake.toLocaleString()} AsterynPoints</span>
+                    <span>Total {row.totalStake.toLocaleString()} Asteryn Coins</span>
                     <span>{new Date(row.createdAt).toLocaleString()}</span>
                   </p>
                 </li>

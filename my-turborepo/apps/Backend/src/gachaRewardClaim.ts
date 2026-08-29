@@ -94,7 +94,7 @@ export function isGachaClaimEnabled(): boolean {
 }
 
 /**
- * Parse website Asteryn Point reward labels for auto-credit.
+ * Parse website Asteryn Coin reward labels for auto-credit.
  * Supported: `asterynpoints:<amount>` or legacy `cobbledollars:<amount>`
  * Example: `asterynpoints:5000`
  */
@@ -188,7 +188,7 @@ export function formatGachaRewardLabel(rewardType: string): string {
   const cur = parseGachaCurrencyReward(rewardType);
   if (cur) return `${cur.label} ×${cur.amount}`;
   const cobble = parseCobbledollarsReward(rewardType);
-  if (cobble) return `Asteryn Point +${cobble.amount.toLocaleString()}`;
+  if (cobble) return `Asteryn Coin +${cobble.amount.toLocaleString()}`;
   return rewardType.trim();
 }
 

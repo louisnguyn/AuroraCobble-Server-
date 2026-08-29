@@ -405,7 +405,7 @@ export async function submitTournamentPrediction(body: {
   )
 }
 
-/** Move website Asteryn Point (user_currency asterynpoints) into the Minecraft server via RCON. */
+/** Move website Asteryn Coin (user_currency asterynpoints) into the Minecraft server via RCON. */
 export async function depositCobbledollars(amount: number): Promise<{ newBalance: number }> {
   return fetchApi<{ newBalance: number }>('/user/asterynpoints/deposit', {
     method: 'POST',
@@ -413,7 +413,7 @@ export async function depositCobbledollars(amount: number): Promise<{ newBalance
   })
 }
 
-/** Transfer website Asteryn Point to another website account username. */
+/** Transfer website Asteryn Coin to another website account username. */
 export async function transferCobbledollars(
   toUsername: string,
   amount: number
@@ -436,7 +436,7 @@ export interface CobbledollarLedgerRow {
   created_at: string
 }
 
-/** Last website Asteryn Point movements (deposit, shop, rewards, etc.). */
+/** Last website Asteryn Coin movements (deposit, shop, rewards, etc.). */
 export async function fetchCobbledollarsLedger(
   limit = 10
 ): Promise<{ transactions: CobbledollarLedgerRow[] }> {
@@ -650,7 +650,7 @@ export type RoleCatalogEntry = {
   badgeRequirementLabel?: string | null
   /** User meets badge requirements (VIP). */
   meetsBadgeRequirement?: boolean
-  /** No Asteryn Point cost — free claim on the shop ladder. */
+  /** No Asteryn Coin cost — free claim on the shop ladder. */
   freeRank?: boolean
   /** Currently active in-game display rank. */
   active?: boolean

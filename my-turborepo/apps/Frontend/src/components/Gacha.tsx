@@ -142,7 +142,7 @@ function formatGachaRewardLabel(raw: string): string {
     return `${label} ×${n}`
   }
   const cobble = parseCobbledollarsRewardLabel(t)
-  if (cobble != null) return `Asteryn Point +${cobble.toLocaleString()}`
+  if (cobble != null) return `Asteryn Coin +${cobble.toLocaleString()}`
   return t
 }
 
@@ -592,7 +592,7 @@ export function Gacha() {
                         </p>
                         {lastReward.cobbledollarsReward && (
                           <p className="text-sm m-0 text-emerald-300">
-                            Auto credited +{lastReward.cobbledollarsReward.amount.toLocaleString()} Asteryn Point
+                            Auto credited +{lastReward.cobbledollarsReward.amount.toLocaleString()} Asteryn Coin
                             {lastReward.cobbledollarsReward.newBalance != null ? (
                               <>
                                 {' '}

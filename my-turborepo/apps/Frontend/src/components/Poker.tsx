@@ -198,7 +198,7 @@ export function Poker() {
             accent="gold"
             eyebrow="Mini-games"
             title="Pokémon Poker"
-            description="Texas Hold'em with Pokémon cards. Virtual Asteryn Point only — no real-money gambling."
+            description="Texas Hold'em with Pokémon cards. Virtual Asteryn Coin only — no real-money gambling."
           />
           <div className="pixel-panel-soft p-8 text-center">
             <button
@@ -230,7 +230,7 @@ export function Poker() {
         >
           <p className="m-0 font-medium">Pokémon Poker requires a verified account</p>
           <p className="m-0 mt-1 text-xs text-amber-100/90">
-            Verify your account under <strong>Account</strong> to create or join tables and play with Asteryn Point.
+            Verify your account under <strong>Account</strong> to create or join tables and play with Asteryn Coin.
           </p>
         </div>
       </PageShell>
@@ -410,7 +410,7 @@ export function Poker() {
                 )}
               </div>
               <div className="holdem-pot-label">
-                {formatCobble(room.pot)} Asteryn Point
+                {formatCobble(room.pot)} Asteryn Coin
                 {room.turnEndsAt && inHand && (
                   <span className="ml-2 opacity-90">
                     · <TurnCountdown endsAt={room.turnEndsAt} />

@@ -42,7 +42,7 @@ export function TournamentPredictionsPage({
         accent="violet"
         eyebrow={eventTitle ? 'Placing predictions for' : 'Tournament predictions'}
         title={eventTitle ?? 'Predictions'}
-        description="Bet website Asteryn Point on who wins champion and runner-up. Results settle when the final is decided in the bracket."
+        description="Bet website Asteryn Coin on who wins champion and runner-up. Results settle when the final is decided in the bracket."
       />
 
       {!isAuthenticated ? (

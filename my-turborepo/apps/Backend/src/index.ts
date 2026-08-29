@@ -348,7 +348,7 @@ let worldHuntPublicCache: {
   };
 } | null = null;
 
-/** Website wallet Asteryn Point (`user_currency` + `users`) — same JSON shape as in-game economy leaderboards. */
+/** Website wallet Asteryn Coin (`user_currency` + `users`) — same JSON shape as in-game economy leaderboards. */
 let websiteCobbledollarsPublicCache: {
   at: number;
   body: {
@@ -531,12 +531,12 @@ async function notifyDiscordTournamentPredictionStake(params: {
     { name: "Tournament", value: clampDiscordText(params.tournamentTitle, 256), inline: true },
     {
       name: "Total staked",
-      value: `${params.totalStake.toLocaleString()} Asteryn Point`,
+      value: `${params.totalStake.toLocaleString()} Asteryn Coin`,
       inline: true,
     },
     {
       name: "Balance",
-      value: `${params.newBalance.toLocaleString()} Asteryn Point`,
+      value: `${params.newBalance.toLocaleString()} Asteryn Coin`,
       inline: true,
     },
   ];
@@ -544,7 +544,7 @@ async function notifyDiscordTournamentPredictionStake(params: {
     fields.push({
       name: "Champion pick",
       value: clampDiscordText(
-        `${params.pickChampionLabel ?? "—"} · ${params.stakeChampion.toLocaleString()} AsterynPoints`,
+        `${params.pickChampionLabel ?? "—"} · ${params.stakeChampion.toLocaleString()} Asteryn Coins`,
         1024
       ),
       inline: false,
@@ -554,7 +554,7 @@ async function notifyDiscordTournamentPredictionStake(params: {
     fields.push({
       name: "Runner-up pick",
       value: clampDiscordText(
-        `${params.pickRunnerUpLabel ?? "—"} · ${params.stakeRunnerUp.toLocaleString()} AsterynPoints`,
+        `${params.pickRunnerUpLabel ?? "—"} · ${params.stakeRunnerUp.toLocaleString()} Asteryn Coins`,
         1024
       ),
       inline: false,
@@ -743,24 +743,24 @@ async function notifyDiscordCobbleLedger(
   let content: string | null = null;
   switch (kind) {
     case "deposit_to_server": {
-      content = `${username} deposited ${amountStr} Asteryn Point to the server (new balance ${balanceAfterStr})`;
+      content = `${username} deposited ${amountStr} Asteryn Coin to the server (new balance ${balanceAfterStr})`;
       break;
     }
     case "shop": {
       // detail like: `${item.label} ×${quantity}`
-      content = `${username} bought ${detail ?? "item"} for ${amountStr} Asteryn Point (new balance ${balanceAfterStr})`;
+      content = `${username} bought ${detail ?? "item"} for ${amountStr} Asteryn Coin (new balance ${balanceAfterStr})`;
       break;
     }
     case "pokemon_shop": {
-      content = `${username} bought ${detail ?? "pokemon"} for ${amountStr} Asteryn Point (new balance ${balanceAfterStr})`;
+      content = `${username} bought ${detail ?? "pokemon"} for ${amountStr} Asteryn Coin (new balance ${balanceAfterStr})`;
       void notifyDiscordEmbed(
         {
           title: "Pokémon Shop Purchase",
           color: 0xa855f7,
           fields: [
             { name: "Player", value: clampDiscordText(username, 128), inline: true },
-            { name: "Paid", value: `${amountStr} Asteryn Point`, inline: true },
-            { name: "Balance", value: `${balanceAfterStr} Asteryn Point`, inline: true },
+            { name: "Paid", value: `${amountStr} Asteryn Coin`, inline: true },
+            { name: "Balance", value: `${balanceAfterStr} Asteryn Coin`, inline: true },
             {
               name: "Pokémon",
               value: clampDiscordText(detail ?? "—", 1024),
@@ -774,15 +774,15 @@ async function notifyDiscordCobbleLedger(
       return;
     }
     case "role_shop": {
-      content = `${username} bought rank ${detail ?? "role"} for ${amountStr} Asteryn Point (new balance ${balanceAfterStr})`;
+      content = `${username} bought rank ${detail ?? "role"} for ${amountStr} Asteryn Coin (new balance ${balanceAfterStr})`;
       break;
     }
     case "tournament_prediction_stake": {
-      content = `${username} staked ${amountStr} Asteryn Point on tournament predictions (balance ${balanceAfterStr})`;
+      content = `${username} staked ${amountStr} Asteryn Coin on tournament predictions (balance ${balanceAfterStr})`;
       break;
     }
     case "tournament_prediction_win": {
-      content = `${username} won ${amountStr} Asteryn Point from tournament predictions (balance ${balanceAfterStr})`;
+      content = `${username} won ${amountStr} Asteryn Coin from tournament predictions (balance ${balanceAfterStr})`;
       break;
     }
   }
@@ -794,8 +794,8 @@ async function notifyDiscordCobbleLedger(
     fields: [
       { name: "Player", value: clampDiscordText(username, 128), inline: true },
       { name: "Type", value: clampDiscordText(kind.replace(/_/g, " "), 128), inline: true },
-      { name: "Amount", value: `${amountStr} Asteryn Point`, inline: true },
-      { name: "Balance", value: `${balanceAfterStr} Asteryn Point`, inline: true },
+      { name: "Amount", value: `${amountStr} Asteryn Coin`, inline: true },
+      { name: "Balance", value: `${balanceAfterStr} Asteryn Coin`, inline: true },
       {
         name: "Detail",
         value: clampDiscordText(detail ?? content, 1024),
@@ -1148,7 +1148,7 @@ app.get("/minecraft/cobbledollars-leaderboard", async (_req, res) => {
   }
 });
 
-/** Public website Asteryn Point top 10 (`user_currency` cobbledollars + `users.username`). Cached ~90s. No auth. */
+/** Public website Asteryn Coin top 10 (`user_currency` cobbledollars + `users.username`). Cached ~90s. No auth. */
 app.get(["/leaderboard/website-cobbledollars", "/leaderboard/website-asterynpoints"], async (_req, res) => {
   if (process.env.WEBSITE_COBBLEDOLLARS_LEADERBOARD_DISABLE === "true") {
     res.json({
@@ -1609,7 +1609,7 @@ app.post("/auth/signup", async (req, res) => {
     res.status(400).json({ error: result.error });
     return;
   }
-  // Grant starter currency for gacha + website Asteryn Point wallet (ignore errors so signup still succeeds)
+  // Grant starter currency for gacha + website Asteryn Coin wallet (ignore errors so signup still succeeds)
   if (supabase) {
     void supabase.from("user_currency").insert([
       { user_id: result.id, currency_type: ASTERYN_POINTS_CURRENCY, balance: 0 },
@@ -2537,7 +2537,7 @@ app.post("/admin/verification-requests/:id/reject", requireAuth, requireAdmin, a
   res.json({ ok: true, request: updatedReq });
 });
 
-// --- Minecraft rank: catalog, Asteryn Point purchase (RCON LuckPerms), grant-only requests ---
+// --- Minecraft rank: catalog, Asteryn Coin purchase (RCON LuckPerms), grant-only requests ---
 app.get("/roles/catalog", requireAuth, async (_req, res) => {
   const userId = res.locals.user!.userId;
   const currentRole = await getUserMinecraftRoleForShop(userId);
@@ -3049,12 +3049,12 @@ app.post("/roles/buy", requireAuth, async (req, res) => {
   if (cost > 0) {
     const wallet = await ensureUserCobbledollarsRow(user.userId);
     if (!wallet) {
-      res.status(500).json({ error: "Could not open Asteryn Point wallet" });
+      res.status(500).json({ error: "Could not open Asteryn Coin wallet" });
       return;
     }
     if (wallet.balance < cost) {
       res.status(400).json({
-        error: "Not enough Asteryn Point",
+        error: "Not enough Asteryn Coin",
         balance: wallet.balance,
         required: cost,
       });
@@ -3945,7 +3945,7 @@ function notifyPokemonShopRefreshIfNeeded(
   const offerLines = offers
     .map(
       (o) =>
-        `#${o.slot} ${o.label}${o.shiny ? "" : " (normal)"} (${o.category}) - ${o.price.toLocaleString()} Asteryn Point`
+        `#${o.slot} ${o.label}${o.shiny ? "" : " (normal)"} (${o.category}) - ${o.price.toLocaleString()} Asteryn Coin`
     )
     .join("\n");
   void notifyDiscordEmbed(
@@ -4292,7 +4292,7 @@ async function isEligibleToday(userId: number, username: string): Promise<boolea
   return localDateOnly(new Date(lastSeen), DAILY_RESET_TIMEZONE) === today;
 }
 
-/** Website Asteryn Point row — created on signup; lazily created for older accounts on first deposit.
+/** Website Asteryn Coin row — created on signup; lazily created for older accounts on first deposit.
  * Also folds leftover `cobbledollars` into `asterynpoints` so shop spend matches the UI total.
  */
 async function ensureUserCobbledollarsRow(
@@ -4347,7 +4347,7 @@ async function ensureUserCobbledollarsRow(
 }
 
 /**
- * Spend website Asteryn Point and credit the linked Minecraft account via RCON.
+ * Spend website Asteryn Coin and credit the linked Minecraft account via RCON.
  * Username must match Java edition IGN (same rule as gacha Pokémon claim).
  */
 app.post(["/user/cobbledollars/deposit", "/user/asterynpoints/deposit"], requireAuth, async (req, res) => {
@@ -4355,7 +4355,7 @@ app.post(["/user/cobbledollars/deposit", "/user/asterynpoints/deposit"], require
   if (!isCobbledollarsDepositEnabled()) {
     res.status(503).json({
       error:
-        "Asteryn Point deposit is not configured (set MC_RCON_* or disable MC_COBBLEDOLLARS_DEPOSIT_DISABLE)",
+        "Asteryn Coin deposit is not configured (set MC_RCON_* or disable MC_COBBLEDOLLARS_DEPOSIT_DISABLE)",
     });
     return;
   }
@@ -4377,19 +4377,19 @@ app.post(["/user/cobbledollars/deposit", "/user/asterynpoints/deposit"], require
   if (!isLikelyMinecraftUsername(user.username)) {
     res.status(400).json({
       error:
-        "Your website username must match your Minecraft name (2–16 letters, numbers, underscore) to deposit Asteryn Point.",
+        "Your website username must match your Minecraft name (2–16 letters, numbers, underscore) to deposit Asteryn Coin.",
     });
     return;
   }
 
   const row = await ensureUserCobbledollarsRow(user.userId);
   if (!row) {
-    res.status(500).json({ error: "Could not open Asteryn Point wallet" });
+    res.status(500).json({ error: "Could not open Asteryn Coin wallet" });
     return;
   }
   if (row.balance < amount) {
     res.status(400).json({
-      error: "Not enough website Asteryn Point",
+      error: "Not enough website Asteryn Coin",
       balance: row.balance,
       required: amount,
     });
@@ -4439,10 +4439,10 @@ app.post(["/user/cobbledollars/deposit", "/user/asterynpoints/deposit"], require
   res.json({ newBalance });
 });
 
-/** Player-to-player Asteryn Point transfer is disabled. */
+/** Player-to-player Asteryn Coin transfer is disabled. */
 app.post(["/user/cobbledollars/transfer", "/user/asterynpoints/transfer"], requireAuth, (_req, res) => {
   res.status(410).json({
-    error: "Sending Asteryn Point to other players is disabled.",
+    error: "Sending Asteryn Coin to other players is disabled.",
     code: "transfer_disabled",
   });
 });
@@ -4670,12 +4670,12 @@ app.post("/shop/buy", requireAuth, async (req, res) => {
 
     const wallet = await ensureUserCobbledollarsRow(user.userId);
     if (!wallet) {
-      res.status(500).json({ error: "Could not open Asteryn Point wallet" });
+      res.status(500).json({ error: "Could not open Asteryn Coin wallet" });
       return;
     }
     if (wallet.balance < totalCost) {
       res.status(400).json({
-        error: "Not enough Asteryn Point",
+        error: "Not enough Asteryn Coin",
         balance: wallet.balance,
         required: totalCost,
       });
@@ -4722,7 +4722,7 @@ app.post("/shop/buy", requireAuth, async (req, res) => {
       await runBattlePassLuckpermsCommand(bpItem.battlePassKind, ign, false);
       res.status(500).json({
         error:
-          "Server permission was applied but the grant could not be saved. Your Asteryn Point was refunded. Contact staff if this persists.",
+          "Server permission was applied but the grant could not be saved. Your Asteryn Coin was refunded. Contact staff if this persists.",
         dbPersisted: false,
       });
       return;
@@ -4761,12 +4761,12 @@ app.post("/shop/buy", requireAuth, async (req, res) => {
 
   const wallet = await ensureUserCobbledollarsRow(user.userId);
   if (!wallet) {
-    res.status(500).json({ error: "Could not open Asteryn Point wallet" });
+    res.status(500).json({ error: "Could not open Asteryn Coin wallet" });
     return;
   }
   if (wallet.balance < totalCost) {
     res.status(400).json({
-      error: "Not enough Asteryn Point",
+      error: "Not enough Asteryn Coin",
       balance: wallet.balance,
       required: totalCost,
     });
@@ -4966,7 +4966,7 @@ app.post("/user/daily-login/claim", requireAuth, async (_req, res) => {
       ? items.map((it) => `${it.label} ×${it.amount}`).join(", ")
       : null;
   const selectedRewardLabel = [
-    flatCobbleBonus > 0 ? `VIP +${flatCobbleBonus} Asteryn Point` : null,
+    flatCobbleBonus > 0 ? `VIP +${flatCobbleBonus} Asteryn Coin` : null,
     ticketBonus > 0 ? `rank +${ticketBonus} ticket(s)` : null,
     itemLabel ? `items: ${itemLabel}` : null,
   ]
@@ -5011,7 +5011,7 @@ app.post("/user/daily-login/claim", requireAuth, async (_req, res) => {
     }
     const parts: string[] = [`Day ${streakDay}`];
     if (flatCobbleBonus + reward.amount > 0) {
-      parts.push(`+${(reward.amount + flatCobbleBonus).toLocaleString()} Asteryn Point`);
+      parts.push(`+${(reward.amount + flatCobbleBonus).toLocaleString()} Asteryn Coin`);
     }
     message = parts.join(": ");
     if (newBalance > 0 && flatCobbleBonus + reward.amount > 0) {
@@ -6937,8 +6937,8 @@ async function runDailyPvpRankPayout(): Promise<{
           const msg = e instanceof Error ? e.message : String(e);
           ticketError = msg;
           payoutStatus = "partial";
-          console.error(`[pvp-daily-payout] Asteryn Point paid but tickets failed (rank ${rank}, user ${user.id}):`, msg);
-          note = `Asteryn Point OK. Ticket grant failed: ${msg}. Staff can grant ${ticketBonus} ${PVP_TICKETS_CURRENCY} manually.`;
+          console.error(`[pvp-daily-payout] Asteryn Coin paid but tickets failed (rank ${rank}, user ${user.id}):`, msg);
+          note = `Asteryn Coin OK. Ticket grant failed: ${msg}. Staff can grant ${ticketBonus} ${PVP_TICKETS_CURRENCY} manually.`;
         }
       }
       await supabase.from("user_pvp_daily_payouts").insert({
@@ -7191,7 +7191,7 @@ app.post("/admin/users/:userId/currency", requireAuth, requireAdmin, async (req,
   }
 });
 
-/** Grant website Asteryn Point to many users in one request; ledger uses same kind as single admin grant. */
+/** Grant website Asteryn Coin to many users in one request; ledger uses same kind as single admin grant. */
 app.post(
   ["/admin/cobbledollars/bulk-grant", "/admin/asterynpoints/bulk-grant"],
   requireAuth,

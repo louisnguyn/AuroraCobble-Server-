@@ -3,9 +3,16 @@ import { ASTERYN_POINTS_CURRENCY } from "./websiteCurrency.js";
 import { fetchAsterynPointLeaderboardViaRcon } from "./minecraftRconAsterynPoint.js";
 import { executeMinecraftRconCommand } from "./minecraftRconExecute.js";
 import { topBalancesFromMap } from "./minecraftRconCobbledollars.js";
+import {
+  INGAME_AP_TO_WEBSITE_COIN_MAX_RANK,
+  websiteCoinRewardForIngameApRank,
+} from "./ingameAsterynPointCoinRewards.js";
 
 export type AsterynPointMigrateMatch = {
+  rank: number;
   ign: string;
+  ingamePoints: number;
+  /** Website Asteryn Coins to credit (rank-based, not 1:1 with ingamePoints). */
   amount: number;
   userId: number;
   websiteName: string;
@@ -13,12 +20,15 @@ export type AsterynPointMigrateMatch = {
 };
 
 export type AsterynPointMigrateSkip = {
+  rank: number;
   ign: string;
-  amount: number;
+  ingamePoints: number;
+  reason: "no_website_user" | "beyond_rank_cap";
 };
 
 export type AsterynPointMigratePlan = {
   boardCount: number;
+  eligibleCount: number;
   totalCredit: number;
   matched: AsterynPointMigrateMatch[];
   unmatched: AsterynPointMigrateSkip[];
@@ -36,7 +46,9 @@ async function creditWebsiteAp(
   supabase: SupabaseClient,
   userId: number,
   amount: number,
-  ign: string
+  ign: string,
+  rank: number,
+  ingamePoints: number
 ): Promise<number> {
   const now = new Date().toISOString();
   const { data: sel, error: selErr } = await supabase
@@ -67,7 +79,7 @@ async function creditWebsiteAp(
     delta: amount,
     balance_after: next,
     kind: "ingame_ap_migrate",
-    detail: `From in-game AsterynPoints (${ign})`,
+    detail: `Rank #${rank} in-game Asteryn Point (${ingamePoints.toLocaleString()} AP) → ${amount} Asteryn Coin`,
   });
   if (ledErr) console.warn("[ingame-ap-migrate ledger]", ledErr.message);
   return next;
@@ -80,7 +92,7 @@ export async function planAsterynPointMigration(
   if (r.error && r.balances.size === 0) {
     throw new Error(r.error);
   }
-  const rows = topBalancesFromMap(r.balances, 200).filter(
+  const rows = topBalancesFromMap(r.balances, INGAME_AP_TO_WEBSITE_COIN_MAX_RANK).filter(
     (row) => Number.isFinite(row.balance) && row.balance > 0
   );
   const { data: users, error: uErr } = await supabase.from("users").select("id, username");
@@ -97,16 +109,44 @@ export async function planAsterynPointMigration(
 
   const matched: AsterynPointMigrateMatch[] = [];
   const unmatched: AsterynPointMigrateSkip[] = [];
-  for (const row of rows) {
-    const amount = Math.trunc(row.balance);
-    if (amount < 1) continue;
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]!;
+    const rank = i + 1;
+    const ingamePoints = Math.trunc(row.balance);
+    if (ingamePoints < 1) continue;
+    const coins = websiteCoinRewardForIngameApRank(rank);
+    if (coins == null) {
+      unmatched.push({
+        rank,
+        ign: row.name,
+        ingamePoints,
+        reason: "beyond_rank_cap",
+      });
+      continue;
+    }
     const hit = byName.get(row.name.trim().toLowerCase());
-    if (hit) matched.push({ ign: row.name, amount, userId: hit.id, websiteName: hit.username });
-    else unmatched.push({ ign: row.name, amount });
+    if (hit) {
+      matched.push({
+        rank,
+        ign: row.name,
+        ingamePoints,
+        amount: coins,
+        userId: hit.id,
+        websiteName: hit.username,
+      });
+    } else {
+      unmatched.push({
+        rank,
+        ign: row.name,
+        ingamePoints,
+        reason: "no_website_user",
+      });
+    }
   }
 
   return {
     boardCount: rows.length,
+    eligibleCount: matched.length,
     totalCredit: matched.reduce((s, m) => s + m.amount, 0),
     matched,
     unmatched,
@@ -120,7 +160,14 @@ export async function applyAsterynPointMigration(
   const plan = await planAsterynPointMigration(supabase);
   const credited: AsterynPointMigrateMatch[] = [];
   for (const m of plan.matched) {
-    const walletAfter = await creditWebsiteAp(supabase, m.userId, m.amount, m.ign);
+    const walletAfter = await creditWebsiteAp(
+      supabase,
+      m.userId,
+      m.amount,
+      m.ign,
+      m.rank,
+      m.ingamePoints
+    );
     credited.push({ ...m, walletAfter });
   }
 

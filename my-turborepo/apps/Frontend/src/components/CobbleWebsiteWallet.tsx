@@ -44,7 +44,7 @@ function ticketCurrencyLabel(currencyType: string): string {
   return currencyType
 }
 
-/** Website AsterynPoints balance and history. */
+/** Website Asteryn Coins balance and history. */
 export function CobbleWebsiteWallet({ onBalanceUpdated }: { onBalanceUpdated?: () => void }) {
   const { isAuthenticated } = useAuth()
   const [walletBalance, setWalletBalance] = useState<number | null>(null)
@@ -143,9 +143,9 @@ export function CobbleWebsiteWallet({ onBalanceUpdated }: { onBalanceUpdated?: (
 
   return (
     <section className="pixel-well p-5 sm:p-6 text-left">
-      <h2 className="text-lg font-semibold m-0 mb-1 text-[#e2e8f0]">AsterynPoints wallet</h2>
+      <h2 className="text-lg font-semibold m-0 mb-1 text-[#e2e8f0]">Asteryn Coins wallet</h2>
       <p className="text-sm text-muted m-0 mb-4">
-        AsterynPoints earned on this site can be deposited to your in-game Cobble$ balance. Your account username must
+        Asteryn Coins earned on this site can be deposited to your in-game Cobble$ balance. Your account username must
         match your in-game name.
       </p>
       {walletLoading ? (
@@ -181,7 +181,7 @@ export function CobbleWebsiteWallet({ onBalanceUpdated }: { onBalanceUpdated?: (
 
           <div className="mt-6 pt-5 border-t border-border/80">
             <h3 className="text-sm font-semibold text-[#e2e8f0] m-0 mb-2">Recent activity</h3>
-            <p className="text-xs text-muted m-0 mb-3">Last 10 website AsterynPoints changes (newest first).</p>
+            <p className="text-xs text-muted m-0 mb-3">Last 10 website Asteryn Coins changes (newest first).</p>
             {ledgerLoading ? (
               <p className="text-xs text-muted m-0">Loading history…</p>
             ) : ledgerError ? (

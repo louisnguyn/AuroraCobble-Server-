@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   fetchAchievementLeaderboard,
   fetchAsterynPointLeaderboard,
@@ -26,6 +26,19 @@ import type {
   WorldHuntLeaderboardResponse,
 } from '../types'
 import { normalizePvpTierSlugForAssets, PvPTierBadge } from './PvPTierBadge.tsx'
+import {
+  INGAME_ASTERYN_POINT_LABEL,
+  INGAME_ASTERYN_POINT_SINGULAR,
+  WEBSITE_CURRENCY_LABEL,
+  WEBSITE_CURRENCY_SINGULAR,
+} from '../currencyLabel'
+
+import {
+  INGAME_AP_TO_WEBSITE_COIN_TABLE,
+  websiteCoinRewardForIngameApRank,
+} from '../ingameAsterynPointCoinRewards'
+
+const INGAME_POINT_TO_WEBSITE_COIN_TABLE = INGAME_AP_TO_WEBSITE_COIN_TABLE
 
 type MainSection = 'ranks' | 'economy' | 'achievements' | 'world_hunt'
 type RankFormatId = 'singles' | 'doubles'
@@ -33,7 +46,7 @@ type EconomyKind = 'cobble' | 'website_cobble' | 'pco' | 'asteryn_ingame'
 
 const MAIN_SECTIONS: { id: MainSection; label: string; description: string }[] = [
   { id: 'ranks', label: 'Ranks', description: 'PvP ELO & tiers' },
-  { id: 'economy', label: 'Economy', description: 'Website AP, in-game AP, Cobble$, or PCO' },
+  { id: 'economy', label: 'Economy', description: `Website ${WEBSITE_CURRENCY_LABEL}, in-game ${INGAME_ASTERYN_POINT_LABEL}, Cobble$, or PCO` },
   { id: 'achievements', label: 'Achievements', description: 'Profile badges ranked by tier score' },
   { id: 'world_hunt', label: 'World Hunt', description: 'Current hunt event scores from /hunt event' },
 ]
@@ -370,25 +383,25 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
       loadKind: isPco
         ? 'PCO'
         : isWebsite
-          ? 'website Asteryn Point'
+          ? `website ${WEBSITE_CURRENCY_SINGULAR}`
           : isIngameAp
-            ? 'in-game Asteryn Point'
+            ? `in-game ${INGAME_ASTERYN_POINT_SINGULAR}`
             : 'in-game Cobble$',
       title: isPco
         ? 'In-game PCO (top 10)'
         : isWebsite
-          ? 'Website Asteryn Point (top 10)'
+          ? `Website ${WEBSITE_CURRENCY_LABEL} (top 10)`
           : isIngameAp
-            ? 'In-game Asteryn Point (top 20)'
+            ? `In-game ${INGAME_ASTERYN_POINT_LABEL} (top 20)`
             : 'In-game Cobble$ (top 10)',
       blurb: isWebsite
-        ? 'Top 10 site wallet balances (GET /leaderboard/website-asterynpoints — same as public Leaderboard).'
+        ? `Top 10 site wallet balances (GET /leaderboard/website-asterynpoints — same as public Leaderboard).`
         : isPco
-          ? 'PCO top 10 from pco top (RCON). Separate from website Asteryn Point.'
+          ? `PCO top 10 from pco top (RCON). Separate from website ${WEBSITE_CURRENCY_LABEL}.`
           : isIngameAp
-            ? 'Top 20 from `/asterynpoint leaderboard` (RCON). Separate from website wallet Asteryn Point.'
+            ? `Top 20 from \`/asterynpoint leaderboard\` (RCON). Separate from website ${WEBSITE_CURRENCY_LABEL}.`
             : 'In-game Cobble$ top 10 (RCON; same public endpoint as the website).',
-      balanceUnit: isPco ? 'PCO' : isWebsite || isIngameAp ? 'Asteryn Point' : 'Cobble$',
+      balanceUnit: isPco ? 'PCO' : isWebsite ? WEBSITE_CURRENCY_SINGULAR : isIngameAp ? INGAME_ASTERYN_POINT_SINGULAR : 'Cobble$',
     }
   }, [economyKind])
 
@@ -401,7 +414,7 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
             Leaderboards
           </h2>
           <p className="text-xs text-slate-500 m-0 mt-1">
-            Same views as the public site — PvP ranks, economy boards, World Hunt, and achievement badges. Your admin
+            Same views as the public site ? PvP ranks, economy boards, World Hunt, and achievement badges. Your admin
             username highlights matching in-game names.
           </p>
         </div>
@@ -427,7 +440,7 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
             </p>
           )}
           {lbLoading ? (
-            <div className={panelClass}>Loading ranks…</div>
+            <div className={panelClass}>Loading ranks?</div>
           ) : lbError ? (
             <div className={`${panelClass} text-red-300`}>Error: {lbError}</div>
           ) : !lbData || Object.keys(lbData).length === 0 ? (
@@ -464,7 +477,7 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
                       }
                     >
                       {saving
-                        ? `${label}: saving…`
+                        ? `${label}: saving?`
                         : hiding
                           ? `${label}: hide 0-match`
                           : `${label}: show all`}
@@ -476,7 +489,7 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
                 <p className="text-xs text-red-300 m-0">{displaySettingsErr}</p>
               ) : (
                 <p className="text-xs text-slate-500 m-0">
-                  Each format controls the public Leaderboard â†’ Ranks table independently. Preview below matches the
+                  Each format controls the public Leaderboard ? Ranks table independently. Preview below matches the
                   selected tab.
                 </p>
               )}
@@ -487,7 +500,7 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
               {rankPlayers.length === 0 ? (
                 <div className={panelClass}>
                   {rankPlayersAll.length > 0 && hideZeroMatchPlayers
-                    ? `Everyone on ${getFormatDisplayName(rankFormatId)} has 0 matches. Use “${getFormatDisplayName(rankFormatId)}: show all” to list them on the public site.`
+                    ? `Everyone on ${getFormatDisplayName(rankFormatId)} has 0 matches. Use ?${getFormatDisplayName(rankFormatId)}: show all? to list them on the public site.`
                     : `No entries for ${getFormatDisplayName(rankFormatId)} yet.`}
                 </div>
               ) : (
@@ -501,11 +514,11 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
                         Your current rank
                       </p>
                       <p className="text-sm text-slate-100 m-0">
-                        <span className="font-mono font-semibold">{yourRankPlayer.playerName}</span> —{' '}
+                        <span className="font-mono font-semibold">{yourRankPlayer.playerName}</span> ?{' '}
                         <strong className="text-amber-200 tabular-nums">
                           #{yourRankInTable?.rank ?? yourRankPlayer.rank}
                         </strong>{' '}
-                        in {getFormatDisplayName(rankFormatId)} · {yourRankPlayer.elo} ELO ·{' '}
+                        in {getFormatDisplayName(rankFormatId)} ? {yourRankPlayer.elo} ELO ?{' '}
                         {yourRankTier ? (
                           <PvPTierBadge
                             slug={normalizePvpTierSlugForAssets(yourRankTier.slug)}
@@ -516,7 +529,7 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
                           />
                         ) : null}
                         {hideZeroMatchPlayers && yourRankPlayer.matches === 0 ? (
-                          <span className="text-amber-300/90"> · 0 matches (hidden on public site)</span>
+                          <span className="text-amber-300/90"> ? 0 matches (hidden on public site)</span>
                         ) : null}
                       </p>
                     </div>
@@ -613,10 +626,10 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
           </h3>
           <div className="flex flex-wrap gap-2" role="tablist" aria-label="Economy currency">
             <SubTab active={economyKind === 'website_cobble'} onClick={() => setEconomyKind('website_cobble')}>
-              Website AP
+              Website {WEBSITE_CURRENCY_LABEL}
             </SubTab>
             <SubTab active={economyKind === 'asteryn_ingame'} onClick={() => setEconomyKind('asteryn_ingame')}>
-              In-game AP
+              In-game {INGAME_ASTERYN_POINT_LABEL}
             </SubTab>
             <SubTab active={economyKind === 'cobble'} onClick={() => setEconomyKind('cobble')}>
               In-game C$
@@ -629,10 +642,18 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
           {econTab.isIngameAp ? (
             <div className="rounded-xl border border-violet-500/30 bg-violet-950/25 p-4 space-y-3 max-w-2xl">
               <p className="text-sm text-violet-100 m-0">
-                Convert in-game AsterynPoints (this board) onto matching website wallets, then run{' '}
-                <span className="font-mono text-violet-200">/asterynpoint bank clear</span>. Nothing happens until you
-                click Convert.
+                Convert in-game {INGAME_ASTERYN_POINT_LABEL} (this board) to website {WEBSITE_CURRENCY_LABEL} by rank — not
+                1:1. Then run <span className="font-mono text-violet-200">/asterynpoint bank clear</span>. Nothing
+                happens until you click Convert.
               </p>
+              <ul className="text-xs text-violet-200/90 m-0 pl-4 space-y-0.5 list-disc">
+                {INGAME_POINT_TO_WEBSITE_COIN_TABLE.map((row) => (
+                  <li key={row.label}>
+                    Rank {row.label}: <strong>{row.coins}</strong> {WEBSITE_CURRENCY_SINGULAR}
+                    {row.coins === 1 ? '' : 's'}
+                  </li>
+                ))}
+              </ul>
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -648,21 +669,25 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
                   onClick={() => setApMigrateConfirm(true)}
                   className="px-3 py-1.5 rounded-lg text-sm font-medium border border-violet-400/40 text-violet-100 bg-violet-600/30 hover:bg-violet-600/40 disabled:opacity-45"
                 >
-                  Convert to website AP
+                  Convert to website {WEBSITE_CURRENCY_LABEL}
                 </button>
               </div>
               {apMigrateErr ? <p className="text-sm text-red-300 m-0">{apMigrateErr}</p> : null}
               {apMigratePlan ? (
                 <div className="text-xs text-slate-300 space-y-1">
                   <p className="m-0">
-                    Board {apMigratePlan.boardCount} · matched {apMigratePlan.matched.length} · unmatched{' '}
-                    {apMigratePlan.unmatched.length} · credit {apMigratePlan.totalCredit.toLocaleString()} AP
+                    Board {apMigratePlan.boardCount} · eligible {apMigratePlan.eligibleCount} · matched{' '}
+                    {apMigratePlan.matched.length} · unmatched {apMigratePlan.unmatched.length} · credit{' '}
+                    {apMigratePlan.totalCredit.toLocaleString()} {WEBSITE_CURRENCY_SINGULAR}
+                    {apMigratePlan.totalCredit === 1 ? '' : 's'}
                     {apMigratePlan.applied ? ' · converted' : ''}
                     {apMigratePlan.bankCleared ? ' · bank cleared' : ''}
                   </p>
                   {apMigratePlan.matched.slice(0, 12).map((m) => (
                     <p key={`${m.userId}-${m.ign}`} className="m-0 text-emerald-200/90">
-                      +{m.amount} {m.ign} → {m.websiteName}
+                      #{m.rank} +{m.amount} {WEBSITE_CURRENCY_SINGULAR}
+                      {m.amount === 1 ? '' : 's'} ({m.ingamePoints.toLocaleString()} {INGAME_ASTERYN_POINT_SINGULAR}) —{' '}
+                      {m.ign} → {m.websiteName}
                       {m.walletAfter != null ? ` (wallet ${m.walletAfter})` : ''}
                     </p>
                   ))}
@@ -670,8 +695,9 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
                     <p className="m-0 text-slate-500">+{apMigratePlan.matched.length - 12} more matched</p>
                   ) : null}
                   {apMigratePlan.unmatched.map((u) => (
-                    <p key={u.ign} className="m-0 text-amber-200/90">
-                      skip {u.ign} ({u.amount} AP, no website user)
+                    <p key={`${u.rank}-${u.ign}`} className="m-0 text-amber-200/90">
+                      skip #{u.rank} {u.ign} ({u.ingamePoints.toLocaleString()} {INGAME_ASTERYN_POINT_SINGULAR}
+                      {u.reason === 'no_website_user' ? ', no website user' : ', beyond rank 20'})
                     </p>
                   ))}
                 </div>
@@ -679,7 +705,7 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
             </div>
           ) : null}
           {cdLoading ? (
-            <div className={panelClass}>Loading {econTab.loadKind} leaderboard…</div>
+            <div className={panelClass}>Loading {econTab.loadKind} leaderboard?</div>
           ) : cdError ? (
             <div className={`${panelClass} text-red-300`}>Error: {cdError}</div>
           ) : !cdData ? (
@@ -689,9 +715,9 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
               {econTab.isPco
                 ? 'PCO'
                 : econTab.isWebsite
-                  ? 'Website Asteryn Point'
+                  ? `Website ${WEBSITE_CURRENCY_SINGULAR}`
                   : econTab.isIngameAp
-                    ? 'In-game Asteryn Point'
+                    ? `In-game ${INGAME_ASTERYN_POINT_SINGULAR}`
                     : 'In-game Cobble$'}{' '}
               leaderboard is
               disabled on this deployment.
@@ -704,8 +730,8 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
           ) : cdData.top10.length === 0 ? (
             <div className={panelClass}>
               {econTab.isIngameAp
-                ? 'No player has earned AsterynPoints yet.'
-                : `No ${econTab.isPco ? 'PCO' : econTab.isWebsite ? 'Asteryn Point' : 'Cobble$'} balances returned yet.`}
+                ? `No player has earned ${INGAME_ASTERYN_POINT_LABEL} yet.`
+                : `No ${econTab.isPco ? 'PCO' : econTab.isWebsite ? WEBSITE_CURRENCY_SINGULAR : 'Cobble$'} balances returned yet.`}
             </div>
           ) : (
             <>
@@ -713,10 +739,28 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
                 <h4 className="text-sm font-semibold m-0 mb-1 text-slate-100">{econTab.title}</h4>
                 {cdData.updatedAt && (
                   <p className="text-xs text-slate-500 m-0">
-                    Last refreshed: {new Date(cdData.updatedAt).toLocaleString()} · ~90s cache
+                    Last refreshed: {new Date(cdData.updatedAt).toLocaleString()} ? ~90s cache
                   </p>
                 )}
               </header>
+              {econTab.isIngameAp ? (
+                <div className="rounded-xl border border-violet-500/25 bg-violet-950/20 px-4 py-3 max-w-2xl text-xs text-slate-300">
+                  <p className="m-0 mb-2 font-semibold text-violet-100">
+                    Website {WEBSITE_CURRENCY_LABEL} reward by rank
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1">
+                    {INGAME_AP_TO_WEBSITE_COIN_TABLE.map((row) => (
+                      <span key={row.label} className="tabular-nums">
+                        Rank {row.label}:{' '}
+                        <strong className="text-violet-200">
+                          {row.coins} {WEBSITE_CURRENCY_SINGULAR}
+                          {row.coins === 1 ? '' : 's'}
+                        </strong>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               {cdYourIndex >= 0 && cdData.top10[cdYourIndex] ? (
                 <div
                   className={`rounded-xl border px-4 py-3 mb-3 max-w-2xl ${
@@ -734,7 +778,7 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
                     Your position
                   </p>
                   <p className="text-sm text-slate-100 m-0">
-                    <span className="font-mono font-semibold">{cdData.top10[cdYourIndex].name}</span> — rank{' '}
+                    <span className="font-mono font-semibold">{cdData.top10[cdYourIndex].name}</span> ? rank{' '}
                     <strong
                       className={`tabular-nums ${econTab.isPco ? 'text-cyan-200' : 'text-amber-200'}`}
                     >
@@ -747,11 +791,25 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
                       {Number(cdData.top10[cdYourIndex].balance).toLocaleString()}
                     </strong>{' '}
                     {econTab.balanceUnit}
+                    {econTab.isIngameAp && websiteCoinRewardForIngameApRank(cdYourIndex + 1) != null ? (
+                      <>
+                        {' '}
+                        →{' '}
+                        <strong className="tabular-nums text-violet-200">
+                          +{websiteCoinRewardForIngameApRank(cdYourIndex + 1)} {WEBSITE_CURRENCY_SINGULAR}
+                          {websiteCoinRewardForIngameApRank(cdYourIndex + 1) === 1 ? '' : 's'}
+                        </strong>{' '}
+                        on website
+                      </>
+                    ) : null}
                   </p>
                 </div>
               ) : null}
               <ol className="list-none m-0 p-0 space-y-2 max-w-2xl">
-                {cdData.top10.map((row, i) => (
+                {cdData.top10.map((row, i) => {
+                  const rank = i + 1
+                  const coinReward = econTab.isIngameAp ? websiteCoinRewardForIngameApRank(rank) : null
+                  return (
                   <li
                     key={`${row.name}-${row.balance}-${i}`}
                     ref={i === cdYourIndex ? cdYouRef : undefined}
@@ -771,21 +829,34 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
                             : 'bg-amber-500/15 text-amber-300'
                         }`}
                       >
-                        {i + 1}
+                        {rank}
                       </span>
                       <span className="font-mono text-sm text-white truncate" title={row.name}>
                         {row.name}
                       </span>
                     </span>
-                    <span
-                      className={`shrink-0 text-sm font-semibold tabular-nums ${
-                        econTab.isPco ? 'text-cyan-100' : 'text-amber-100'
-                      }`}
-                    >
-                      {Number(row.balance).toLocaleString()}
+                    <span className="shrink-0 text-right">
+                      <span
+                        className={`block text-sm font-semibold tabular-nums ${
+                          econTab.isPco ? 'text-cyan-100' : 'text-amber-100'
+                        }`}
+                      >
+                        {Number(row.balance).toLocaleString()}
+                        {econTab.isIngameAp ? (
+                          <span className="text-xs font-normal text-slate-400 ml-1">
+                            {INGAME_ASTERYN_POINT_SINGULAR}
+                          </span>
+                        ) : null}
+                      </span>
+                      {coinReward != null ? (
+                        <span className="block text-xs font-semibold tabular-nums text-violet-200 mt-0.5">
+                          +{coinReward} {WEBSITE_CURRENCY_SINGULAR}
+                          {coinReward === 1 ? '' : 's'}
+                        </span>
+                      ) : null}
                     </span>
                   </li>
-                ))}
+                )})}
               </ol>
             </>
           )}
@@ -798,11 +869,11 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
             Top achievements
           </h3>
           <p className="text-sm text-slate-400 m-0 max-w-3xl">
-            Ranked by profile badge score (higher tiers count more: violet 1 → legend 5). Top 50 with at least one
+            Ranked by profile badge score (higher tiers count more: violet 1 ? legend 5). Top 50 with at least one
             active badge.
           </p>
           {achLoading && !achData ? (
-            <div className={panelClass}>Loading achievements…</div>
+            <div className={panelClass}>Loading achievements?</div>
           ) : achError && !achData ? (
             <div className={`${panelClass} text-red-300`}>Error: {achError}</div>
           ) : !achData?.rows?.length ? (
@@ -813,9 +884,9 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
                 <div className="rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-3" role="status">
                   <p className="text-xs font-semibold uppercase tracking-wide text-amber-200 m-0 mb-1.5">Your place</p>
                   <p className="text-sm text-slate-100 m-0">
-                    #{yourAchRow.rank} · {yourAchRow.badgeCount} badges · score {yourAchRow.score.toLocaleString()}
+                    #{yourAchRow.rank} ? {yourAchRow.badgeCount} badges ? score {yourAchRow.score.toLocaleString()}
                     {yourAchRow.legend + yourAchRow.mythic + yourAchRow.gold > 0
-                      ? ` · legend ${yourAchRow.legend} · mythic ${yourAchRow.mythic} · gold ${yourAchRow.gold}`
+                      ? ` ? legend ${yourAchRow.legend} ? mythic ${yourAchRow.mythic} ? gold ${yourAchRow.gold}`
                       : ''}
                   </p>
                 </div>
@@ -847,13 +918,13 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
                       </span>
                       <span className="text-sm text-slate-400 tabular-nums text-right">
                         <span className="text-white font-semibold">{row.badgeCount}</span> badges
-                        <span> · score {row.score}</span>
+                        <span> ? score {row.score}</span>
                         {row.legend > 0 || row.mythic > 0 || row.gold > 0 ? (
                           <span className="block text-xs mt-0.5">
                             {row.legend > 0 ? `Legend ${row.legend}` : null}
-                            {row.legend > 0 && (row.mythic > 0 || row.gold > 0) ? ' · ' : null}
+                            {row.legend > 0 && (row.mythic > 0 || row.gold > 0) ? ' ? ' : null}
                             {row.mythic > 0 ? `Mythic ${row.mythic}` : null}
-                            {row.mythic > 0 && row.gold > 0 ? ' · ' : null}
+                            {row.mythic > 0 && row.gold > 0 ? ' ? ' : null}
                             {row.gold > 0 ? `Gold ${row.gold}` : null}
                           </span>
                         ) : null}
@@ -874,10 +945,10 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
           </h3>
           <p className="text-sm text-slate-400 m-0 max-w-3xl">
             Current hunt event scores from <span className="font-mono text-pink-200/90">/hunt event</span> (RCON). Shows
-            the active Pokémon target and top players by AsterynPoint earned in the event.
+            the active Pokémon target and top players by {INGAME_ASTERYN_POINT_SINGULAR} earned in the event.
           </p>
           {whLoading && !whData ? (
-            <div className={panelClass}>Loading World Hunt…</div>
+            <div className={panelClass}>Loading World Hunt?</div>
           ) : whError && !whData ? (
             <div className={`${panelClass} text-red-300`}>Error: {whError}</div>
           ) : whData?.disabled ? (
@@ -895,17 +966,17 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
               <div className="rounded-xl border border-pink-400/30 bg-pink-950/25 px-4 py-3 max-w-2xl">
                 <p className="text-sm text-pink-100 m-0">
                   Hunt target:{' '}
-                  <span className="font-mono font-semibold text-pink-50">{whData.pokemon ?? '—'}</span>
+                  <span className="font-mono font-semibold text-pink-50">{whData.pokemon ?? '?'}</span>
                   {whData.shownCount != null && whData.totalSlots != null ? (
                     <span className="text-pink-200/80">
                       {' '}
-                      · Top {whData.shownCount}/{whData.totalSlots}
+                      ? Top {whData.shownCount}/{whData.totalSlots}
                     </span>
                   ) : null}
                 </p>
                 {whData.updatedAt ? (
                   <p className="text-xs text-slate-500 m-0 mt-1">
-                    Last refreshed: {new Date(whData.updatedAt).toLocaleString()} · ~90s cache
+                    Last refreshed: {new Date(whData.updatedAt).toLocaleString()} ? ~90s cache
                   </p>
                 ) : null}
               </div>
@@ -913,12 +984,12 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
                 <div className="rounded-xl border border-pink-400/40 bg-pink-500/10 px-4 py-3 max-w-2xl" role="status">
                   <p className="text-xs font-semibold uppercase tracking-wide text-pink-200 m-0 mb-1.5">Your place</p>
                   <p className="text-sm text-slate-100 m-0">
-                    #{yourWhRow.rank} ·{' '}
-                    <span className="font-mono">{yourWhRow.name}</span> ·{' '}
+                    #{yourWhRow.rank} ?{' '}
+                    <span className="font-mono">{yourWhRow.name}</span> ?{' '}
                     <strong className="tabular-nums text-pink-200">
                       {Number(yourWhRow.points).toLocaleString()}
                     </strong>{' '}
-                    AsterynPoint
+                    {INGAME_ASTERYN_POINT_SINGULAR}
                   </p>
                 </div>
               ) : viewerIgn ? (
@@ -974,12 +1045,12 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
             onClick={(e) => e.stopPropagation()}
           >
             <h4 id="ap-migrate-title" className="text-base font-semibold text-white m-0">
-              Convert in-game AP to website?
+              Convert in-game {INGAME_ASTERYN_POINT_LABEL} to website {WEBSITE_CURRENCY_LABEL}?
             </h4>
             <p className="text-sm text-slate-300 m-0">
-              This credits matched website wallets from <span className="font-mono">/asterynpoint leaderboard</span>, then
-              runs <span className="font-mono">/asterynpoint bank clear</span> for everyone. Unmatched IGNs lose in-game
-              AP. This does not run automatically.
+              Credits website wallets by leaderboard rank (top 20 only — not 1:1 with in-game balances), then runs{' '}
+              <span className="font-mono">/asterynpoint bank clear</span> for everyone. Unmatched IGNs lose in-game{' '}
+              {INGAME_ASTERYN_POINT_LABEL}. This does not run automatically.
             </p>
             <div className="flex justify-end gap-2 pt-1">
               <button
@@ -996,7 +1067,7 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
                 onClick={() => void onApplyApMigrate()}
                 className="px-3 py-1.5 rounded-lg text-sm font-medium border border-violet-400/40 text-violet-50 bg-violet-600/40"
               >
-                {apMigrateBusy === 'apply' ? 'Converting…' : 'Confirm convert'}
+                {apMigrateBusy === 'apply' ? 'Converting?' : 'Confirm convert'}
               </button>
             </div>
           </div>

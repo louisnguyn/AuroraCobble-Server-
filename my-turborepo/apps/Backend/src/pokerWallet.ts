@@ -48,9 +48,9 @@ export async function spendPokerBuyIn(
   detail: string
 ): Promise<{ ok: true; newBalance: number } | { ok: false; error: string; balance?: number }> {
   const row = await deps.ensureUserCobbledollarsRow(userId);
-  if (!row) return { ok: false, error: "Could not open Asteryn Point wallet" };
+  if (!row) return { ok: false, error: "Could not open Asteryn Coin wallet" };
   if (row.balance < amount) {
-    return { ok: false, error: "Not enough website Asteryn Point for buy-in", balance: row.balance };
+    return { ok: false, error: "Not enough website Asteryn Coin for buy-in", balance: row.balance };
   }
   if (!supabase) return { ok: false, error: "Database not configured" };
   const newBalance = row.balance - amount;

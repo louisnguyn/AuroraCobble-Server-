@@ -13,6 +13,7 @@ import type {
 } from '../types'
 import { CobbleDollars } from './CobbleDollars.tsx'
 import { WorldHuntLeaderboard } from './WorldHuntLeaderboard.tsx'
+import { INGAME_ASTERYN_POINT_LABEL, WEBSITE_CURRENCY_LABEL } from '../currencyLabel'
 import { getPvpTierFromElo, normalizePvpTierSlugForAssets, PvPTierBadge } from './PvPTierBadge.tsx'
 import { RankedApiFeed } from './RankedApiFeed.tsx'
 import { PageHeader, PageNotice, PageShell, PageTabBar } from './PageLayout.tsx'
@@ -26,7 +27,7 @@ const MAIN_SECTIONS: { id: MainSection; label: string; description: string }[] =
   {
     id: 'economy',
     label: 'Economy',
-    description: 'Website AsterynPoints, in-game AsterynPoints, Cobble$, or PCO',
+    description: `Website ${WEBSITE_CURRENCY_LABEL}, in-game ${INGAME_ASTERYN_POINT_LABEL}, Cobble$, or PCO`,
   },
   { id: 'achievements', label: 'Achievements', description: 'Profile badges ranked by tier score' },
   {
@@ -92,7 +93,7 @@ function ticketBonusLabel(count: number): string {
 function PvpDailyRewardPill({ cobble, tickets }: { cobble: number; tickets: number }) {
   return (
     <span className="lb-reward-pill" title={tickets > 0 ? `${ticketBonusLabel(tickets)}/day` : undefined}>
-      +{fmtCd(cobble)} AsterynPoints/day
+      +{fmtCd(cobble)} Asteryn Coins/day
       {tickets > 0 ? <span className="lb-reward-pill-tickets">{ticketBonusLabel(tickets)}</span> : null}
     </span>
   )
@@ -284,13 +285,13 @@ export function Leaderboard() {
 
               {pvpRankRewards ? (
                 <p className="text-sm text-muted m-0 max-w-3xl leading-relaxed">
-                  Top {topRewardRank} on each ladder earn daily website AsterynPoints at 00:00{' '}
+                  Top {topRewardRank} on each ladder earn daily website Asteryn Coins at 00:00{' '}
                   {pvpRankRewards.timezone}.{' '}
                   {pvpRankRewards.ranks.map((r, i) => (
                     <span key={r.rank}>
                       {i > 0 ? ' · ' : ''}
                       #{r.rank}{' '}
-                      <strong className="text-[#f0d48a] font-semibold">+{fmtCd(r.cobble)} AsterynPoints</strong>
+                      <strong className="text-[#f0d48a] font-semibold">+{fmtCd(r.cobble)} Asteryn Coins</strong>
                       {r.tickets > 0 ? ` (${ticketBonusLabel(r.tickets)})` : ''}
                     </span>
                   ))}
@@ -489,10 +490,10 @@ export function Leaderboard() {
           </h2>
           <div className="flex flex-wrap gap-2" role="tablist" aria-label="Economy currency">
             <SubTab active={economyKind === 'website_cobble'} onClick={() => setEconomyKind('website_cobble')}>
-              Website AP
+              Website {WEBSITE_CURRENCY_LABEL}
             </SubTab>
             <SubTab active={economyKind === 'asteryn_ingame'} onClick={() => setEconomyKind('asteryn_ingame')}>
-              In-game AP
+              In-game {INGAME_ASTERYN_POINT_LABEL}
             </SubTab>
             <SubTab active={economyKind === 'cobble'} onClick={() => setEconomyKind('cobble')}>
               In-game C$
@@ -503,13 +504,13 @@ export function Leaderboard() {
           </div>
           <p className="text-sm text-muted m-0">
             {economyKind === 'website_cobble' ? (
-              <>Top site wallet balances (same AsterynPoints you see under Account).</>
+              <>Top site wallet balances (same {WEBSITE_CURRENCY_LABEL} you see under Account).</>
             ) : economyKind === 'asteryn_ingame' ? (
-              <>Top 20 in-game AsterynPoints from <span className="font-mono">/asterynpoint leaderboard</span>.</>
+              <>Top 20 in-game {INGAME_ASTERYN_POINT_LABEL}. Each rank shows website {WEBSITE_CURRENCY_LABEL} reward.</>
             ) : economyKind === 'cobble' ? (
               <>Richest players by in-game Cobble$ (Minecraft server). Deposit from your website wallet under Account.</>
             ) : (
-              <>Top 10 by PCO in-game. Separate from website AsterynPoints.</>
+              <>Top 10 by PCO in-game. Separate from website {WEBSITE_CURRENCY_LABEL}.</>
             )}
           </p>
           <CobbleDollars viewerIgn={viewerIgn} kind={economyKind} />

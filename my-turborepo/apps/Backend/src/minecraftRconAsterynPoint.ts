@@ -79,7 +79,7 @@ export async function fetchAsterynPointLeaderboardViaRcon(): Promise<Cobbledolla
     }
     return {
       balances,
-      error: `Could not parse Asteryn Point leaderboard from RCON: ${preview}`,
+      error: `Could not parse in-game Asteryn Point leaderboard from RCON: ${preview}`,
     };
   } catch (err) {
     const raw = err instanceof Error ? err.message : String(err);

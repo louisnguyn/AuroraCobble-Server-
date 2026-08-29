@@ -105,7 +105,7 @@ export function WorldHuntLeaderboard({ viewerIgn }: { viewerIgn?: string | null 
                 <strong className="tabular-nums text-pink-300">
                   {Number(yourRow.points).toLocaleString()}
                 </strong>{' '}
-                AsterynPoint
+                Asteryn Point
               </p>
             </div>
           ) : null}

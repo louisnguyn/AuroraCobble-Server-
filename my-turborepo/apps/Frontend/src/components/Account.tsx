@@ -179,7 +179,7 @@ function RolePerksSummary({ perks }: { perks: RoleWebsitePerks }) {
           <span className="text-amber-200/95 font-medium tabular-nums">
             +{perks.dailyFlatCobble.toLocaleString()}
           </span>
-          <span className="text-slate-500 block text-[10px] sm:text-[11px] mt-0.5">VIP AsterynPoints / day</span>
+          <span className="text-slate-500 block text-[10px] sm:text-[11px] mt-0.5">VIP Asteryn Coins / day</span>
         </p>
       </div>
       <div className={cellClass}>
@@ -829,7 +829,7 @@ export function Account() {
               />
               <DailyRewardStatCard
                 accent="amber"
-                label="AsterynPoints reward"
+                label="Asteryn Coins reward"
                 value={
                   pvpLeaderboardPreview.inTop1 ? (
                     <span className="text-[#fbbf24]">{pvpLeaderboardPreview.cobble.toLocaleString()}</span>
@@ -890,7 +890,7 @@ export function Account() {
                 />
                 <DailyRewardStatCard
                   accent="amber"
-                  label="VIP AsterynPoints"
+                  label="VIP Asteryn Coins"
                   value={
                     rewardsBreakdown.roleFlatCobble > 0 ? (
                       <span className="text-[#fbbf24]">+{rewardsBreakdown.roleFlatCobble.toLocaleString()}</span>
@@ -1099,7 +1099,7 @@ export function Account() {
       {activeTab === 'shop' && (
         <>
           <p className="text-sm text-muted m-0 mb-3">
-            AsterynPoints balance:{' '}
+            Asteryn Coins balance:{' '}
             <span className="text-[#fbbf24] font-semibold tabular-nums">{cobbleBalance.toLocaleString()}</span>
           </p>
           {!canUseWebsiteShop ? (
@@ -1125,7 +1125,7 @@ export function Account() {
           ) : null}
           {shopDiscountPercent > 0 ? (
             <p className="text-sm text-emerald-300/95 m-0 mb-3">
-              Rank discount: -{shopDiscountPercent}% on AsterynPoints (item shop and battle pass).
+              Rank discount: -{shopDiscountPercent}% on Asteryn Coins (item shop and battle pass).
             </p>
           ) : null}
           <div className="mb-6 pixel-well p-4">
@@ -1138,10 +1138,10 @@ export function Account() {
                       {item.discountedCost < item.cost ? (
                         <>
                           <span className="line-through opacity-70">{item.cost.toLocaleString()}</span>{' '}
-                          <span className="text-[#fbbf24] tabular-nums">{item.discountedCost.toLocaleString()} AsterynPoints</span>
+                          <span className="text-[#fbbf24] tabular-nums">{item.discountedCost.toLocaleString()} Asteryn Coins</span>
                         </>
                       ) : (
-                        <>Cost: {item.cost.toLocaleString()} AsterynPoints</>
+                        <>Cost: {item.cost.toLocaleString()} Asteryn Coins</>
                       )}
                     </p>
                   </div>
@@ -1182,10 +1182,10 @@ export function Account() {
                       ) : item.discountedCost < item.cost ? (
                         <>
                           <span className="line-through opacity-70">{item.cost.toLocaleString()}</span>{' '}
-                          <span className="text-[#fbbf24] tabular-nums">{item.discountedCost.toLocaleString()} AsterynPoints</span>
+                          <span className="text-[#fbbf24] tabular-nums">{item.discountedCost.toLocaleString()} Asteryn Coins</span>
                         </>
                       ) : (
-                        <>Cost: {item.cost.toLocaleString()} AsterynPoints</>
+                        <>Cost: {item.cost.toLocaleString()} Asteryn Coins</>
                       )}
                     </p>
                   </div>
@@ -1219,7 +1219,7 @@ export function Account() {
       {activeTab === 'ranks' && (
         <>
           <p className="text-sm text-muted m-0 mb-2">
-            AsterynPoints balance:{' '}
+            Asteryn Coins balance:{' '}
             <span className="text-[#fbbf24] font-semibold tabular-nums">{cobbleBalance.toLocaleString()}</span>
           </p>
           <p className="text-sm text-muted m-0 mb-3">
@@ -1275,7 +1275,7 @@ export function Account() {
             </div>
           ) : null}
 
-          <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-3">Buy rank (AsterynPoints)</h2>
+          <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-3">Buy rank (Asteryn Coins)</h2>
           {shopEventDiscountPercent > 0 ? (
             <p className="text-sm text-amber-200/95 m-0 mb-3">
               Rank shop event: -{shopEventDiscountPercent}% on all purchasable ranks.
@@ -1313,7 +1313,7 @@ export function Account() {
                     How it works
                   </p>
                   <p className="m-0 text-xs leading-relaxed text-slate-300">
-                    Buy ranks with AsterynPoints one step at a time. Purchases go to Inventory — pick display there. VIP
+                    Buy ranks with Asteryn Coins one step at a time. Purchases go to Inventory — pick display there. VIP
                     is claimed with Badge Score.
                   </p>
                 </div>
@@ -1378,10 +1378,10 @@ export function Account() {
                               <span className="line-through opacity-70 text-muted mr-1.5">
                                 {entry.listCost.toLocaleString()}
                               </span>
-                              {entry.cost.toLocaleString()} AsterynPoints
+                              {entry.cost.toLocaleString()} Asteryn Coins
                             </>
                           ) : (
-                            <>{(entry.cost ?? 0).toLocaleString()} AsterynPoints</>
+                            <>{(entry.cost ?? 0).toLocaleString()} Asteryn Coins</>
                           )}
                         </p>
                         {entry.badgeRequirementLabel ? (
@@ -1438,7 +1438,7 @@ export function Account() {
 
           <h2 className="text-lg font-medium text-[#e2e8f0] m-0 mb-2">VIP (Badge Score)</h2>
           <p className="text-xs text-muted m-0 mb-3">
-            Claim VIP tiers with Badge Score — no AsterynPoints. After claiming, choose display in Inventory.
+            Claim VIP tiers with Badge Score — no Asteryn Coins. After claiming, choose display in Inventory.
             Daily Point follows VIP. Daily tickets follow shop rank. Daily items stack from shop rank and VIP.
           </p>
           <div className="mb-6 pixel-well p-4 space-y-3">

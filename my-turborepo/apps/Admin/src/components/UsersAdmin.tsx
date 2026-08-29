@@ -237,7 +237,7 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
       return
     }
     if (!Number.isFinite(n) || n <= 0 || !Number.isInteger(n)) {
-      setError('Enter a positive whole number for Asteryn Point.')
+      setError('Enter a positive whole number for Asteryn Coin.')
       return
     }
     setBulkConfirmOpen(true)
@@ -261,7 +261,7 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
           ? ` ${res.failures.length} failed (${res.failures.slice(0, 3).map((f) => `#${f.user_id}`).join(', ')}${res.failures.length > 3 ? '…' : ''}).`
           : ''
       setSuccessMessage(
-        `Added ${res.amount_per_user.toLocaleString()} Asteryn Point to ${res.granted} of ${res.requested} accounts.${failMsg}`
+        `Added ${res.amount_per_user.toLocaleString()} Asteryn Coin to ${res.granted} of ${res.requested} accounts.${failMsg}`
       )
       if (selectedUser && bulkCobbleTargetIds.includes(selectedUser.id)) {
         const { currencies: c } = await fetchAdminUserCurrency(selectedUser.id)
@@ -840,7 +840,7 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
                   : 'text-muted hover:text-[#f5efe6] border border-transparent'
               }`}
             >
-              Bulk Asteryn Point
+              Bulk Asteryn Coin
             </button>
             <button
               type="button"
@@ -875,10 +875,10 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
           {tab === 'bulkCobble' && (
             <div className="rounded-lg bg-surface border border-border p-4 space-y-4">
               <div>
-                <h2 className="text-sm font-semibold text-[#f5efe6] m-0 mb-1">Bulk Asteryn Point (website wallet)</h2>
+                <h2 className="text-sm font-semibold text-[#f5efe6] m-0 mb-1">Bulk Asteryn Coin (website wallet)</h2>
                 <p className="text-xs text-muted m-0">
                   Choose users with the checkboxes in the list, enter an amount, and confirm. Each selected account
-                  receives the same balance increase. Entries appear in the Asteryn Point ledger like single-user grants.
+                  receives the same balance increase. Entries appear in the Asteryn Coin ledger like single-user grants.
                 </p>
               </div>
               <label className="inline-flex items-center gap-2 text-xs text-muted">
@@ -939,7 +939,7 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
               <div>
                 <h2 className="text-sm font-semibold text-[#f5efe6] m-0 mb-1">Bulk tickets (website wallet)</h2>
                 <p className="text-xs text-muted m-0">
-                  Same checkboxes as Asteryn Point: each selected account gets the same ticket balance increase (exchange
+                  Same checkboxes as Asteryn Coin: each selected account gets the same ticket balance increase (exchange
                   types: mythic / paradox / shiny, etc.).
                 </p>
               </div>
@@ -1022,7 +1022,7 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
               <div>
                 <h2 className="text-sm font-semibold text-[#f5efe6] m-0 mb-1">Bulk items (website inventory)</h2>
                 <p className="text-xs text-muted m-0">
-                  Same checkboxes as Asteryn Point: each selected account receives the same item stack in their website
+                  Same checkboxes as Asteryn Coin: each selected account receives the same item stack in their website
                   inventory (claim in-game per your server setup).
                 </p>
               </div>
@@ -1651,16 +1651,16 @@ export function UsersAdmin({ currentAdminId }: { currentAdminId: number }) {
             onClick={(e) => e.stopPropagation()}
           >
             <h3 id="bulk-cobble-title" className="text-lg font-semibold text-[#f5efe6] m-0 mb-2">
-              Grant Asteryn Point to {bulkCobbleTargetIds.length} accounts{bulkAllUsers ? ' (all users)' : ''}?
+              Grant Asteryn Coin to {bulkCobbleTargetIds.length} accounts{bulkAllUsers ? ' (all users)' : ''}?
             </h3>
             <p className="text-sm text-muted m-0 mb-4">
               Each account will receive{' '}
               <span className="text-[#f5efe6] font-medium">
-                {Number(bulkAmount).toLocaleString()} Asteryn Point
+                {Number(bulkAmount).toLocaleString()} Asteryn Coin
               </span>
               . Total credits:{' '}
               <span className="text-[#f5efe6] font-medium">
-                {(Number(bulkAmount) * bulkCobbleTargetIds.length).toLocaleString()} Asteryn Point
+                {(Number(bulkAmount) * bulkCobbleTargetIds.length).toLocaleString()} Asteryn Coin
               </span>
               .
               {bulkNote.trim() ? (

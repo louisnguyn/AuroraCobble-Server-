@@ -129,7 +129,7 @@ function ClanMilestones({ clan }: { clan: ClanPublic }) {
         clan.max_members >= 5
           ? `Max ${clan.max_members} members unlocked`
           : clan.next_member_unlock_treasury != null
-            ? `${fmt(clan.next_member_unlock_treasury)} AsterynPoints treasury to next slot (${clan.max_members}/${5})`
+            ? `${fmt(clan.next_member_unlock_treasury)} Asteryn Coins treasury to next slot (${clan.max_members}/${5})`
             : `${clan.max_members} / 5 slots`,
       pct: memberSlotPct,
       complete: clan.max_members >= 5,
@@ -137,7 +137,7 @@ function ClanMilestones({ clan }: { clan: ClanPublic }) {
     ...clan.treasury_milestones.map((m) => ({
       key: m.key,
       label: m.label,
-      detail: `${fmt(treasury)} / ${fmt(m.threshold)} AsterynPoints in treasury`,
+      detail: `${fmt(treasury)} / ${fmt(m.threshold)} Asteryn Coins in treasury`,
       pct: pct(treasury, m.threshold),
       complete: treasury >= m.threshold,
     })),
@@ -148,7 +148,7 @@ function ClanMilestones({ clan }: { clan: ClanPublic }) {
       <h3 className="clan-section-title">Treasury milestones</h3>
       <p className="clan-section-hint">
         Milestones use the current treasury balance — donations add to it; leader payouts reduce it. Every{' '}
-        {fmt(clan.treasury_milestone)} AsterynPoints in treasury adds +1 member slot (up to 5).
+        {fmt(clan.treasury_milestone)} Asteryn Coins in treasury adds +1 member slot (up to 5).
       </p>
       <ul className="clan-milestone-list">
         {milestones.map((m) => (
@@ -209,7 +209,7 @@ function ClanTreasuryActivity({
                   <strong>{d.username}</strong> donated
                 </span>
                 <span className="clan-treasury-history-amount clan-treasury-history-amount--in">
-                  +{fmt(d.amount)} AsterynPoints
+                  +{fmt(d.amount)} Asteryn Coins
                 </span>
               </li>
             ))}
@@ -228,7 +228,7 @@ function ClanTreasuryActivity({
                   <strong>{d.leader_username}</strong> → <strong>{d.recipient_username}</strong>
                 </span>
                 <span className="clan-treasury-history-amount clan-treasury-history-amount--out">
-                  {fmt(d.amount)} AsterynPoints
+                  {fmt(d.amount)} Asteryn Coins
                 </span>
               </li>
             ))}
@@ -263,7 +263,7 @@ function ClanLeaderboardRewardsPanel({
     <div className={`clan-lb-rewards${earningReward ? ' clan-lb-rewards--active' : ''}`}>
       <h3 className="clan-section-title">Leaderboard daily rewards</h3>
       <p className="clan-section-hint">
-        #1 on each board earns {fmt(rewardTop1)} AsterynPoints/day in treasury; #2 earns {fmt(rewardTop2)} AsterynPoints/day — paid at 00:00
+        #1 on each board earns {fmt(rewardTop1)} Asteryn Coins/day in treasury; #2 earns {fmt(rewardTop2)} Asteryn Coins/day — paid at 00:00
         Asia/Ho_Chi_Minh (same schedule as member daily income).
       </p>
       <div className="clan-lb-rewards-grid">
@@ -274,10 +274,10 @@ function ClanLeaderboardRewardsPanel({
               <span className="clan-lb-reward-slot-label">{slot.label}</span>
               <span className="clan-lb-reward-slot-rank">{slot.rank != null ? `#${slot.rank}` : '—'}</span>
               {payout != null ? (
-                <span className="clan-lb-reward-slot-badge">+{fmt(payout)} AsterynPoints/day</span>
+                <span className="clan-lb-reward-slot-badge">+{fmt(payout)} Asteryn Coins/day</span>
               ) : (
                 <span className="clan-lb-reward-slot-hint">
-                  #1 +{fmt(rewardTop1)} · #2 +{fmt(rewardTop2)} AsterynPoints/day
+                  #1 +{fmt(rewardTop1)} · #2 +{fmt(rewardTop2)} Asteryn Coins/day
                 </span>
               )}
             </div>
@@ -286,7 +286,7 @@ function ClanLeaderboardRewardsPanel({
       </div>
       {dailyBonus > 0 ? (
         <p className="clan-lb-rewards-total">
-          Your clan earns an extra <strong>+{fmt(dailyBonus)} AsterynPoints/day</strong> in treasury from leaderboard placement.
+          Your clan earns an extra <strong>+{fmt(dailyBonus)} Asteryn Coins/day</strong> in treasury from leaderboard placement.
         </p>
       ) : null}
       {recentPayouts.length > 0 ? (
@@ -300,7 +300,7 @@ function ClanLeaderboardRewardsPanel({
                   {clanLbCategoryLabel(p.category)}
                   {p.rank_position ? ` #${p.rank_position}` : ''}
                 </span>
-                <span className="clan-lb-rewards-history-amount">+{fmt(p.amount)} AsterynPoints</span>
+                <span className="clan-lb-rewards-history-amount">+{fmt(p.amount)} Asteryn Coins</span>
               </li>
             ))}
           </ul>
@@ -354,7 +354,7 @@ function ClanLeaderboardTable({
                   <span
                     className={`clan-lb-reward-pill${row.rank === 2 ? ' clan-lb-reward-pill--top2' : ''}`}
                   >
-                    +{fmt(rewardAmount)} AsterynPoints/day
+                    +{fmt(rewardAmount)} Asteryn Coins/day
                   </span>
                 ) : null}
                 <div className="clan-lb-metric">
@@ -376,7 +376,7 @@ function ClanLeaderboardTable({
                     <>
                       <span className="clan-lb-metric-main">
                         <span className="clan-lb-metric-num">{fmt(row.bank_balance)}</span>
-                        <span className="clan-lb-metric-suffix">AsterynPoints</span>
+                        <span className="clan-lb-metric-suffix">Asteryn Coins</span>
                       </span>
                       <span className="clan-lb-metric-label">{valueLabel}</span>
                     </>
@@ -459,11 +459,11 @@ function ClanCard({
         <div className="clan-card-stat-grid">
           <div className="clan-card-stat clan-card-stat--treasury">
             <span className="clan-card-stat-label">Treasury</span>
-            <span className="clan-card-stat-value">{fmt(clan.bank_balance)} AsterynPoints</span>
+            <span className="clan-card-stat-value">{fmt(clan.bank_balance)} Asteryn Coins</span>
           </div>
           <div className="clan-card-stat">
             <span className="clan-card-stat-label">Daily income</span>
-            <span className="clan-card-stat-value">+{fmt(clan.daily_income_per_day)} AsterynPoints</span>
+            <span className="clan-card-stat-value">+{fmt(clan.daily_income_per_day)} Asteryn Coins</span>
           </div>
           {clan.total_elo != null ? (
             <div className="clan-card-stat clan-card-stat--elo">
@@ -492,7 +492,7 @@ function ClanCard({
             </div>
             <ClanProgressBar value={nextMilestonePct} complete={false} />
             <p className="clan-card-next-milestone-detail">
-              {fmt(clan.bank_balance)} / {fmt(nextMilestone.threshold)} AsterynPoints in treasury
+              {fmt(clan.bank_balance)} / {fmt(nextMilestone.threshold)} Asteryn Coins in treasury
             </p>
           </div>
         ) : null}
@@ -677,7 +677,7 @@ function ClanDisbandConfirmModal({
           </li>
           {treasuryBalance > 0 ? (
             <li>
-              Treasury balance of <strong>{fmt(treasuryBalance)} AsterynPoints</strong> will be lost
+              Treasury balance of <strong>{fmt(treasuryBalance)} Asteryn Coins</strong> will be lost
             </li>
           ) : null}
           <li>Donation history and leaderboard placement for this clan are removed</li>
@@ -1062,8 +1062,8 @@ export function Clan() {
     if (remaining != null && amount > remaining) {
       setDisburseError(
         remaining <= 0
-          ? `Daily payout limit reached (max ${fmt(myClan.treasury_daily_disburse_max ?? 3_000_000)} AsterynPoints per day). Resets at 00:00 Asia/Ho_Chi_Minh.`
-          : `Amount exceeds today's remaining payout limit (${fmt(remaining)} AsterynPoints left today).`
+          ? `Daily payout limit reached (max ${fmt(myClan.treasury_daily_disburse_max ?? 3_000_000)} Asteryn Coins per day). Resets at 00:00 Asia/Ho_Chi_Minh.`
+          : `Amount exceeds today's remaining payout limit (${fmt(remaining)} Asteryn Coins left today).`
       )
       return
     }
@@ -1073,7 +1073,7 @@ export function Clan() {
       await disburseClanFunds(myClan.id, member.username, amount)
       setDisburseAmount('')
       setDisburseUserId('')
-      setActionMsg(`Sent ${fmt(amount)} AsterynPoints to ${member.username}.`)
+      setActionMsg(`Sent ${fmt(amount)} Asteryn Coins to ${member.username}.`)
       loadMine()
       loadLeaderboards()
     } catch (err) {
@@ -1137,7 +1137,7 @@ export function Clan() {
         accent="violet"
         eyebrow="Community"
         title="Clans"
-        description="Pool Asteryn Point in a shared treasury, unlock perks as the balance grows, and compete on treasury and total ELO leaderboards."
+        description="Pool Asteryn Coin in a shared treasury, unlock perks as the balance grows, and compete on treasury and total ELO leaderboards."
       />
 
       {actionMsg ? (
@@ -1168,7 +1168,7 @@ export function Clan() {
           <section className="clan-panel clan-panel--how">
             <h2 className="clan-section-title">How clans work</h2>
             <p className="clan-how-lead">
-              Clans pool website Asteryn Point in a shared treasury. Donations add to the balance; leader payouts reduce it.
+              Clans pool website Asteryn Coin in a shared treasury. Donations add to the balance; leader payouts reduce it.
               Milestones and leaderboards use the current treasury — not a separate lifetime total.
             </p>
             <div className="clan-how-grid">
@@ -1176,7 +1176,7 @@ export function Clan() {
                 <h3 className="clan-how-block-title">Getting started</h3>
                 <ul className="clan-how-list">
                   <li>
-                    <strong>Create a clan</strong> — one-time fee of {fmt(createCost)} AsterynPoints from your website balance.
+                    <strong>Create a clan</strong> — one-time fee of {fmt(createCost)} Asteryn Coins from your website balance.
                   </li>
                   <li>
                     <strong>Join a clan</strong> — verified accounts can send a request; the leader approves new members.
@@ -1186,7 +1186,7 @@ export function Clan() {
               <div className="clan-how-block">
                 <h3 className="clan-how-block-title">Treasury &amp; donations</h3>
                 <ul className="clan-how-list">
-                  <li>Member donations add AsterynPoints to the clan <strong>treasury</strong>.</li>
+                  <li>Member donations add Asteryn Coins to the clan <strong>treasury</strong>.</li>
                   <li>
                     Leader payouts reduce the treasury — milestones and member-slot unlocks follow the current balance.
                   </li>
@@ -1196,11 +1196,11 @@ export function Clan() {
                 <h3 className="clan-how-block-title">Daily income &amp; rewards</h3>
                 <ul className="clan-how-list">
                   <li>
-                    <strong>{fmt(25_000)} AsterynPoints × members</strong> credited to treasury daily at 00:00 Asia/Ho_Chi_Minh.
+                    <strong>{fmt(25_000)} Asteryn Coins × members</strong> credited to treasury daily at 00:00 Asia/Ho_Chi_Minh.
                   </li>
                   <li>
-                    <strong>#1 on each leaderboard</strong> earns {fmt(lbRewardTop1)} AsterynPoints/day; <strong>#2</strong> earns{' '}
-                    {fmt(lbRewardTop2)} AsterynPoints/day (treasury, total ELO, and level) — paid into clan treasury at 00:00.
+                    <strong>#1 on each leaderboard</strong> earns {fmt(lbRewardTop1)} Asteryn Coins/day; <strong>#2</strong> earns{' '}
+                    {fmt(lbRewardTop2)} Asteryn Coins/day (treasury, total ELO, and level) — paid into clan treasury at 00:00.
                   </li>
                 </ul>
               </div>
@@ -1260,8 +1260,8 @@ export function Clan() {
           <h2 className="clan-section-title">Clan leaderboards</h2>
           <p className="clan-section-hint">
             Site-wide rankings by treasury, total ELO, and clan level. #1 on each board earns{' '}
-            <strong className="text-[#f0d48a]">{fmt(lbRewardTop1)} AsterynPoints/day</strong>; #2 earns{' '}
-            <strong className="text-[#f0d48a]">{fmt(lbRewardTop2)} AsterynPoints/day</strong> in clan treasury (00:00
+            <strong className="text-[#f0d48a]">{fmt(lbRewardTop1)} Asteryn Coins/day</strong>; #2 earns{' '}
+            <strong className="text-[#f0d48a]">{fmt(lbRewardTop2)} Asteryn Coins/day</strong> in clan treasury (00:00
             Asia/Ho_Chi_Minh).
           </p>
           {lbLoading ? (
@@ -1351,13 +1351,13 @@ export function Clan() {
 
                 <div className="clan-create-cost-card">
                   <div className="clan-create-cost-icon" aria-hidden="true">
-                    AsterynPoints
+                    Asteryn Coins
                   </div>
                   <div className="clan-create-cost-body">
                     <span className="clan-create-cost-label">Creation cost</span>
-                    <span className="clan-create-cost-value">{fmt(createCost)} AsterynPoints</span>
+                    <span className="clan-create-cost-value">{fmt(createCost)} Asteryn Coins</span>
                     <span className="clan-create-cost-sub">
-                      One-time fee · deducted from your website Asteryn Point balance
+                      One-time fee · deducted from your website Asteryn Coin balance
                     </span>
                   </div>
                 </div>
@@ -1545,7 +1545,7 @@ export function Clan() {
           <div className="clan-stat-grid">
             <div className="clan-stat-card clan-stat-card--accent">
               <span className="clan-stat-label">Treasury</span>
-              <span className="clan-stat-value">{fmt(myClan.bank_balance)} AsterynPoints</span>
+              <span className="clan-stat-value">{fmt(myClan.bank_balance)} Asteryn Coins</span>
               <span className="clan-stat-sub">
                 Shared clan balance. Donations and daily income add here; leader payouts reduce it. Milestones and
                 leaderboards use this amount.
@@ -1554,13 +1554,13 @@ export function Clan() {
             <div className="clan-stat-card">
               <span className="clan-stat-label">Daily income</span>
               <span className="clan-stat-value clan-stat-value--accent">
-                +{fmt(myClan.daily_income_per_day + (myClan.leaderboard_daily_treasury_bonus ?? 0))} AsterynPoints
+                +{fmt(myClan.daily_income_per_day + (myClan.leaderboard_daily_treasury_bonus ?? 0))} Asteryn Coins
                 {myClan.daily_income_multiplier > 1 ? ` (×${myClan.daily_income_multiplier} members)` : ''}
               </span>
               <span className="clan-stat-sub">
-                {fmt(myClan.daily_income_per_day)} AsterynPoints from members
+                {fmt(myClan.daily_income_per_day)} Asteryn Coins from members
                 {(myClan.leaderboard_daily_treasury_bonus ?? 0) > 0
-                  ? ` · +${fmt(myClan.leaderboard_daily_treasury_bonus)} AsterynPoints leaderboard bonus`
+                  ? ` · +${fmt(myClan.leaderboard_daily_treasury_bonus)} Asteryn Coins leaderboard bonus`
                   : ''}
               </span>
               {myClan.daily_ticket_bonus > 0 ? (
@@ -1578,8 +1578,8 @@ export function Clan() {
             </div>
             <div className="clan-stat-card">
               <span className="clan-stat-label">Your donations</span>
-              <span className="clan-stat-value">{fmt(myClan.my_donated_total)} AsterynPoints</span>
-              <span className="clan-stat-sub">Lifetime Asteryn Point you&apos;ve donated to this clan</span>
+              <span className="clan-stat-value">{fmt(myClan.my_donated_total)} Asteryn Coins</span>
+              <span className="clan-stat-sub">Lifetime Asteryn Coin you&apos;ve donated to this clan</span>
             </div>
           </div>
 
@@ -1603,7 +1603,7 @@ export function Clan() {
                   <li key={m.user_id} className="clan-top-donors-row">
                     <span className="clan-lb-rank">#{i + 1}</span>
                     <span className="clan-top-donors-name">{m.username}</span>
-                    <span className="clan-top-donors-amount">{fmt(m.donated_total)} AsterynPoints</span>
+                    <span className="clan-top-donors-amount">{fmt(m.donated_total)} Asteryn Coins</span>
                   </li>
                 ))}
               </ol>
@@ -1689,7 +1689,7 @@ export function Clan() {
                             <span className="text-muted">Unranked</span>
                           )}
                         </span>
-                        <span className="clan-member-donated">{fmt(m.donated_total)} AsterynPoints donated</span>
+                        <span className="clan-member-donated">{fmt(m.donated_total)} Asteryn Coins donated</span>
                       </div>
                       {isLeader && m.role !== 'leader' ? (
                         <div className="clan-member-actions">
@@ -1725,7 +1725,7 @@ export function Clan() {
               <form onSubmit={handleDonate} className="clan-treasury-form">
                 <div className="clan-treasury-field">
                   <label className="clan-label" htmlFor="donate-amount">
-                    Donate Asteryn Point
+                    Donate Asteryn Coin
                   </label>
                   <input
                     id="donate-amount"
@@ -1746,9 +1746,9 @@ export function Clan() {
               <div className="clan-funds-panel">
                 <h3 className="clan-section-title">Treasury payouts</h3>
                 <p className="clan-section-hint">
-                  Send Asteryn Point from the clan treasury to any member — including yourself. This lowers the treasury and
+                  Send Asteryn Coin from the clan treasury to any member — including yourself. This lowers the treasury and
                   can reduce milestone progress. Leaders can pay out up to{' '}
-                  <strong>{fmt(myClan.treasury_daily_disburse_max ?? 3_000_000)} AsterynPoints</strong> per calendar day (resets
+                  <strong>{fmt(myClan.treasury_daily_disburse_max ?? 3_000_000)} Asteryn Coins</strong> per calendar day (resets
                   00:00 Asia/Ho_Chi_Minh).
                 </p>
                 {myClan.treasury_daily_disburse_remaining != null ? (
