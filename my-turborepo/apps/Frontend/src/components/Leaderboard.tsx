@@ -13,12 +13,13 @@ import type {
 } from '../types'
 import { CobbleDollars } from './CobbleDollars.tsx'
 import { WorldHuntLeaderboard } from './WorldHuntLeaderboard.tsx'
+import { TowerLeaderboard } from './TowerLeaderboard.tsx'
 import { INGAME_ASTERYN_POINT_LABEL, WEBSITE_CURRENCY_LABEL } from '../currencyLabel'
 import { getPvpTierFromElo, normalizePvpTierSlugForAssets, PvPTierBadge } from './PvPTierBadge.tsx'
 import { RankedApiFeed } from './RankedApiFeed.tsx'
 import { PageHeader, PageNotice, PageShell, PageTabBar } from './PageLayout.tsx'
 
-type MainSection = 'ranks' | 'economy' | 'achievements' | 'world_hunt' | 'ranked'
+type MainSection = 'ranks' | 'economy' | 'achievements' | 'world_hunt' | 'tower' | 'ranked'
 type RankFormatId = 'singles' | 'doubles'
 type EconomyKind = 'cobble' | 'website_cobble' | 'pco' | 'asteryn_ingame'
 
@@ -34,6 +35,11 @@ const MAIN_SECTIONS: { id: MainSection; label: string; description: string }[] =
     id: 'world_hunt',
     label: 'World Hunt',
     description: 'Current hunt event scores from /hunt event',
+  },
+  {
+    id: 'tower',
+    label: 'Tower',
+    description: 'Endless Tower floors from /stellarbattlefactory leaderboardtext',
   },
   {
     id: 'ranked',
@@ -225,7 +231,7 @@ export function Leaderboard() {
         accent="cyan"
         eyebrow="Competitive"
         title="Leaderboard"
-        description="PvP ranks, economy top 10, profile achievement badges, and CobbleRanked match summaries. When you are signed in, your row is highlighted if your site username matches your in-game name."
+        description="PvP ranks, economy top 10, profile achievement badges, Endless Tower, and CobbleRanked match summaries. When you are signed in, your row is highlighted if your site username matches your in-game name."
         footer={
           <>
             {!isAuthenticated ? (
@@ -599,6 +605,19 @@ export function Leaderboard() {
             server.
           </p>
           <WorldHuntLeaderboard viewerIgn={viewerIgn} />
+        </section>
+      )}
+
+      {mainSection === 'tower' && (
+        <section className="space-y-4" aria-labelledby="tower-heading">
+          <h2 id="tower-heading" className="text-lg font-semibold m-0 text-[#e2e8f0]">
+            Tower
+          </h2>
+          <p className="text-sm text-muted m-0">
+            Highest Endless Tower floors from{' '}
+            <span className="font-mono">/stellarbattlefactory leaderboardtext</span> on the Minecraft server.
+          </p>
+          <TowerLeaderboard viewerIgn={viewerIgn} />
         </section>
       )}
 

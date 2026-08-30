@@ -66,6 +66,11 @@ export async function fetchWorldHuntLeaderboard() {
   return get<import('./types').WorldHuntLeaderboardResponse>('/minecraft/world-hunt-leaderboard')
 }
 
+/** Endless Tower board — RCON `stellarbattlefactory leaderboardtext`. */
+export async function fetchTowerLeaderboard() {
+  return get<import('./types').TowerLeaderboardResponse>('/minecraft/tower-leaderboard')
+}
+
 /** Website wallet Asteryn Coin top 10 — same JSON shape as in-game economy boards. */
 export async function fetchWebsiteCobbledollarsLeaderboard() {
   return get<import('./types').CobbleDollarsLeaderboardResponse>('/leaderboard/website-asterynpoints')

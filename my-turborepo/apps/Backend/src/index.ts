@@ -29,6 +29,7 @@ import { fetchCobbledollarsViaRcon, topBalancesFromMap } from "./minecraftRconCo
 import { fetchAsterynPointLeaderboardViaRcon } from "./minecraftRconAsterynPoint.js";
 import { fetchPcoTopViaRcon } from "./minecraftRconPcoTop.js";
 import { fetchWorldHuntLeaderboardViaRcon } from "./minecraftRconWorldHunt.js";
+import { fetchStellarBattleFactoryLeaderboardViaRcon } from "./minecraftRconStellarBattleFactory.js";
 import {
   isKnownSkindexSkinId,
   listSkindexCatalog,
@@ -343,6 +344,18 @@ let worldHuntPublicCache: {
     shownCount: number | null;
     totalSlots: number | null;
     rows: { rank: number; name: string; points: number }[];
+    error: string | null;
+    updatedAt: string | null;
+  };
+} | null = null;
+
+let towerPublicCache: {
+  at: number;
+  body: {
+    ok: boolean;
+    disabled: boolean;
+    mode: string | null;
+    rows: { rank: number; name: string; floor: number; time: string | null }[];
     error: string | null;
     updatedAt: string | null;
   };
@@ -1385,6 +1398,49 @@ app.get("/minecraft/world-hunt-leaderboard", async (_req, res) => {
       pokemon: null,
       shownCount: null,
       totalSlots: null,
+      rows: [],
+      error: msg,
+      updatedAt: null,
+    });
+  }
+});
+
+/** Public Endless Tower board from RCON (`stellarbattlefactory leaderboardtext`). Cached ~90s. No auth. */
+app.get("/minecraft/tower-leaderboard", async (_req, res) => {
+  if (process.env.MC_SBF_LEADERBOARD_DISABLE === "true") {
+    res.json({
+      ok: false,
+      disabled: true,
+      mode: null,
+      rows: [],
+      error: null,
+      updatedAt: null,
+    });
+    return;
+  }
+  const now = Date.now();
+  if (towerPublicCache && now - towerPublicCache.at < COBBLEDOLLARS_PUBLIC_CACHE_TTL_MS) {
+    res.json(towerPublicCache.body);
+    return;
+  }
+  try {
+    const r = await fetchStellarBattleFactoryLeaderboardViaRcon();
+    const body = {
+      ok: !r.error,
+      disabled: false,
+      mode: r.parsed.mode,
+      rows: r.parsed.rows,
+      error: r.error ?? null,
+      updatedAt: new Date().toISOString(),
+    };
+    towerPublicCache = { at: now, body };
+    res.json(body);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.json({
+      ok: false,
+      disabled: false,
+      mode: null,
       rows: [],
       error: msg,
       updatedAt: null,

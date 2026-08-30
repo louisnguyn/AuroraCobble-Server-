@@ -99,6 +99,23 @@ export interface WorldHuntLeaderboardResponse {
   updatedAt: string | null
 }
 
+/** GET /minecraft/tower-leaderboard — Endless Tower / Battle Factory from `stellarbattlefactory leaderboardtext` */
+export interface TowerLeaderboardRow {
+  rank: number
+  name: string
+  floor: number
+  time: string | null
+}
+
+export interface TowerLeaderboardResponse {
+  ok: boolean
+  disabled?: boolean
+  mode: string | null
+  rows: TowerLeaderboardRow[]
+  error: string | null
+  updatedAt: string | null
+}
+
 /** GET /minecraft/battle-tower-leaderboard */
 export interface BattleTowerLeaderboardRow {
   rank: number

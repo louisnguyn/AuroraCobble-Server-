@@ -7,6 +7,7 @@ import {
   fetchWebsiteCobbledollarsLeaderboard,
   fetchLeaderboard,
   fetchWorldHuntLeaderboard,
+  fetchTowerLeaderboard,
 } from '../api'
 import {
   adminFetchLeaderboardDisplaySettings,
@@ -24,6 +25,7 @@ import type {
   LeaderboardPlayer,
   LeaderboardResponse,
   WorldHuntLeaderboardResponse,
+  TowerLeaderboardResponse,
 } from '../types'
 import { normalizePvpTierSlugForAssets, PvPTierBadge } from './PvPTierBadge.tsx'
 import {
@@ -40,7 +42,7 @@ import {
 
 const INGAME_POINT_TO_WEBSITE_COIN_TABLE = INGAME_AP_TO_WEBSITE_COIN_TABLE
 
-type MainSection = 'ranks' | 'economy' | 'achievements' | 'world_hunt'
+type MainSection = 'ranks' | 'economy' | 'achievements' | 'world_hunt' | 'tower'
 type RankFormatId = 'singles' | 'doubles'
 type EconomyKind = 'cobble' | 'website_cobble' | 'pco' | 'asteryn_ingame'
 
@@ -49,6 +51,7 @@ const MAIN_SECTIONS: { id: MainSection; label: string; description: string }[] =
   { id: 'economy', label: 'Economy', description: `Website ${WEBSITE_CURRENCY_LABEL}, in-game ${INGAME_ASTERYN_POINT_LABEL}, Cobble$, or PCO` },
   { id: 'achievements', label: 'Achievements', description: 'Profile badges ranked by tier score' },
   { id: 'world_hunt', label: 'World Hunt', description: 'Current hunt event scores from /hunt event' },
+  { id: 'tower', label: 'Tower', description: 'Endless Tower floors from /stellarbattlefactory leaderboardtext' },
 ]
 
 const RANK_FORMATS: { id: RankFormatId; label: string }[] = [
@@ -150,6 +153,7 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
   const cdYouRef = useRef<HTMLLIElement>(null)
   const achYouRef = useRef<HTMLLIElement>(null)
   const whYouRef = useRef<HTMLLIElement>(null)
+  const towerYouRef = useRef<HTMLLIElement>(null)
 
   const [mainSection, setMainSection] = useState<MainSection>('ranks')
   const [economyKind, setEconomyKind] = useState<EconomyKind>('website_cobble')
@@ -175,6 +179,10 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
   const [whData, setWhData] = useState<WorldHuntLeaderboardResponse | null>(null)
   const [whLoading, setWhLoading] = useState(false)
   const [whError, setWhError] = useState<string | null>(null)
+
+  const [towerData, setTowerData] = useState<TowerLeaderboardResponse | null>(null)
+  const [towerLoading, setTowerLoading] = useState(false)
+  const [towerError, setTowerError] = useState<string | null>(null)
 
   const [apMigratePlan, setApMigratePlan] = useState<AsterynPointMigratePlan | null>(null)
   const [apMigrateBusy, setApMigrateBusy] = useState<'preview' | 'apply' | null>(null)
@@ -308,6 +316,19 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
       .finally(() => setWhLoading(false))
   }, [mainSection])
 
+  useEffect(() => {
+    if (mainSection !== 'tower') return
+    setTowerLoading(true)
+    setTowerError(null)
+    fetchTowerLeaderboard()
+      .then(setTowerData)
+      .catch((e) => {
+        setTowerData(null)
+        setTowerError(e instanceof Error ? e.message : 'Failed to load')
+      })
+      .finally(() => setTowerLoading(false))
+  }, [mainSection])
+
   const panelClass =
     'p-8 text-center rounded-2xl border border-white/10 bg-surface/40 text-slate-400'
 
@@ -370,6 +391,16 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
     scrollElementIntoViewCentered(whYouRef.current)
   }, [mainSection, yourWhRow?.rank])
 
+  const yourTowerRow = useMemo(() => {
+    if (!viewerIgn || !towerData?.rows?.length) return undefined
+    return towerData.rows.find((r) => ignNamesMatch(viewerIgn, r.name))
+  }, [towerData, viewerIgn])
+
+  useEffect(() => {
+    if (mainSection !== 'tower' || !yourTowerRow) return
+    scrollElementIntoViewCentered(towerYouRef.current)
+  }, [mainSection, yourTowerRow?.rank])
+
   const mainDescription = MAIN_SECTIONS.find((s) => s.id === mainSection)?.description ?? ''
 
   const econTab = useMemo(() => {
@@ -414,7 +445,7 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
             Leaderboards
           </h2>
           <p className="text-xs text-slate-500 m-0 mt-1">
-            Same views as the public site ? PvP ranks, economy boards, World Hunt, and achievement badges. Your admin
+            Same views as the public site — PvP ranks, economy boards, World Hunt, Tower, and achievement badges. Your admin
             username highlights matching in-game names.
           </p>
         </div>
@@ -1020,6 +1051,92 @@ export function DashboardLeaderboardPanel({ viewerUsername }: { viewerUsername?:
                       </span>
                       <span className="shrink-0 text-sm font-semibold tabular-nums text-pink-100">
                         {Number(row.points).toLocaleString()}
+                      </span>
+                    </li>
+                  )
+                })}
+              </ol>
+            </>
+          )}
+        </section>
+      )}
+
+      {mainSection === 'tower' && (
+        <section className="space-y-5" aria-labelledby="dash-tower-heading">
+          <h3 id="dash-tower-heading" className="text-lg font-semibold m-0 text-white">
+            Tower
+          </h3>
+          <p className="text-sm text-slate-400 m-0 max-w-3xl">
+            Endless Tower floors from{' '}
+            <span className="font-mono text-cyan-200/90">/stellarbattlefactory leaderboardtext</span> (RCON). Highest
+            floor reached, with time when the server reports it.
+          </p>
+          {towerLoading && !towerData ? (
+            <div className={panelClass}>Loading Tower…</div>
+          ) : towerError && !towerData ? (
+            <div className={`${panelClass} text-red-300`}>Error: {towerError}</div>
+          ) : towerData?.disabled ? (
+            <div className={panelClass}>Tower leaderboard is disabled on this backend.</div>
+          ) : towerData?.error ? (
+            <div className={`${panelClass} text-red-300`}>Could not load Tower: {towerData.error}</div>
+          ) : !towerData?.rows?.length ? (
+            <div className={panelClass}>No Tower floors recorded yet.</div>
+          ) : (
+            <>
+              <div className="rounded-xl border border-cyan-400/30 bg-cyan-950/25 px-4 py-3 max-w-2xl">
+                <p className="text-sm text-cyan-100 m-0">
+                  Mode:{' '}
+                  <span className="font-mono font-semibold text-cyan-50">{towerData.mode ?? 'tower'}</span>
+                </p>
+                {towerData.updatedAt ? (
+                  <p className="text-xs text-slate-500 m-0 mt-1">
+                    Last refreshed: {new Date(towerData.updatedAt).toLocaleString()} · ~90s cache
+                  </p>
+                ) : null}
+              </div>
+              {yourTowerRow ? (
+                <div className="rounded-xl border border-cyan-400/40 bg-cyan-500/10 px-4 py-3 max-w-2xl" role="status">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-cyan-200 m-0 mb-1.5">Your place</p>
+                  <p className="text-sm text-slate-100 m-0">
+                    #{yourTowerRow.rank} · <span className="font-mono">{yourTowerRow.name}</span> · floor{' '}
+                    <strong className="tabular-nums text-cyan-200">{yourTowerRow.floor}</strong>
+                    {' · '}
+                    time {yourTowerRow.time?.trim() || '—'}
+                  </p>
+                </div>
+              ) : viewerIgn ? (
+                <p className="text-xs text-slate-500 m-0 rounded-lg border border-white/10 bg-black/20 px-3 py-2 max-w-2xl">
+                  Not on the board for <span className="font-mono text-slate-300">{viewerIgn}</span> yet.
+                </p>
+              ) : null}
+              <ol className="list-none m-0 p-0 space-y-2 max-w-2xl">
+                {towerData.rows.map((row) => {
+                  const isYou = yourTowerRow?.rank === row.rank && ignNamesMatch(viewerIgn ?? '', row.name)
+                  return (
+                    <li
+                      key={`${row.rank}-${row.name}`}
+                      ref={isYou ? towerYouRef : undefined}
+                      className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 scroll-mt-24 ${
+                        isYou
+                          ? 'border-cyan-400/50 bg-cyan-500/10 ring-2 ring-cyan-400/35'
+                          : 'border-white/5 bg-black/25'
+                      }`}
+                    >
+                      <span className="flex min-w-0 items-center gap-3">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-cyan-500/15 text-sm font-bold tabular-nums text-cyan-300">
+                          {row.rank}
+                        </span>
+                        <span className="font-mono text-sm text-white truncate" title={row.name}>
+                          {row.name}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-right">
+                        <span className="block text-sm font-semibold tabular-nums text-cyan-100">
+                          Floor {row.floor}
+                        </span>
+                        <span className="block text-xs tabular-nums text-slate-400 mt-0.5">
+                          Time {row.time?.trim() || '—'}
+                        </span>
                       </span>
                     </li>
                   )
