@@ -10,6 +10,7 @@ import { SiteMaintenanceAdmin } from './SiteMaintenanceAdmin.tsx'
 import { WorldHuntAdmin } from './WorldHuntAdmin.tsx'
 import { SkindexAdmin } from './SkindexAdmin.tsx'
 import { BattleTowerFacilityAdmin } from './BattleTowerFacilityAdmin.tsx'
+import { AsteryAccessAdmin } from './AsteryAccessAdmin.tsx'
 
 function StatCard({
   label,
@@ -188,6 +189,9 @@ export function MinecraftDashboard({ viewerUsername }: { viewerUsername?: string
       <div className="grid gap-4 xl:grid-cols-2 xl:items-stretch">
         <NightMarketAdmin />
         <WorldHuntAdmin />
+      </div>
+      <div className="grid gap-4 xl:grid-cols-2 xl:items-stretch">
+        <AsteryAccessAdmin />
       </div>
       <div className="grid gap-4 xl:grid-cols-1">
         <SkindexAdmin />

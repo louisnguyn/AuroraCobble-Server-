@@ -4,6 +4,7 @@ export const SKINDEX_CATALOG: Record<string, readonly string[]> = {
   ash: ["cobblemon:greninja"],
   champion_incineroar: ["cobblemon:incineroar"],
   champion_yveltal: ["cobblemon:yveltal"],
+  ceruledge_ghost_soul: ["cobblemon:ceruledge"],
   crimson_ceruledge: ["cobblemon:ceruledge"],
   crimson_metagross: ["cobblemon:metagross"],
   cubone_cosplay_godzilla: ["cobblemon:cubone"],
@@ -19,9 +20,12 @@ export const SKINDEX_CATALOG: Record<string, readonly string[]> = {
   custom_zacian: ["cobblemon:zacian"],
   dark_knight: ["cobblemon:ceruledge"],
   eternamax: ["cobblemon:eternatus"],
+  frieren_gardevoir: ["cobblemon:gardevoir"],
   galaxy_rayquaza: ["cobblemon:rayquaza"],
   galaxy_regigigas: ["cobblemon:regigigas"],
   ghost_white: ["cobblemon:ceruledge"],
+  gholdengo_muken_aizen: ["cobblemon:gholdengo"],
+  god_of_light_mewtwo: ["cobblemon:mewtwo"],
   grimmjow_sneasler: ["cobblemon:sneasler"],
   groudon_godzilla_base: ["cobblemon:groudon"],
   groudon_godzilla_burn: ["cobblemon:groudon"],
@@ -35,6 +39,7 @@ export const SKINDEX_CATALOG: Record<string, readonly string[]> = {
   mermaid_primarina: ["cobblemon:primarina"],
   mermaid_volcarona: ["cobblemon:volcarona"],
   nika_lucario: ["cobblemon:lucario"],
+  noelle_indeedee_female: ["cobblemon:indeedee"],
   "origin-forme": ["cobblemon:giratina"],
   pascua_ferrothorn: ["cobblemon:ferrothorn"],
   pascua_meowscarada: ["cobblemon:meowscarada"],
@@ -49,6 +54,7 @@ export const SKINDEX_CATALOG: Record<string, readonly string[]> = {
   unbound: ["cobblemon:hoopa"],
   volcarona_mothra: ["cobblemon:volcarona"],
   white_ichigo_ironvaliant: ["cobblemon:ironvaliant"],
+  zoro_ceruledge: ["cobblemon:ceruledge"],
 } as const;
 
 export type SkindexCatalogEntry = {

@@ -165,6 +165,9 @@ import {
   runFacilitySetStageRcon,
 } from "./minecraftFacilityAdmin.js";
 import {
+  runAsteryAccessResetUnclaimedRcon,
+} from "./minecraftAsteryAccess.js";
+import {
   DEFAULT_NIGHT_MARKET_LOCATION,
   NIGHT_MARKET_MAX_MINUTES,
   normalizeNightMarketLocation,
@@ -5965,6 +5968,52 @@ app.post("/admin/minecraft/facility-admin", requireAuth, requireAdmin, async (re
 
   res.status(400).json({
     error: "action must be force_win or set_stage",
+  });
+});
+
+/**
+ * AsteryAccess Discord ↔ Minecraft link admin RCON:
+ * - reset_unclaimed / revoke → `asteryaccess admin reset-unclaimed <player>`
+ */
+app.post("/admin/minecraft/asteryaccess", requireAuth, requireAdmin, async (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const actionRaw = typeof body.action === "string" ? body.action.trim().toLowerCase() : "";
+  const minecraftUsername =
+    typeof body.minecraft_username === "string" ? body.minecraft_username.trim() : "";
+
+  if (!minecraftUsername) {
+    res.status(400).json({ error: "minecraft_username required" });
+    return;
+  }
+  if (!isValidMinecraftIgn(minecraftUsername)) {
+    res.status(400).json({ error: "minecraft_username must be a valid Minecraft IGN (2–16 [A-Za-z0-9_])" });
+    return;
+  }
+
+  if (
+    actionRaw === "reset_unclaimed" ||
+    actionRaw === "reset-unclaimed" ||
+    actionRaw === "resetunclaimed" ||
+    actionRaw === "revoke" ||
+    actionRaw === "unlink"
+  ) {
+    const exec = await runAsteryAccessResetUnclaimedRcon(minecraftUsername);
+    if (exec.ok) {
+      console.info(`[admin] asteryaccess reset-unclaimed ${minecraftUsername}: ok (${exec.command})`);
+      res.json({ ok: true, command: exec.command, output: exec.output });
+      return;
+    }
+    console.warn(`[admin] asteryaccess reset-unclaimed failed`, exec.error);
+    res.json({
+      ok: false,
+      error: exec.error ?? "Could not run asteryaccess reset-unclaimed on the server.",
+      command: exec.command,
+    });
+    return;
+  }
+
+  res.status(400).json({
+    error: "action must be reset_unclaimed (or revoke)",
   });
 });
 

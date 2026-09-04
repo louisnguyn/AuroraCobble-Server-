@@ -770,6 +770,17 @@ export async function adminMinecraftFacilityAdmin(
   })
 }
 
+/** AsteryAccess Discord link admin RCON (`asteryaccess admin reset-unclaimed …`). */
+export async function adminMinecraftAsteryAccess(body: {
+  action: 'reset_unclaimed' | 'revoke'
+  minecraft_username: string
+}): Promise<{ ok: boolean; error?: string; command?: string; output?: string }> {
+  return fetchJson(`/admin/minecraft/asteryaccess`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
 export async function adminMinecraftNightMarket(
   body:
     | { action: 'open'; minutes: number; location?: string }
